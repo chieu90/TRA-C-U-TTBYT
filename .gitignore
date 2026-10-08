@@ -1,0 +1,10 @@
+# dữ liệu / bộ nhớ đệm cục bộ — không đưa lên máy chủ
+vimda_cache.json
+*.tmp
+vimda_*.csv
+vimda_*.xlsx
+~$*
+*.log
+__pycache__/
+.claude/
+.DS_Store
