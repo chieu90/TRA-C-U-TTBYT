@@ -48,6 +48,7 @@ button:disabled { opacity: .55; cursor: default; }
 .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 24px 0 10px; }
 .status { color: var(--muted); font-size: 14px; }
 .status.err { color: var(--bad); }
+.note { font-size: 13px; color: var(--muted); margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); }
 .filter { margin: 14px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filter label { font-size: 13px; color: var(--muted); }
 .filter input { flex: 1 1 280px; min-width: 0; padding: 9px 12px; font-size: 14px; border: 1px dashed var(--line); border-radius: 10px;
@@ -120,7 +121,9 @@ mark { background: #fff3b0; color: inherit; border-radius: 3px; padding: 0 1px; 
     <label><input type="radio" name="m" value="san_pham"><span>Chỉ tên sản phẩm</span></label>
     <label><input type="radio" name="m" value="cong_ty"><span>Chỉ tên công ty</span></label>
     <label><input type="radio" name="m" value="so"><span>Số lưu hành / Mã hồ sơ</span></label>
+    <label><input type="radio" name="m" value="hang"><span>Hãng / Chủ sở hữu</span></label>
   </div>
+  <p class="note" id="idxNote" hidden></p>
   <div class="filter">
     <label for="flt">Lọc kết quả:</label>
     <input type="search" id="flt" placeholder="theo hãng sản xuất / chủ sở hữu… (vd: Mindray, B. Braun)" autocomplete="off">
@@ -242,7 +245,9 @@ function render() {
         (pending ? ` · còn ${pending} hồ sơ đang tải hãng sản xuất…` : "") +
         (state.more ? ` · bấm “Tải tất cả” ở cuối trang để lọc trên toàn bộ ~${state.total.toLocaleString("vi-VN")} hồ sơ` : "");
     } else {
-      $("#status").textContent = `Khoảng ${state.total.toLocaleString("vi-VN")} hồ sơ trên vimda · đang hiện ${shown}` +
+      $("#status").textContent = (state.mode === "hang"
+        ? `${state.total.toLocaleString("vi-VN")} hồ sơ trong kho có hãng / chủ sở hữu khớp · đang hiện ${shown}`
+        : `Khoảng ${state.total.toLocaleString("vi-VN")} hồ sơ trên vimda · đang hiện ${shown}`) +
         (shown < all ? ` (ẩn ${all - shown} hồ sơ không có sản phẩm)` : "") + (pending ? ` · đang tải hãng sản xuất cho ${pending} hồ sơ…` : "");
     }
   }
@@ -307,6 +312,7 @@ async function load(page, size = 50) {
       const seen = new Set(state.rows.map(x => x["Mã hồ sơ"] + "|" + x["Số công bố / số lưu hành"]));
       state.rows = state.rows.concat(j.rows.filter(x => !seen.has(x["Mã hồ sơ"] + "|" + x["Số công bố / số lưu hành"])));
     }
+    j.rows.forEach(x => { if (x._d && x["Link chi tiết"]) details.set(x["Link chi tiết"], x._d); });  // đã có sẵn
     j.rows.filter(x => x["Tên sản phẩm (TBYT)"] && x["Link chi tiết"]).forEach(x => enqueue(x["Link chi tiết"]));
     return token;
   } catch (e) {
@@ -439,7 +445,7 @@ function goHome(e) {
   queue.splice(0).forEach(l => details.delete(l)); // huỷ hàng đợi tải hãng sản xuất
   Object.assign(state, { q: "", mode: "tat_ca", page: 1, rows: [], total: 0, more: false, loadingAll: false });
   $("#q").value = ""; $("#flt").value = "";
-  document.querySelector('input[name=m][value="tat_ca"]').checked = true;
+  document.querySelector('input[name=m][value="tat_ca"]').checked = true; showIdxNote();
   $("#status").classList.remove("err");
   $("#status").textContent = HOME_STATUS;
   $("#go").disabled = $("#more").disabled = false;
@@ -450,6 +456,19 @@ function goHome(e) {
   $("#q").focus();
 }
 document.querySelectorAll(".go-home").forEach(a => a.addEventListener("click", goHome));
+
+// Thông tin kho dữ liệu dựng sẵn (dùng cho chế độ tìm theo hãng / chủ sở hữu)
+let idx = { count: 0, built: null };
+function showIdxNote() {
+  const on = document.querySelector("input[name=m]:checked").value === "hang";
+  $("#idxNote").hidden = !on;
+  if (!on) return;
+  $("#idxNote").textContent = idx.count
+    ? `Tìm trong kho dữ liệu dựng sẵn: ${idx.count.toLocaleString("vi-VN")} hồ sơ có sản phẩm, cập nhật lúc ${idx.built}. Hồ sơ công bố sau thời điểm này chưa có trong kho.`
+    : "Kho dữ liệu hãng sản xuất đang được xây dựng (mất vài ngày) — chế độ này chưa có dữ liệu. Tạm thời: tìm theo sản phẩm/công ty rồi dùng ô “Lọc kết quả”.";
+}
+fetch("/api/info").then(r => r.json()).then(j => { idx = j; showIdxNote(); }).catch(() => {});
+$("#modes").addEventListener("change", showIdxNote);
 
 const init = new URL(location).searchParams;
 if (init.get("q")) {

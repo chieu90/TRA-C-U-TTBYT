@@ -9,3 +9,4 @@ __pycache__/
 .claude/
 .DS_Store
 app_cache.json
+index/

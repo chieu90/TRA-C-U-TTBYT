@@ -9,7 +9,7 @@ rồi mở http://localhost:8765
 Trình duyệt không gọi thẳng vimda được (bị chặn CORS), nên máy chủ nhỏ này
 nhận từ khóa, tìm trên vimda rồi trả kết quả cho trang web.
 """
-import argparse, gzip, json, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, gzip, json, os, re, sys, threading, time, unicodedata, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -113,6 +113,45 @@ for path in (os.path.join(HERE, v.CACHE_FILE), CACHE_PATH):  # nạp cả bộ �
             pass
 
 
+# ---------- Kho dữ liệu dựng sẵn (build_index.py) -> tìm theo hãng / chủ sở hữu ----------
+INDEX_FILE = os.path.join(HERE, "data", "tbyt_index.json.gz")
+DETAIL_FIELDS = ("Tên thương mại", "Hãng / cơ sở sản xuất", "Nước sản xuất", "Chủ sở hữu")
+
+
+def norm(s):
+    s = unicodedata.normalize("NFD", s or "").replace("đ", "d").replace("Đ", "D")
+    return "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
+
+
+index_rows, index_maker, index_info = [], [], {"count": 0, "built": None}
+if os.path.exists(INDEX_FILE):
+    try:
+        data = json.load(gzip.open(INDEX_FILE, "rt", encoding="utf-8"))
+        cols = data["cols"]
+        for a in data["rows"]:
+            r = dict(zip(cols, a))
+            index_rows.append(r)
+            index_maker.append(norm(r["Hãng / cơ sở sản xuất"] + " | " + r["Chủ sở hữu"]))
+            detail_cache.setdefault(detail_key(r["Link chi tiết"]), {k: r.get(k, "") for k in DETAIL_FIELDS})
+        index_info = {"count": len(index_rows), "built": data.get("built")}
+        print(f"Đã nạp kho dữ liệu: {len(index_rows):,} hồ sơ (cập nhật {data.get('built')})", file=sys.stderr)
+    except Exception as e:
+        print(f"Không nạp được kho dữ liệu: {e}", file=sys.stderr)
+
+
+def search_maker(q, page, size):
+    """Tìm trong kho dựng sẵn theo hãng sản xuất / chủ sở hữu (không cần gọi vimda)."""
+    nq = norm(q.strip())
+    hits = [i for i, m in enumerate(index_maker) if nq in m]
+    part = hits[(page - 1) * size: page * size]
+    rows = []
+    for i in part:
+        r = dict(index_rows[i])
+        r["_d"] = {k: r.pop(k, "") for k in DETAIL_FIELDS}
+        rows.append(r)
+    return {"total": len(hits), "more": len(hits) > page * size, "rows": rows, "exact": True}
+
+
 search_cache = {}  # (field, q, page, size) -> (thời điểm, kết quả); giữ 30 phút để không gọi lại vimda
 
 
@@ -135,6 +174,8 @@ def search_one(field, q, page, size=PAGE):
 
 
 def search(q, mode, page, size=PAGE):
+    if mode == "hang":
+        return search_maker(q, page, size)
     fields = {"san_pham": ["ten_tbyt"], "cong_ty": ["cong_ty"], "so": ["keyword"]}.get(
         mode, ["ten_tbyt", "cong_ty"])
     with ThreadPoolExecutor(len(fields)) as ex:
@@ -149,6 +190,8 @@ def search(q, mode, page, size=PAGE):
                 seen.add(key)
                 rows.append(r)
     rows.sort(key=lambda r: "/".join(reversed(r["Ngày công bố"].split("/"))), reverse=True)
+    # gắn sẵn hãng sản xuất nếu đã có trong bộ nhớ đệm / kho -> trang hiện ngay, khỏi gọi vimda
+    rows = [dict(r, _d=detail_cache[k]) if (k := detail_key(r["Link chi tiết"])) in detail_cache else r for r in rows]
     return {"total": total, "more": more, "rows": rows}
 
 
@@ -194,6 +237,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if u.path == "/":
                 self.send(200, open(os.path.join(HERE, "index.html"), "rb").read(), "text/html; charset=utf-8")
+            elif u.path == "/api/info":
+                self.send(200, index_info)
             elif u.path == "/api/search":
                 q = p.get("q", "").strip()
                 if not q:
