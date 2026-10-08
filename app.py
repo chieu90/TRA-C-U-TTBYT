@@ -9,7 +9,7 @@ rồi mở http://localhost:8765
 Trình duyệt không gọi thẳng vimda được (bị chặn CORS), nên máy chủ nhỏ này
 nhận từ khóa, tìm trên vimda rồi trả kết quả cho trang web.
 """
-import argparse, json, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, gzip, json, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -23,65 +23,107 @@ PAGE = 50
 DETAIL_PREFIX = "https://vimda.moh.gov.vn/web/guest/van-ban-cong-bo?"
 SCRIPT_RE = re.compile(r"^https://script\.google\.com/macros/s/[\w-]+/exec$")
 
-# vimda trả 503 khi bị gọi dồn dập. Quy tắc gọi:
-#  - tách hàng chờ: tìm kiếm (danh sách) không phải đợi sau hàng trăm request chi tiết
-#  - giãn cách tối thiểu giữa 2 request
-#  - gặp 503 thì cả app tạm nghỉ một lúc (thay vì mỗi luồng tự gọi lại liên tục)
+# vimda giới hạn theo IP (đo thực tế): cho gửi dồn ~12-15 request, sau đó ~1 request / 2-3 giây;
+# vượt mức thì trả 503 vài giây. Dùng "xô token" mô phỏng đúng giới hạn đó để không bị chặn:
+#  - xô chứa tối đa BURST lượt, tự đầy lại REFILL lượt/giây
+#  - tìm kiếm (danh sách) được ưu tiên: request chi tiết phải chừa lại RESERVE lượt cho tìm kiếm
+#  - vẫn gặp 503 thì xả xô và cả app nghỉ một lúc
+BURST, REFILL, RESERVE = 10.0, 0.4, 2.0
 search_slots = threading.BoundedSemaphore(2)
-detail_slots = threading.BoundedSemaphore(2)
-MIN_GAP = 0.5
-gap_lock = threading.Lock()
-last_call = 0.0
+detail_slots = threading.BoundedSemaphore(3)
+bucket_lock = threading.Lock()
+tokens, last_refill = BURST, time.time()
 pause_until = 0.0
 
 
+def take_token(kind):
+    global tokens, last_refill
+    need = 1.0 if kind == "search" else 1.0 + RESERVE
+    while True:
+        with bucket_lock:
+            now = time.time()
+            if now >= pause_until:
+                tokens = min(BURST, tokens + (now - last_refill) * REFILL)
+                last_refill = now
+                if tokens >= need:
+                    tokens -= 1.0
+                    return
+            wait = max(pause_until - now, (need - tokens) / REFILL, 0.05)
+        time.sleep(min(wait, 1.0))
+
+
+def exclusive(url):
+    # p_p_state=exclusive: vimda chỉ trả phần dữ liệu, bỏ khung giao diện -> nhẹ & nhanh hơn
+    return url.replace("p_p_state=normal", "p_p_state=exclusive", 1)
+
+
 def fetch(url, kind="detail"):
-    global last_call, pause_until
+    global pause_until, tokens, last_refill
     slots = search_slots if kind == "search" else detail_slots
     with slots:
         for attempt in range(6):
-            wait = pause_until - time.time()
-            if wait > 0:
-                time.sleep(wait)
-            with gap_lock:
-                wait = last_call + MIN_GAP - time.time()
-                if wait > 0:
-                    time.sleep(wait)
-                last_call = time.time()
+            take_token(kind)
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": v.UA})
+                req = urllib.request.Request(url, headers={"User-Agent": v.UA, "Accept-Encoding": "gzip"})
                 with urllib.request.urlopen(req, timeout=90, context=v.SSL_CTX) as r:
-                    return r.read().decode("utf-8", "replace")
+                    data = r.read()
+                    if r.headers.get("Content-Encoding") == "gzip":
+                        data = gzip.decompress(data)
+                return data.decode("utf-8", "replace")
             except urllib.error.HTTPError as e:
                 if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
                     raise
-                pause_until = max(pause_until, time.time() + 10 * (attempt + 1))
-                print(f"vimda bận ({e.code}) — tạm nghỉ {10 * (attempt + 1)} giây", file=sys.stderr)
+                with bucket_lock:
+                    tokens, last_refill = 0.0, time.time() + 5 * (attempt + 1)
+                    pause_until = max(pause_until, time.time() + 5 * (attempt + 1))
+                print(f"vimda bận ({e.code}) — tạm nghỉ {5 * (attempt + 1)} giây", file=sys.stderr)
             except (urllib.error.URLError, TimeoutError):
                 if attempt == 5:
                     raise
                 time.sleep(3)
 
 
+def detail_key(url):
+    """Khoá bộ nhớ đệm theo mã hồ sơ + mã văn bản (link chi tiết có nhiều tham số thay đổi theo lần tìm)."""
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    ho_so, van_ban = q.get(v.NS + "hoSoId", [""])[0], q.get(v.NS + "vanBanId", [""])[0]
+    return f"{ho_so}|{van_ban}" if ho_so and van_ban else url
+
+
+def detail_url(url):
+    """Link chi tiết gọn: chỉ giữ các tham số cần thiết, dạng exclusive."""
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    keep = {k: q[k][0] for k in ("hoSoId", "vanBanId", "doanhNghiepId", "jspPage")
+            for k in [v.NS + k] if k in q}
+    if len(keep) < 4:
+        return exclusive(url)
+    return DETAIL_PREFIX + urllib.parse.urlencode({
+        "p_p_id": "vanbancongbo_WAR_trangthietbiyteportlet", "p_p_lifecycle": "0",
+        "p_p_state": "exclusive", "p_p_mode": "view", **keep})
+
+
+CACHE_PATH = os.path.join(HERE, "app_cache.json")
 detail_cache = {}
-if os.path.exists(os.path.join(HERE, v.CACHE_FILE)):
-    try:
-        detail_cache.update(json.load(open(os.path.join(HERE, v.CACHE_FILE), encoding="utf-8")))
-    except Exception:
-        pass
+for path in (os.path.join(HERE, v.CACHE_FILE), CACHE_PATH):  # nạp cả bộ đệm của script tải hàng loạt
+    if os.path.exists(path):
+        try:
+            for k, d in json.load(open(path, encoding="utf-8")).items():
+                detail_cache[detail_key(k) if k.startswith("http") else k] = d
+        except Exception:
+            pass
 
 
-search_cache = {}  # (field, q, page) -> (thời điểm, kết quả); giữ 10 phút để không gọi lại vimda
+search_cache = {}  # (field, q, page, size) -> (thời điểm, kết quả); giữ 30 phút để không gọi lại vimda
 
 
 def search_one(field, q, page, size=PAGE):
     key = (field, q.lower(), page, size)
     hit = search_cache.get(key)
-    if hit and time.time() - hit[0] < 600:
+    if hit and time.time() - hit[0] < 1800:
         return hit[1]
     a = argparse.Namespace(keyword=None, cong_ty=None, ten_tbyt=None, tu=None, den=None)
     setattr(a, field, q)
-    total, rows = v.parse_list(fetch(v.list_url(page, a, delta=size), "search"))
+    total, rows = v.parse_list(fetch(exclusive(v.list_url(page, a, delta=size)), "search"))
     for r in rows:
         r["_khop"] = field
     if total is None:  # vimda không in tổng khi chỉ có 1 trang
@@ -115,23 +157,23 @@ unsaved = 0
 
 
 def save_cache():
-    path = os.path.join(HERE, v.CACHE_FILE)
-    with open(path + ".tmp", "w", encoding="utf-8") as f:
+    with open(CACHE_PATH + ".tmp", "w", encoding="utf-8") as f:
         json.dump(detail_cache, f, ensure_ascii=False)
-    os.replace(path + ".tmp", path)
+    os.replace(CACHE_PATH + ".tmp", CACHE_PATH)
 
 
 def detail(url):
     global unsaved
-    if url not in detail_cache:
-        d = v.parse_detail(fetch(url))
+    key = detail_key(url)
+    if key not in detail_cache:
+        d = v.parse_detail(fetch(detail_url(url)))
         with cache_lock:
-            detail_cache[url] = d
+            detail_cache[key] = d
             unsaved += 1
             if unsaved >= 20:  # ghi xuống đĩa để khởi động lại không phải tải lại
                 save_cache()
                 unsaved = 0
-    return detail_cache[url]
+    return detail_cache[key]
 
 
 class Handler(BaseHTTPRequestHandler):
