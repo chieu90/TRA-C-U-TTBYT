@@ -23,6 +23,12 @@ body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px 64px; }
 h1 { font-size: 22px; margin: 0 0 4px; }
+h1 a { color: inherit; text-decoration: none; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+a.home { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--text); text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+a.home:hover { border-color: var(--accent); color: var(--accent); }
+a.home svg { width: 16px; height: 16px; }
 .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
 .sub a { color: var(--accent); }
 form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -90,7 +96,13 @@ mark { background: #fff3b0; color: inherit; border-radius: 3px; padding: 0 1px; 
 </head>
 <body>
 <div class="wrap">
-  <h1>Tra cứu thiết bị y tế</h1>
+  <div class="top">
+    <h1><a href="/" class="go-home">Tra cứu thiết bị y tế</a></h1>
+    <a href="/" class="home go-home" title="Về trang chủ, xoá kết quả tìm kiếm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/></svg>
+      Trang chủ
+    </a>
+  </div>
   <p class="sub">Tìm trực tiếp trên <a href="https://vimda.moh.gov.vn/web/guest/van-ban-cong-bo" target="_blank" rel="noopener">vimda.moh.gov.vn</a>: công ty công bố, số lưu hành, sản phẩm, hãng sản xuất.</p>
 
   <form id="f">
@@ -364,6 +376,26 @@ $("#gsCode").addEventListener("click", async () => {
     gsMsg("Đã sao chép code Apps Script — dán vào trình soạn thảo Apps Script.", "ok");
   } catch (e) { gsMsg("Không sao chép được: " + e.message, "err"); }
 });
+
+// Về trang mặc định: dừng mọi việc đang tải, xoá kết quả và ô tìm kiếm (không cần tải lại trang)
+const HOME_STATUS = "Nhập từ khóa để bắt đầu. Gõ không dấu cũng được.";
+function goHome(e) {
+  if (e) e.preventDefault();
+  state.token++;                                   // bỏ qua các kết quả tìm kiếm đang về
+  queue.splice(0).forEach(l => details.delete(l)); // huỷ hàng đợi tải hãng sản xuất
+  Object.assign(state, { q: "", mode: "tat_ca", page: 1, rows: [], total: 0, more: false, loadingAll: false });
+  $("#q").value = "";
+  document.querySelector('input[name=m][value="tat_ca"]').checked = true;
+  $("#status").classList.remove("err");
+  $("#status").textContent = HOME_STATUS;
+  $("#go").disabled = $("#more").disabled = false;
+  if ($("#dlg").open) $("#dlg").close();
+  history.replaceState(null, "", location.pathname);
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("#q").focus();
+}
+document.querySelectorAll(".go-home").forEach(a => a.addEventListener("click", goHome));
 
 const init = new URL(location).searchParams;
 if (init.get("q")) {
