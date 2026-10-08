@@ -115,6 +115,8 @@ for path in (os.path.join(HERE, v.CACHE_FILE), CACHE_PATH):  # nạp cả bộ �
 
 # ---------- Kho dữ liệu dựng sẵn (build_index.py) -> tìm theo hãng / chủ sở hữu ----------
 INDEX_FILE = os.path.join(HERE, "data", "tbyt_index.json.gz")
+if not os.path.exists(INDEX_FILE):  # cho phép đặt file ngay thư mục gốc (khi tải lên GitHub bằng kéo thả)
+    INDEX_FILE = os.path.join(HERE, "tbyt_index.json.gz")
 DETAIL_FIELDS = ("Tên thương mại", "Hãng / cơ sở sản xuất", "Nước sản xuất", "Chủ sở hữu")
 
 
