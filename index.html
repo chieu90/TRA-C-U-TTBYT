@@ -48,6 +48,12 @@ button:disabled { opacity: .55; cursor: default; }
 .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 24px 0 10px; }
 .status { color: var(--muted); font-size: 14px; }
 .status.err { color: var(--bad); }
+.filter { margin: 14px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter label { font-size: 13px; color: var(--muted); }
+.filter input { flex: 1 1 280px; min-width: 0; padding: 9px 12px; font-size: 14px; border: 1px dashed var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--text); outline: none; }
+.filter input:focus { border-style: solid; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.filter input:not(:placeholder-shown) { border-style: solid; border-color: var(--accent); }
 .opts { display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 table { width: 100%; border-collapse: collapse; }
@@ -115,6 +121,10 @@ mark { background: #fff3b0; color: inherit; border-radius: 3px; padding: 0 1px; 
     <label><input type="radio" name="m" value="cong_ty"><span>Chỉ tên công ty</span></label>
     <label><input type="radio" name="m" value="so"><span>Số lưu hành / Mã hồ sơ</span></label>
   </div>
+  <div class="filter">
+    <label for="flt">Lọc kết quả:</label>
+    <input type="search" id="flt" placeholder="theo hãng sản xuất / chủ sở hữu… (vd: Mindray, B. Braun)" autocomplete="off">
+  </div>
 
   <div class="bar">
     <div class="status" id="status">Nhập từ khóa để bắt đầu. Gõ không dấu cũng được.</div>
@@ -169,26 +179,44 @@ const queue = []; let running = 0;
 
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function strip(s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase(); }
-function hl(text) {
-  text = String(text ?? ""); const q = strip(state.q.trim()); if (!q || q.length < 2) return esc(text);
+function hl(text, term = state.q) {
+  text = String(text ?? ""); const q = strip(term.trim()); if (!q || q.length < 2) return esc(text);
   const flat = Array.from(text, c => strip(c).charAt(0) || c).join("");  // giữ nguyên độ dài để vị trí khớp
   const i = flat.indexOf(q); if (i < 0) return esc(text);
   return esc(text.slice(0, i)) + "<mark>" + esc(text.slice(i, i + q.length)) + "</mark>" + esc(text.slice(i + q.length));
 }
-function visible() { return $("#onlyProd").checked ? state.rows.filter(r => r["Tên sản phẩm (TBYT)"]) : state.rows; }
+function fltTerm() { return strip($("#flt").value.trim()); }
+// Lọc theo hãng / chủ sở hữu: chỉ áp dụng được cho hồ sơ đã tải xong trang chi tiết
+function matchMaker(r) {
+  const d = details.get(r["Link chi tiết"]);
+  if (typeof d !== "object") return false;
+  return strip((d["Hãng / cơ sở sản xuất"] || "") + " | " + (d["Chủ sở hữu"] || "")).includes(fltTerm());
+}
+function visible() {
+  let rows = $("#onlyProd").checked ? state.rows.filter(r => r["Tên sản phẩm (TBYT)"]) : state.rows;
+  if (fltTerm()) rows = rows.filter(matchMaker);
+  return rows;
+}
+function pendingRows() {
+  return state.rows.filter(r => r["Tên sản phẩm (TBYT)"] && typeof details.get(r["Link chi tiết"]) !== "object");
+}
 
 function detailCell(r, key) {
   const d = details.get(r["Link chi tiết"]);
   if (!r["Tên sản phẩm (TBYT)"]) return '<span class="meta">—</span>';
   if (!d || d === "loading") return '<span class="sk"></span>';
   if (d === "error") return `<a href="#" class="lnk" data-retry="${esc(r["Link chi tiết"])}">Lỗi – thử lại</a>`;
-  return hl(d[key]) || '<span class="meta">—</span>';
+  return hl(d[key], $("#flt").value || state.q) || '<span class="meta">—</span>';
 }
 
 function render() {
   const rows = visible();
   if (!rows.length) {
-    $("#tb").innerHTML = `<tr><td colspan="7" class="empty">${state.q ? "Không có hồ sơ phù hợp" : "Chưa có kết quả"}</td></tr>`;
+    const waiting = fltTerm() && pendingRows().length;
+    $("#tb").innerHTML = `<tr><td colspan="7" class="empty">${!state.q ? "Chưa có kết quả"
+      : waiting ? `Chưa có hồ sơ nào khớp “${esc($("#flt").value.trim())}” — đang tải hãng sản xuất cho ${waiting} hồ sơ…`
+      : fltTerm() ? `Không có hồ sơ nào có hãng / chủ sở hữu khớp “${esc($("#flt").value.trim())}” trong ${state.rows.length} hồ sơ đã tải`
+      : "Không có hồ sơ phù hợp"}</td></tr>`;
   } else {
     $("#tb").innerHTML = rows.map(r => {
       const d = details.get(r["Link chi tiết"]);
@@ -208,9 +236,15 @@ function render() {
   observeRows();
   const shown = rows.length, all = state.rows.length;
   if (state.q && !$("#status").classList.contains("err")) {
-    const pending = state.rows.filter(r => r["Tên sản phẩm (TBYT)"] && (!details.get(r["Link chi tiết"]) || details.get(r["Link chi tiết"]) === "loading")).length;
-    $("#status").textContent = `Khoảng ${state.total.toLocaleString("vi-VN")} hồ sơ trên vimda · đang hiện ${shown}` +
-      (shown < all ? ` (ẩn ${all - shown} hồ sơ không có sản phẩm)` : "") + (pending ? ` · đang tải hãng sản xuất cho ${pending} hồ sơ…` : "");
+    const pending = pendingRows().length;
+    if (fltTerm()) {
+      $("#status").textContent = `Lọc “${$("#flt").value.trim()}”: ${shown} hồ sơ khớp trong ${all} hồ sơ đã tải` +
+        (pending ? ` · còn ${pending} hồ sơ đang tải hãng sản xuất…` : "") +
+        (state.more ? ` · bấm “Tải tất cả” ở cuối trang để lọc trên toàn bộ ~${state.total.toLocaleString("vi-VN")} hồ sơ` : "");
+    } else {
+      $("#status").textContent = `Khoảng ${state.total.toLocaleString("vi-VN")} hồ sơ trên vimda · đang hiện ${shown}` +
+        (shown < all ? ` (ẩn ${all - shown} hồ sơ không có sản phẩm)` : "") + (pending ? ` · đang tải hãng sản xuất cho ${pending} hồ sơ…` : "");
+    }
   }
   $("#more").hidden = $("#all").hidden = !state.more || state.loadingAll;
   $("#all").textContent = `Tải tất cả (${state.total.toLocaleString("vi-VN")})`;
@@ -318,6 +352,7 @@ $("#all").addEventListener("click", async () => {
   } finally { state.loadingAll = false; render(); }
 });
 $("#onlyProd").addEventListener("change", render);
+$("#flt").addEventListener("input", render);
 $("#tb").addEventListener("click", e => {
   const link = e.target.dataset && e.target.dataset.retry;
   if (link) { e.preventDefault(); details.delete(link); enqueue(link); render(); }
@@ -331,9 +366,11 @@ function exportRows() {
   });
 }
 function pendingCount() {
-  return visible().filter(r => r["Tên sản phẩm (TBYT)"] && typeof details.get(r["Link chi tiết"]) !== "object").length;
+  // khi đang lọc theo hãng, hồ sơ chưa tải xong bị ẩn nhưng vẫn có thể khớp -> đếm trên toàn bộ
+  return fltTerm() ? pendingRows().length
+    : visible().filter(r => r["Tên sản phẩm (TBYT)"] && typeof details.get(r["Link chi tiết"]) !== "object").length;
 }
-function fileTag() { return strip(state.q).replace(/[^a-z0-9]+/g, "_"); }
+function fileTag() { return strip(state.q + (fltTerm() ? " " + fltTerm() : "")).replace(/[^a-z0-9]+/g, "_"); }
 
 $("#csv").addEventListener("click", () => {
   const lines = [EXPORT_COLS].concat(exportRows()).map(a => a.map(v => '"' + v.replace(/"/g, '""') + '"').join(","));
@@ -401,7 +438,7 @@ function goHome(e) {
   state.token++;                                   // bỏ qua các kết quả tìm kiếm đang về
   queue.splice(0).forEach(l => details.delete(l)); // huỷ hàng đợi tải hãng sản xuất
   Object.assign(state, { q: "", mode: "tat_ca", page: 1, rows: [], total: 0, more: false, loadingAll: false });
-  $("#q").value = "";
+  $("#q").value = ""; $("#flt").value = "";
   document.querySelector('input[name=m][value="tat_ca"]').checked = true;
   $("#status").classList.remove("err");
   $("#status").textContent = HOME_STATUS;
