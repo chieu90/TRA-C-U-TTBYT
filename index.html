@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tra cứu TBYT</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%231f6feb%22/%3E%3Cpath d=%22M13 7h6v6h6v6h-6v6h-6v-6H7v-6h6z%22 fill=%22white%22/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --text: #1a1d23; --muted: #5f6672; --line: #e3e6eb;
+  --accent: #1f6feb; --accent-soft: #e8f0fe; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e;
+  --skeleton: #eceff3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115; --surface: #171a20; --text: #e6e8eb; --muted: #9aa1ad; --line: #2a2f38;
+    --accent: #4c8dff; --accent-soft: #1a2740; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    --skeleton: #232831;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+.sub a { color: var(--accent); }
+form { display: flex; gap: 8px; flex-wrap: wrap; }
+input[type=search] { flex: 1 1 320px; min-width: 0; padding: 12px 14px; font-size: 16px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); color: var(--text); outline: none; }
+input[type=search]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+button { padding: 12px 18px; font-size: 15px; border-radius: 10px; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
+button.ghost { background: var(--surface); color: var(--text); border-color: var(--line); font-weight: 500; }
+button:disabled { opacity: .55; cursor: default; }
+.modes { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 0; }
+.modes label { cursor: pointer; }
+.modes input { display: none; }
+.modes span { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+  font-size: 13px; color: var(--muted); background: var(--surface); }
+.modes input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 24px 0 10px; }
+.status { color: var(--muted); font-size: 14px; }
+.status.err { color: var(--bad); }
+.opts { display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 600;
+  background: var(--surface); position: sticky; top: 0; }
+tr:last-child td { border-bottom: none; }
+td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: nowrap; }
+.prod { font-weight: 600; }
+.tm, .meta { color: var(--muted); font-size: 13px; }
+.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.tag.ok { color: var(--ok); border-color: currentColor; }
+.tag.bad { color: var(--bad); border-color: currentColor; }
+.sk { display: inline-block; height: 12px; width: 120px; border-radius: 6px; background: var(--skeleton); animation: p 1.2s infinite; }
+@keyframes p { 50% { opacity: .5; } }
+a.lnk { color: var(--accent); text-decoration: none; font-size: 13px; white-space: nowrap; }
+a.lnk:hover { text-decoration: underline; }
+.empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+.more { text-align: center; margin-top: 16px; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text);
+  padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+.dlg { padding: 20px; }
+.dlg h2 { font-size: 18px; margin: 0 0 4px; }
+.dlg h3 { font-size: 14px; margin: 18px 0 6px; }
+.dlg p, .dlg li { font-size: 14px; color: var(--muted); margin: 4px 0; }
+.dlg ol { padding-left: 20px; margin: 6px 0; }
+.dlg input[type=url] { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text); margin: 6px 0; }
+.dlg .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.dlg .msg { font-size: 14px; margin-top: 10px; min-height: 1.5em; }
+.dlg .msg.ok { color: var(--ok); } .dlg .msg.err { color: var(--bad); }
+.dlg details { margin-top: 6px; } .dlg summary { cursor: pointer; font-size: 14px; color: var(--accent); }
+.dlg code { font-size: 12px; }
+.x { float: right; background: none; border: none; color: var(--muted); font-size: 22px; padding: 0 4px; line-height: 1; }
+mark { background: #fff3b0; color: inherit; border-radius: 3px; padding: 0 1px; }
+@media (prefers-color-scheme: dark) { mark { background: #5a4a00; } }
+@media (max-width: 760px) {
+  thead { display: none; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  td { border: none; padding: 4px 14px; }
+  td::before { content: attr(data-l); display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: .03em; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tra cứu thiết bị y tế</h1>
+  <p class="sub">Tìm trực tiếp trên <a href="https://vimda.moh.gov.vn/web/guest/van-ban-cong-bo" target="_blank" rel="noopener">vimda.moh.gov.vn</a>: công ty công bố, số lưu hành, sản phẩm, hãng sản xuất.</p>
+
+  <form id="f">
+    <input type="search" id="q" placeholder="Tên sản phẩm, tên công ty hoặc số lưu hành… (vd: máy thở, B. Braun, 260003688)" autofocus>
+    <button id="go">Tìm kiếm</button>
+  </form>
+  <div class="modes" id="modes">
+    <label><input type="radio" name="m" value="tat_ca" checked><span>Sản phẩm + Công ty</span></label>
+    <label><input type="radio" name="m" value="san_pham"><span>Chỉ tên sản phẩm</span></label>
+    <label><input type="radio" name="m" value="cong_ty"><span>Chỉ tên công ty</span></label>
+    <label><input type="radio" name="m" value="so"><span>Số lưu hành / Mã hồ sơ</span></label>
+  </div>
+
+  <div class="bar">
+    <div class="status" id="status">Nhập từ khóa để bắt đầu. Gõ không dấu cũng được.</div>
+    <div class="opts">
+      <label><input type="checkbox" id="onlyProd" checked> Chỉ hồ sơ có sản phẩm</label>
+      <button class="ghost" id="csv" disabled>Tải CSV</button>
+      <button class="ghost" id="gs" disabled>Google Sheets</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>Số lưu hành</th><th>Sản phẩm</th><th>Công ty công bố</th><th>Hãng / cơ sở sản xuất</th><th>Chủ sở hữu</th><th>Ngày</th><th></th>
+      </tr></thead>
+      <tbody id="tb"><tr><td colspan="7" class="empty">Chưa có kết quả</td></tr></tbody>
+    </table>
+  </div>
+  <div class="more"><button class="ghost" id="more" hidden>Tải thêm</button> <button class="ghost" id="all" hidden>Tải tất cả</button></div>
+</div>
+
+<dialog id="dlg"><div class="dlg">
+  <button class="x" id="dlgClose" aria-label="Đóng">×</button>
+  <h2>Xuất ra Google Sheets</h2>
+  <p id="dlgInfo"></p>
+
+  <h3>Cách 1 · Sao chép rồi dán</h3>
+  <p>Chép bảng vào bộ nhớ tạm và mở một Google Sheet mới. Sang đó bấm vào ô A1 rồi <b>Cmd+V</b> (Windows: Ctrl+V).</p>
+  <div class="row"><button id="gsCopy">Sao chép &amp; mở Google Sheets</button></div>
+
+  <h3>Cách 2 · Gửi thẳng vào Sheet của bạn</h3>
+  <p>Ghi thêm vào trang tính “vimda” của một Sheet cố định, tự bỏ qua hồ sơ đã có.</p>
+  <input type="url" id="gsUrl" placeholder="URL Apps Script: https://script.google.com/macros/s/…/exec">
+  <div class="row"><button id="gsSend">Gửi vào Google Sheet</button></div>
+  <details><summary>Cài đặt lần đầu (khoảng 2 phút)</summary>
+    <ol>
+      <li>Mở Google Sheet muốn lưu → <b>Tiện ích mở rộng → Apps Script</b>.</li>
+      <li>Xoá code mẫu, dán đoạn code (nút bên dưới), bấm <b>Lưu</b>.</li>
+      <li><b>Triển khai → Tùy chọn triển khai mới</b> → loại <b>Ứng dụng web</b>; Thực thi với tư cách: <b>Tôi</b>; Quyền truy cập: <b>Bất kỳ ai</b>.</li>
+      <li>Bấm Triển khai, cấp quyền, sao chép <b>URL ứng dụng web</b> (đuôi <code>/exec</code>) dán vào ô trên.</li>
+    </ol>
+    <div class="row"><button class="ghost" id="gsCode">Sao chép code Apps Script</button></div>
+  </details>
+  <div class="msg" id="gsMsg"></div>
+</div></dialog>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = { q: "", mode: "tat_ca", page: 1, rows: [], total: 0, more: false, token: 0 };
+const details = new Map();       // link -> {..} | "loading" | "error"
+const queue = []; let running = 0;
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function strip(s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase(); }
+function hl(text) {
+  text = String(text ?? ""); const q = strip(state.q.trim()); if (!q || q.length < 2) return esc(text);
+  const flat = Array.from(text, c => strip(c).charAt(0) || c).join("");  // giữ nguyên độ dài để vị trí khớp
+  const i = flat.indexOf(q); if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + "<mark>" + esc(text.slice(i, i + q.length)) + "</mark>" + esc(text.slice(i + q.length));
+}
+function visible() { return $("#onlyProd").checked ? state.rows.filter(r => r["Tên sản phẩm (TBYT)"]) : state.rows; }
+
+function detailCell(r, key) {
+  const d = details.get(r["Link chi tiết"]);
+  if (!r["Tên sản phẩm (TBYT)"]) return '<span class="meta">—</span>';
+  if (!d || d === "loading") return '<span class="sk"></span>';
+  if (d === "error") return `<a href="#" class="lnk" data-retry="${esc(r["Link chi tiết"])}">Lỗi – thử lại</a>`;
+  return hl(d[key]) || '<span class="meta">—</span>';
+}
+
+function render() {
+  const rows = visible();
+  if (!rows.length) {
+    $("#tb").innerHTML = `<tr><td colspan="7" class="empty">${state.q ? "Không có hồ sơ phù hợp" : "Chưa có kết quả"}</td></tr>`;
+  } else {
+    $("#tb").innerHTML = rows.map(r => {
+      const d = details.get(r["Link chi tiết"]);
+      const tm = d && typeof d === "object" && d["Tên thương mại"] ? `<div class="tm">${hl(d["Tên thương mại"])}</div>` : "";
+      const st = r["Trạng thái"]; const cls = /hiệu lực/i.test(st) && !/hết|thu hồi/i.test(st) ? "ok" : "bad";
+      return `<tr>
+        <td class="num" data-l="Số lưu hành">${hl(r["Số công bố / số lưu hành"])}<div class="meta">${esc(r["Mã hồ sơ"])}</div></td>
+        <td data-l="Sản phẩm"><div class="prod">${hl(r["Tên sản phẩm (TBYT)"]) || '<span class="meta">—</span>'}</div>${tm}<div class="meta">${esc(r["Thủ tục"])}</div></td>
+        <td data-l="Công ty công bố">${hl(r["Công ty công bố"])}</td>
+        <td data-l="Hãng / cơ sở sản xuất">${detailCell(r, "Hãng / cơ sở sản xuất")}</td>
+        <td data-l="Chủ sở hữu">${detailCell(r, "Chủ sở hữu")}</td>
+        <td data-l="Ngày công bố" style="white-space:nowrap">${esc(r["Ngày công bố"])}<div><span class="tag ${cls}">${esc(st)}</span></div></td>
+        <td data-l="Tài liệu">${r["File công bố"] ? `<a class="lnk" target="_blank" rel="noopener" href="${esc(r["File công bố"])}">PDF</a><br>` : ""}<a class="lnk" target="_blank" rel="noopener" href="${esc(r["Link chi tiết"])}">Chi tiết</a></td>
+      </tr>`;
+    }).join("");
+  }
+  const shown = rows.length, all = state.rows.length;
+  if (state.q && !$("#status").classList.contains("err")) {
+    const pending = state.rows.filter(r => r["Tên sản phẩm (TBYT)"] && (!details.get(r["Link chi tiết"]) || details.get(r["Link chi tiết"]) === "loading")).length;
+    $("#status").textContent = `Khoảng ${state.total.toLocaleString("vi-VN")} hồ sơ trên vimda · đang hiện ${shown}` +
+      (shown < all ? ` (ẩn ${all - shown} hồ sơ không có sản phẩm)` : "") + (pending ? ` · đang tải hãng sản xuất cho ${pending} hồ sơ…` : "");
+  }
+  $("#more").hidden = $("#all").hidden = !state.more || state.loadingAll;
+  $("#all").textContent = `Tải tất cả (${state.total.toLocaleString("vi-VN")})`;
+  $("#csv").disabled = $("#gs").disabled = !rows.length;
+}
+
+// Vẽ lại tối đa ~1 lần/0,5 giây — bảng có thể tới hàng nghìn dòng
+let renderTimer = null;
+function scheduleRender() { if (!renderTimer) renderTimer = setTimeout(() => { renderTimer = null; render(); }, 500); }
+
+const tries = new Map();
+function enqueue(link) { if (!details.has(link)) { details.set(link, "loading"); queue.push(link); pump(); } }
+function pump() {
+  while (running < 2 && queue.length) {
+    const link = queue.shift(); running++;
+    fetch("/api/detail?url=" + encodeURIComponent(link)).then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => details.set(link, d))
+      .catch(() => {
+        // vimda hay trả 503 khi bận: thử lại tối đa 3 lần, giãn cách tăng dần
+        const n = (tries.get(link) || 0) + 1; tries.set(link, n);
+        if (n <= 3) setTimeout(() => { queue.push(link); pump(); }, 5000 * n);
+        else details.set(link, "error");
+      })
+      .finally(() => { running--; scheduleRender(); pump(); });
+  }
+}
+
+async function load(page, size = 50) {
+  const token = ++state.token; state.lastError = false;
+  $("#go").disabled = $("#more").disabled = true;
+  $("#status").classList.remove("err");
+  $("#status").textContent = page === 1 ? "Đang tìm trên vimda…" : "Đang tải thêm…";
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(state.q)}&mode=${state.mode}&page=${page}&size=${size}`);
+    const j = await r.json();
+    if (token !== state.token) return;
+    if (!r.ok) throw new Error(j.error);
+    state.page = page; state.total = j.total; state.more = j.more;
+    if (page === 1) {
+      // tìm mới: bỏ các hồ sơ đang chờ trong hàng đợi để chúng được tải lại khi cần
+      queue.splice(0).forEach(l => details.delete(l));
+      state.rows = j.rows;
+    } else {
+      const seen = new Set(state.rows.map(x => x["Mã hồ sơ"] + "|" + x["Số công bố / số lưu hành"]));
+      state.rows = state.rows.concat(j.rows.filter(x => !seen.has(x["Mã hồ sơ"] + "|" + x["Số công bố / số lưu hành"])));
+    }
+    j.rows.filter(x => x["Tên sản phẩm (TBYT)"] && x["Link chi tiết"]).forEach(x => enqueue(x["Link chi tiết"]));
+    return token;
+  } catch (e) {
+    if (token !== state.token) return;
+    $("#status").classList.add("err");
+    state.lastError = true;
+    $("#status").textContent = e.message || "Không kết nối được. app.py còn đang chạy không?";
+  } finally {
+    if (token === state.token) { $("#go").disabled = $("#more").disabled = false; render(); }
+  }
+}
+
+$("#f").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = $("#q").value.trim(); if (!q) return;
+  state.q = q; state.mode = document.querySelector("input[name=m]:checked").value; state.loadingAll = false;
+  const u = new URL(location); u.searchParams.set("q", q); u.searchParams.set("mode", state.mode); history.replaceState(null, "", u);
+  load(1);
+});
+$("#modes").addEventListener("change", () => { if ($("#q").value.trim()) $("#f").requestSubmit(); });
+$("#more").addEventListener("click", () => load(state.page + 1));
+$("#all").addEventListener("click", async () => {
+  // Lấy lại từ đầu với 200 hồ sơ/lần cho nhanh, rồi lặp tới trang cuối
+  state.loadingAll = true; render();
+  let page = Math.floor(state.rows.length / 200) + 1;   // giữ lại phần đã có
+  try {
+    let fails = 0;
+    while (state.loadingAll) {
+      const t = await load(page, 200);
+      if (!t) {
+        // vimda bận: chờ rồi thử lại trang này, tối đa 5 lần
+        if (!state.lastError || ++fails > 5) break;
+        $("#status").textContent = `vimda đang bận — thử lại sau 20 giây (lần ${fails}/5)…`;
+        await new Promise(r => setTimeout(r, 20000));
+        continue;
+      }
+      fails = 0;
+      if (!state.more) break;
+      $("#status").textContent = `Đã lấy ${state.rows.length.toLocaleString("vi-VN")} / ~${state.total.toLocaleString("vi-VN")} hồ sơ, đang lấy tiếp…`;
+      page++;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  } finally { state.loadingAll = false; render(); }
+});
+$("#onlyProd").addEventListener("change", render);
+$("#tb").addEventListener("click", e => {
+  const link = e.target.dataset && e.target.dataset.retry;
+  if (link) { e.preventDefault(); details.delete(link); enqueue(link); render(); }
+});
+const EXPORT_COLS = ["Số công bố / số lưu hành", "Mã hồ sơ", "Thủ tục", "Ngày công bố", "Công ty công bố", "Tên sản phẩm (TBYT)",
+  "Tên thương mại", "Hãng / cơ sở sản xuất", "Chủ sở hữu", "Trạng thái", "File công bố", "Link chi tiết"];
+function exportRows() {
+  return visible().map(r => {
+    const d = details.get(r["Link chi tiết"]); const x = Object.assign({}, r, typeof d === "object" ? d : {});
+    return EXPORT_COLS.map(c => String(x[c] ?? ""));
+  });
+}
+function pendingCount() {
+  return visible().filter(r => r["Tên sản phẩm (TBYT)"] && typeof details.get(r["Link chi tiết"]) !== "object").length;
+}
+function fileTag() { return strip(state.q).replace(/[^a-z0-9]+/g, "_"); }
+
+$("#csv").addEventListener("click", () => {
+  const lines = [EXPORT_COLS].concat(exportRows()).map(a => a.map(v => '"' + v.replace(/"/g, '""') + '"').join(","));
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "vimda_" + fileTag() + ".csv"; a.click();
+});
+
+// ---- Google Sheets ----
+const GS_KEY = "vimda_apps_script_url";
+function gsMsg(text, cls) { $("#gsMsg").textContent = text; $("#gsMsg").className = "msg " + (cls || ""); }
+function lsGet(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+$("#gs").addEventListener("click", () => {
+  const n = visible().length, p = pendingCount();
+  $("#dlgInfo").textContent = `${n} hồ sơ cho từ khóa “${state.q}”.` + (p ? ` Lưu ý: còn ${p} hồ sơ chưa tải xong hãng sản xuất — đợi thêm chút nếu cần đủ cột này.` : "");
+  $("#gsUrl").value = lsGet(GS_KEY); gsMsg("");
+  $("#dlg").showModal();
+});
+$("#dlgClose").addEventListener("click", () => $("#dlg").close());
+
+$("#gsCopy").addEventListener("click", async () => {
+  // Dạng TSV: Google Sheets tự tách cột khi dán
+  const tsv = [EXPORT_COLS].concat(exportRows()).map(a => a.map(v => v.replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+  try {
+    await navigator.clipboard.writeText(tsv);
+    window.open("https://sheets.new", "_blank", "noopener");
+    gsMsg(`Đã sao chép ${exportRows().length} dòng. Trong Google Sheet mới: bấm ô A1 rồi Cmd+V.`, "ok");
+  } catch (e) { gsMsg("Không sao chép được vào bộ nhớ tạm: " + e.message, "err"); }
+});
+
+$("#gsSend").addEventListener("click", async () => {
+  const url = $("#gsUrl").value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) {
+    return gsMsg("URL phải có dạng https://script.google.com/macros/s/…/exec (xem phần Cài đặt lần đầu).", "err");
+  }
+  lsSet(GS_KEY, url);
+  const rows = exportRows();
+  $("#gsSend").disabled = true; gsMsg(`Đang gửi ${rows.length} dòng…`);
+  try {
+    const r = await fetch("/api/sheets", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, payload: { header: EXPORT_COLS, rows } }) });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || "Lỗi không rõ");
+    $("#gsMsg").className = "msg ok";
+    $("#gsMsg").innerHTML = `Đã thêm ${j.added} dòng` + (j.skipped ? `, bỏ qua ${j.skipped} dòng đã có` : "") +
+      `. <a class="lnk" target="_blank" rel="noopener" href="${esc(j.url)}">Mở Google Sheet</a>`;
+  } catch (e) { gsMsg(e.message, "err"); }
+  finally { $("#gsSend").disabled = false; }
+});
+
+$("#gsCode").addEventListener("click", async () => {
+  try {
+    const code = await (await fetch("/apps-script.gs")).text();
+    await navigator.clipboard.writeText(code);
+    gsMsg("Đã sao chép code Apps Script — dán vào trình soạn thảo Apps Script.", "ok");
+  } catch (e) { gsMsg("Không sao chép được: " + e.message, "err"); }
+});
+
+const init = new URL(location).searchParams;
+if (init.get("q")) {
+  $("#q").value = init.get("q");
+  const m = document.querySelector(`input[name=m][value="${init.get("mode")}"]`); if (m) m.checked = true;
+  $("#f").requestSubmit();
+}
+</script>
+</body>
+</html>
