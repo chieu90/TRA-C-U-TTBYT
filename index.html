@@ -194,7 +194,7 @@ function render() {
       const d = details.get(r["Link chi tiết"]);
       const tm = d && typeof d === "object" && d["Tên thương mại"] ? `<div class="tm">${hl(d["Tên thương mại"])}</div>` : "";
       const st = r["Trạng thái"]; const cls = /hiệu lực/i.test(st) && !/hết|thu hồi/i.test(st) ? "ok" : "bad";
-      return `<tr>
+      return `<tr data-link="${esc(r["Link chi tiết"])}">
         <td class="num" data-l="Số lưu hành">${hl(r["Số công bố / số lưu hành"])}<div class="meta">${esc(r["Mã hồ sơ"])}</div></td>
         <td data-l="Sản phẩm"><div class="prod">${hl(r["Tên sản phẩm (TBYT)"]) || '<span class="meta">—</span>'}</div>${tm}<div class="meta">${esc(r["Thủ tục"])}</div></td>
         <td data-l="Công ty công bố">${hl(r["Công ty công bố"])}</td>
@@ -205,6 +205,7 @@ function render() {
       </tr>`;
     }).join("");
   }
+  observeRows();
   const shown = rows.length, all = state.rows.length;
   if (state.q && !$("#status").classList.contains("err")) {
     const pending = state.rows.filter(r => r["Tên sản phẩm (TBYT)"] && (!details.get(r["Link chi tiết"]) || details.get(r["Link chi tiết"]) === "loading")).length;
@@ -216,6 +217,22 @@ function render() {
   $("#csv").disabled = $("#gs").disabled = !rows.length;
 }
 
+// Dòng nào đang hiện trên màn hình thì tải hãng sản xuất trước
+const io = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    const link = en.target.dataset.link, i = queue.indexOf(link);
+    if (i > 0) { queue.splice(i, 1); queue.unshift(link); }
+  }
+}) : null;
+function observeRows() {
+  if (!io) return;
+  io.disconnect();
+  document.querySelectorAll("#tb tr[data-link]").forEach(tr => {
+    if (details.get(tr.dataset.link) === "loading") io.observe(tr);
+  });
+}
+
 // Vẽ lại tối đa ~1 lần/0,5 giây — bảng có thể tới hàng nghìn dòng
 let renderTimer = null;
 function scheduleRender() { if (!renderTimer) renderTimer = setTimeout(() => { renderTimer = null; render(); }, 500); }
@@ -223,7 +240,7 @@ function scheduleRender() { if (!renderTimer) renderTimer = setTimeout(() => { r
 const tries = new Map();
 function enqueue(link) { if (!details.has(link)) { details.set(link, "loading"); queue.push(link); pump(); } }
 function pump() {
-  while (running < 2 && queue.length) {
+  while (running < 4 && queue.length) {
     const link = queue.shift(); running++;
     fetch("/api/detail?url=" + encodeURIComponent(link)).then(r => r.ok ? r.json() : Promise.reject())
       .then(d => details.set(link, d))

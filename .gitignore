@@ -8,3 +8,4 @@ vimda_*.xlsx
 __pycache__/
 .claude/
 .DS_Store
+app_cache.json
