@@ -165,24 +165,57 @@ def load_details():
 
 
 # ---------- các bước ----------
+def fetch_page(page, size=PAGE_SIZE):
+    url = list_page_url(page)
+    if size != PAGE_SIZE:
+        url = url.replace(f"{v.NS}delta={PAGE_SIZE}", f"{v.NS}delta={size}")
+    return v.parse_list(fetch(url))
+
+
+def fetch_page_safe(page):
+    """Một số trang của vimda bị lỗi (trả về trang rỗng, có lẽ do 1 hồ sơ hỏng).
+    Khi đó lấy lại khoảng đó bằng các trang nhỏ hơn, bỏ qua đúng phần bị lỗi."""
+    total, got = fetch_page(page)
+    if got:
+        return total, got
+    log(f"Trang {page} bị lỗi trên vimda — lấy lại bằng trang nhỏ")
+    got = []
+    for size in (20, 5, 1):
+        got, bad = [], 0
+        per = PAGE_SIZE // size
+        for sub in range((page - 1) * per + 1, page * per + 1):
+            t, g = fetch_page(sub, size)
+            total = total or t
+            if g:
+                got += g
+            else:
+                bad += 1
+        if bad == 0 or size == 1:
+            if bad:
+                log(f"Trang {page}: bỏ qua {bad} hồ sơ lỗi trên vimda")
+            break
+    return total, got
+
+
 def crawl_list(st, rows):
     if st["list_complete"]:
         return
     page = st["list_done_page"] + 1
     with open(LIST_FILE, "a", encoding="utf-8") as f:
         while True:
-            total, got = v.parse_list(fetch(list_page_url(page)))
+            pages = -(-(st["list_total"] or 0) // PAGE_SIZE)
+            total, got = fetch_page_safe(page)
             if total:
                 st["list_total"] = total
+                pages = -(-total // PAGE_SIZE)
             for r in got:
                 rows[row_key(r)] = r
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
             f.flush()
             st["list_done_page"] = page
             save_state(st)
-            pages = -(-(st["list_total"] or 0) // PAGE_SIZE)
             log(f"Danh sách: trang {page}/{pages} — có {len(rows):,} hồ sơ")
-            if not got or page >= pages:
+            if page >= pages:
                 break
             page += 1
     st["list_complete"] = True
