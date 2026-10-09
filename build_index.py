@@ -5,12 +5,13 @@ Xây kho dữ liệu đầy đủ từ vimda để tìm được theo hãng sả
     python3 build_index.py           # chạy (hoặc chạy tiếp) toàn bộ: danh sách -> chi tiết -> đóng gói
     python3 build_index.py update    # chỉ lấy hồ sơ mới công bố từ lần trước rồi đóng gói
     python3 build_index.py export    # đóng gói phần đã có ra data/tbyt_index.json.gz (để đưa lên web)
+    python3 build_index.py publish   # đóng gói rồi đẩy lên GitHub ngay (Render tự cập nhật trang)
     python3 build_index.py status    # xem tiến độ
 
 Mọi thứ lưu trong thư mục index/ (ghi nối từng dòng, an toàn khi bị ngắt giữa chừng).
 vimda giới hạn ~1 request / 2-3 giây cho mỗi IP, nên lần đầu mất khoảng 3 ngày.
 """
-import argparse, gzip, json, os, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, gzip, json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 
 import vimda_scraper as v
 
@@ -212,6 +213,8 @@ def crawl_details(rows, det):
                 log(f"Chi tiết: {n:,}/{len(todo):,} — {rate:.0f} hồ sơ/phút — còn khoảng {left:.1f} giờ")
             if n % 2000 == 0:
                 export(rows, det)  # đóng gói định kỳ để có thể đưa phần đã có lên web
+            if n % 10000 == 0:
+                publish()          # ~7 giờ một lần: đẩy lên GitHub -> Render tự cập nhật trang
 
 
 def update(rows, det):
@@ -254,6 +257,23 @@ def export(rows, det):
         f"({os.path.getsize(OUT_FILE) / 1e6:.1f} MB)")
 
 
+def publish():
+    """Đẩy file kho dữ liệu lên GitHub (dùng mã đã lưu trong Keychain). Lỗi thì chỉ ghi log, không dừng."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    rel = os.path.relpath(OUT_FILE, HERE)
+    try:
+        subprocess.run(["git", "add", rel], cwd=HERE, check=True, env=env, capture_output=True)
+        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=HERE, env=env).returncode == 0:
+            return log("Kho dữ liệu không đổi — không cần đẩy lên GitHub")
+        subprocess.run(["git", "commit", "-m", f"Cập nhật kho dữ liệu ({time.strftime('%d/%m/%Y %H:%M')})"],
+                       cwd=HERE, check=True, env=env, capture_output=True)
+        r = subprocess.run(["git", "push", "-q", "origin", "main"], cwd=HERE, env=env, capture_output=True, text=True)
+        log("Đã đẩy kho dữ liệu lên GitHub — trang web tự cập nhật sau ~2 phút" if r.returncode == 0
+            else f"Không đẩy được lên GitHub: {r.stderr.strip()[-200:]}")
+    except Exception as e:
+        log(f"Không đẩy được lên GitHub: {e}")
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
     os.makedirs(DIR, exist_ok=True)
@@ -266,12 +286,16 @@ def main():
         return
     if cmd == "export":
         return export(rows, det)
+    if cmd == "publish":
+        export(rows, det)
+        return publish()
     if cmd == "update":
         update(rows, det)
     else:
         crawl_list(st, rows)
         crawl_details(rows, det)
     export(rows, det)
+    publish()
     log("Hoàn tất.")
 
 
