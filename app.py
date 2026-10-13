@@ -125,6 +125,12 @@ def norm(s):
     return "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
 
 
+def date_key(d):
+    """'07/10/2026' -> '2026-10-07' để so sánh/sắp xếp."""
+    p = (d or "").split("/")
+    return f"{p[2]}-{p[1]}-{p[0]}" if len(p) == 3 else ""
+
+
 index_rows, index_maker, index_info = [], [], {"count": 0, "built": None}
 if os.path.exists(INDEX_FILE):
     try:
@@ -135,10 +141,97 @@ if os.path.exists(INDEX_FILE):
             index_rows.append(r)
             index_maker.append(norm(r["Hãng / cơ sở sản xuất"] + " | " + r["Chủ sở hữu"]))
             detail_cache.setdefault(detail_key(r["Link chi tiết"]), {k: r.get(k, "") for k in DETAIL_FIELDS})
+        index_rows.sort(key=lambda r: date_key(r["Ngày công bố"]), reverse=True)
+        index_maker = [norm(r["Hãng / cơ sở sản xuất"] + " | " + r["Chủ sở hữu"]) for r in index_rows]
         index_info = {"count": len(index_rows), "built": data.get("built")}
         print(f"Đã nạp kho dữ liệu: {len(index_rows):,} hồ sơ (cập nhật {data.get('built')})", file=sys.stderr)
     except Exception as e:
         print(f"Không nạp được kho dữ liệu: {e}", file=sys.stderr)
+
+
+# ---------- Tự cập nhật hồ sơ mới công bố trên vimda ----------
+UPDATE_EVERY = int(os.environ.get("UPDATE_EVERY", 1800))   # giây; 0 = tắt
+VN_TZ = 7 * 3600
+update_lock = threading.Lock()
+
+
+def today_vn():
+    return time.strftime("%d/%m/%Y", time.gmtime(time.time() + VN_TZ))
+
+
+def refresh_info(checked=None):
+    today = today_vn()
+    index_info.update(count=len(index_rows),
+                      today=sum(1 for r in index_rows if r["Ngày công bố"] == today),
+                      newest=index_rows[0]["Ngày công bố"] if index_rows else None)
+    if checked:
+        index_info["checked"] = checked
+
+
+def update_once():
+    """Đọc các trang mới nhất của vimda, thêm hồ sơ có sản phẩm chưa có trong kho (kèm hãng / chủ sở hữu).
+    Dừng khi gặp hồ sơ cũ hơn ngày mới nhất trong kho 3 ngày (phần cũ do build_index.py lo)."""
+    global index_rows, index_maker
+    known = {detail_key(r["Link chi tiết"]) for r in index_rows}
+    newest = max((date_key(r["Ngày công bố"]) for r in index_rows), default="")
+    stop_before = ""
+    if newest:
+        t = time.mktime(time.strptime(newest, "%Y-%m-%d")) - 3 * 86400
+        stop_before = time.strftime("%Y-%m-%d", time.localtime(t))
+    a = argparse.Namespace(keyword=None, cong_ty=None, ten_tbyt=None, tu=None, den=None)
+    fresh = []
+    for page in range(1, 11):  # tối đa 2.000 hồ sơ mới mỗi lần
+        _, rows = v.parse_list(fetch(exclusive(v.list_url(page, a, delta=200)), "search"))
+        if not rows:
+            break
+        old = 0
+        for r in rows:
+            if stop_before and date_key(r["Ngày công bố"]) < stop_before:
+                old += 1
+                continue
+            if r["Tên sản phẩm (TBYT)"] and r["Link chi tiết"] and detail_key(r["Link chi tiết"]) not in known:
+                fresh.append(r)
+        if old or not stop_before:
+            break
+    added = []
+    for r in fresh:
+        try:
+            d = detail(r["Link chi tiết"])
+        except Exception as e:
+            print(f"Cập nhật: bỏ qua {r['Mã hồ sơ']} ({e})", file=sys.stderr)
+            continue
+        x = {k: r.get(k, "") for k in ("Số công bố / số lưu hành", "Mã hồ sơ", "Thủ tục", "Ngày công bố",
+                                      "Công ty công bố", "Tên sản phẩm (TBYT)", "Trạng thái", "File công bố", "Link chi tiết")}
+        x.update({k: d.get(k, "") for k in DETAIL_FIELDS})
+        added.append(x)
+    if added:
+        rows = sorted(added + index_rows, key=lambda r: date_key(r["Ngày công bố"]), reverse=True)
+        maker = [norm(r["Hãng / cơ sở sản xuất"] + " | " + r["Chủ sở hữu"]) for r in rows]
+        index_rows, index_maker = rows, maker   # đổi cả khối một lần, người đang tìm không bị lỗi
+    refresh_info(time.strftime("%d/%m/%Y %H:%M", time.gmtime(time.time() + VN_TZ)))
+    print(f"Cập nhật vimda: +{len(added)} hồ sơ mới (kho {len(index_rows):,})", file=sys.stderr, flush=True)
+    return len(added)
+
+
+def updater():
+    time.sleep(20)
+    while UPDATE_EVERY:
+        try:
+            with update_lock:
+                update_once()
+        except Exception as e:
+            print(f"Cập nhật vimda lỗi: {e}", file=sys.stderr, flush=True)
+        time.sleep(UPDATE_EVERY)
+
+
+def latest(page, size):
+    part = index_rows[(page - 1) * size: page * size]
+    rows = []
+    for r in part:
+        x = dict(r)
+        x["_d"] = {k: x.pop(k, "") for k in DETAIL_FIELDS}
+        rows.append(x)
+    return {"total": len(index_rows), "more": len(index_rows) > page * size, "rows": rows, "exact": True}
 
 
 def search_maker(q, page, size):
@@ -241,6 +334,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200, open(os.path.join(HERE, "index.html"), "rb").read(), "text/html; charset=utf-8")
             elif u.path == "/api/info":
                 self.send(200, index_info)
+            elif u.path == "/api/latest":
+                size = min(200, max(10, int(p.get("size", PAGE))))
+                self.send(200, latest(max(1, int(p.get("page", 1))), size))
             elif u.path == "/api/search":
                 q = p.get("q", "").strip()
                 if not q:
@@ -285,7 +381,10 @@ class Handler(BaseHTTPRequestHandler):
             sys.stderr.write("%s\n" % (fmt % args))
 
 
+refresh_info()
+
 if __name__ == "__main__":
+    threading.Thread(target=updater, daemon=True).start()
     print(f"Mở trình duyệt: http://localhost:{PORT}  (Ctrl+C để dừng)", file=sys.stderr, flush=True)
     try:
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

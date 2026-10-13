@@ -74,7 +74,11 @@ button:disabled { opacity: .5; cursor: default; filter: none; }
   background: var(--bg); color: var(--text); outline: none; }
 .filter input:focus, .filter input:not(:placeholder-shown) { border-color: var(--brand-2); background: var(--surface); box-shadow: 0 0 0 3px var(--k-cb-bg); }
 
-.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 2px 12px; }
+.sec { display: flex; align-items: center; gap: 10px; margin: 26px 2px 0; font-size: 18px; }
+.sec .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ok); background: var(--ok-bg);
+  padding: 3px 10px; border-radius: 999px; }
+.sec .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: p 1.6s infinite; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 2px 12px; }
 .status { color: var(--muted); font-size: 14px; }
 .status.err { color: var(--bad); }
 .opts { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
@@ -188,6 +192,7 @@ mark { background: #fff3b0; color: inherit; border-radius: 3px; padding: 0 1px; 
   </div>
   </section>
 
+  <h2 class="sec" id="secTitle"><span id="secText">Hồ sơ mới công bố</span><span class="live" id="secLive">Tự cập nhật 30 phút/lần</span></h2>
   <div class="bar">
     <div class="status" id="status">Nhập từ khóa để bắt đầu. Gõ không dấu cũng được.</div>
     <div class="opts">
@@ -276,6 +281,12 @@ function kindOf(t) {
   return { c: "x", label: t.replace(/\s*\(.*$/, "").slice(0, 40) || "Hồ sơ" };
 }
 
+function setSection() {
+  const latestMode = state.mode === "latest";
+  $("#secText").textContent = latestMode ? "Hồ sơ mới công bố" : `Kết quả cho “${state.q}”`;
+  $("#secLive").hidden = !latestMode;
+}
+
 function render() {
   const rows = visible();
   if (!rows.length) {
@@ -318,7 +329,10 @@ function render() {
   }
   observeRows();
   const shown = rows.length, all = state.rows.length;
-  if (state.q && !$("#status").classList.contains("err")) {
+  if (state.mode === "latest" && !state.q && !fltTerm() && !$("#status").classList.contains("err")) {
+    $("#status").textContent = `Mới nhất trước · ${idx.today ? `hôm nay có ${idx.today} hồ sơ mới · ` : ""}` +
+      `cập nhật lúc ${idx.checked || idx.built || "—"} · đang hiện ${shown}/${state.total.toLocaleString("vi-VN")} hồ sơ trong kho`;
+  } else if ((state.q || state.mode === "latest") && !$("#status").classList.contains("err")) {
     const pending = pendingRows().length;
     if (fltTerm()) {
       $("#status").textContent = `Lọc “${$("#flt").value.trim()}”: ${shown} hồ sơ khớp trong ${all} hồ sơ đã tải` +
@@ -332,6 +346,7 @@ function render() {
     }
   }
   $("#more").hidden = $("#all").hidden = !state.more || state.loadingAll;
+  if (state.mode === "latest") $("#all").hidden = true;
   $("#all").textContent = `Tải tất cả (${state.total.toLocaleString("vi-VN")})`;
   $("#csv").disabled = $("#gs").disabled = !rows.length;
 }
@@ -377,9 +392,11 @@ async function load(page, size = 50) {
   const token = ++state.token; state.lastError = false;
   $("#go").disabled = $("#more").disabled = true;
   $("#status").classList.remove("err");
-  $("#status").textContent = page === 1 ? "Đang tìm trên vimda…" : "Đang tải thêm…";
+  $("#status").textContent = page === 1 ? (state.mode === "latest" ? "Đang lấy hồ sơ mới công bố…" : "Đang tìm trên vimda…") : "Đang tải thêm…";
+  setSection();
   try {
-    const r = await fetch(`/api/search?q=${encodeURIComponent(state.q)}&mode=${state.mode}&page=${page}&size=${size}`);
+    const r = await fetch(state.mode === "latest" ? `/api/latest?page=${page}&size=${size}`
+      : `/api/search?q=${encodeURIComponent(state.q)}&mode=${state.mode}&page=${page}&size=${size}`);
     const j = await r.json();
     if (token !== state.token) return;
     if (!r.ok) throw new Error(j.error);
@@ -531,10 +548,11 @@ function goHome(e) {
   $("#go").disabled = $("#more").disabled = false;
   if ($("#dlg").open) $("#dlg").close();
   history.replaceState(null, "", location.pathname);
-  render();
   window.scrollTo({ top: 0, behavior: "smooth" });
   $("#q").focus();
+  showLatest();
 }
+function showLatest() { state.q = ""; state.mode = "latest"; load(1); }
 document.querySelectorAll(".go-home").forEach(a => a.addEventListener("click", goHome));
 
 // Thông tin kho dữ liệu dựng sẵn (dùng cho chế độ tìm theo hãng / chủ sở hữu)
@@ -547,7 +565,7 @@ function showIdxNote() {
     ? `Tìm trong kho dữ liệu dựng sẵn: ${idx.count.toLocaleString("vi-VN")} hồ sơ có sản phẩm, cập nhật lúc ${idx.built}. Hồ sơ công bố sau thời điểm này chưa có trong kho.`
     : "Kho dữ liệu hãng sản xuất đang được xây dựng (mất vài ngày) — chế độ này chưa có dữ liệu. Tạm thời: tìm theo sản phẩm/công ty rồi dùng ô “Lọc kết quả”.";
 }
-fetch("/api/info").then(r => r.json()).then(j => { idx = j; showIdxNote(); }).catch(() => {});
+fetch("/api/info").then(r => r.json()).then(j => { idx = j; showIdxNote(); render(); }).catch(() => {});
 $("#modes").addEventListener("change", showIdxNote);
 
 const init = new URL(location).searchParams;
@@ -555,6 +573,8 @@ if (init.get("q")) {
   $("#q").value = init.get("q");
   const m = document.querySelector(`input[name=m][value="${init.get("mode")}"]`); if (m) m.checked = true;
   $("#f").requestSubmit();
+} else {
+  showLatest();
 }
 </script>
 </body>
