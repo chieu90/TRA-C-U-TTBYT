@@ -143,7 +143,7 @@ if os.path.exists(INDEX_FILE):
             detail_cache.setdefault(detail_key(r["Link chi tiết"]), {k: r.get(k, "") for k in DETAIL_FIELDS})
         index_rows.sort(key=lambda r: date_key(r["Ngày công bố"]), reverse=True)
         index_maker = [norm(r["Hãng / cơ sở sản xuất"] + " | " + r["Chủ sở hữu"]) for r in index_rows]
-        index_info = {"count": len(index_rows), "built": data.get("built")}
+        index_info = {"count": len(index_rows), "built": data.get("built"), "complete_from": data.get("complete_from")}
         print(f"Đã nạp kho dữ liệu: {len(index_rows):,} hồ sơ (cập nhật {data.get('built')})", file=sys.stderr)
     except Exception as e:
         print(f"Không nạp được kho dữ liệu: {e}", file=sys.stderr)

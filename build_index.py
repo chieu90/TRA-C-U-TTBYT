@@ -281,9 +281,16 @@ def export(rows, det):
         x = dict(r, **d)
         out.append([x.get(c, "") for c in COLS])
     out.sort(key=lambda a: "/".join(reversed(a[3].split("/"))), reverse=True)
+    # Kho đầy đủ từ ngày nào: hồ sơ có sản phẩm mới nhất -> cũ dần, dừng ở hồ sơ đầu tiên chưa có chi tiết
+    complete_from = None
+    for r in sorted((r for r in rows.values() if r["Tên sản phẩm (TBYT)"]),
+                    key=lambda r: "/".join(reversed(r["Ngày công bố"].split("/"))), reverse=True):
+        if key_of(r["Link chi tiết"]) not in det:
+            break
+        complete_from = r["Ngày công bố"]
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
     with gzip.open(OUT_FILE + ".tmp", "wt", encoding="utf-8") as f:
-        json.dump({"cols": COLS, "built": time.strftime("%d/%m/%Y %H:%M"), "rows": out}, f,
+        json.dump({"cols": COLS, "built": time.strftime("%d/%m/%Y %H:%M"), "complete_from": complete_from, "rows": out}, f,
                   ensure_ascii=False, separators=(",", ":"))
     os.replace(OUT_FILE + ".tmp", OUT_FILE)
     log(f"Đã đóng gói {len(out):,} hồ sơ -> {os.path.relpath(OUT_FILE, HERE)} "

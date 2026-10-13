@@ -562,7 +562,9 @@ function showIdxNote() {
   $("#idxNote").hidden = !on;
   if (!on) return;
   $("#idxNote").textContent = idx.count
-    ? `Tìm trong kho dữ liệu dựng sẵn: ${idx.count.toLocaleString("vi-VN")} hồ sơ có sản phẩm, cập nhật lúc ${idx.built}. Hồ sơ công bố sau thời điểm này chưa có trong kho.`
+    ? `Tìm trong kho dữ liệu dựng sẵn: ${idx.count.toLocaleString("vi-VN")} hồ sơ có sản phẩm` +
+      (idx.complete_from ? `, đầy đủ cho hồ sơ công bố từ ${idx.complete_from} đến nay. Hồ sơ cũ hơn đang được bổ sung dần (kho tải từ mới đến cũ), nên kết quả của hãng có hồ sơ cũ có thể còn thiếu.`
+                         : `, cập nhật lúc ${idx.built}.`)
     : "Kho dữ liệu hãng sản xuất đang được xây dựng (mất vài ngày) — chế độ này chưa có dữ liệu. Tạm thời: tìm theo sản phẩm/công ty rồi dùng ô “Lọc kết quả”.";
 }
 fetch("/api/info").then(r => r.json()).then(j => { idx = j; showIdxNote(); render(); }).catch(() => {});
