@@ -1,0 +1,209 @@
+{
+  "_ghi_chu": "Sản phẩm quan tâm. 'tu' = từ khóa tìm trong tên mặt hàng (không phân biệt hoa thường). 'tim' = từ khóa gõ vào ô Loại hàng hóa trên muasamcong khi quét hằng ngày. 'loai_tru' = bỏ mặt hàng có các chữ này.",
+  "tim": [
+    "test",
+    "que thử",
+    "khay thử"
+  ],
+  "nhom": [
+    {
+      "ten": "HIV",
+      "tu": [
+        "HIV"
+      ]
+    },
+    {
+      "ten": "HBsAg / viêm gan B",
+      "tu": [
+        "HBsAg",
+        "HBeAg",
+        "HBsAb",
+        "HBcAb",
+        "HBc ",
+        "viêm gan B",
+        "siêu vi B"
+      ]
+    },
+    {
+      "ten": "HCV / viêm gan C",
+      "tu": [
+        "HCV",
+        "viêm gan C",
+        "siêu vi C"
+      ]
+    },
+    {
+      "ten": "HAV / HEV",
+      "tu": [
+        "HAV",
+        "HEV",
+        "viêm gan A",
+        "viêm gan E"
+      ]
+    },
+    {
+      "ten": "Dengue / sốt xuất huyết",
+      "tu": [
+        "dengue",
+        "sốt xuất huyết",
+        "NS1"
+      ]
+    },
+    {
+      "ten": "Giang mai",
+      "tu": [
+        "giang mai",
+        "syphilis",
+        "TPHA",
+        "RPR"
+      ]
+    },
+    {
+      "ten": "Cúm / COVID / RSV / Adeno",
+      "tu": [
+        "cúm",
+        "influenza",
+        "covid",
+        "sars-cov",
+        "RSV",
+        "adeno"
+      ]
+    },
+    {
+      "ten": "H. pylori",
+      "tu": [
+        "pylori",
+        "test nhanh HP",
+        "HP dạ dày"
+      ]
+    },
+    {
+      "ten": "Ma túy",
+      "tu": [
+        "ma túy",
+        "ma tuý",
+        "morphin",
+        "heroin",
+        "amphetamin",
+        "methamphetamin",
+        "MDMA",
+        "THC",
+        "ketamin",
+        "chất gây nghiện"
+      ]
+    },
+    {
+      "ten": "Thử thai hCG",
+      "tu": [
+        "hCG",
+        "thử thai",
+        "thai sớm"
+      ]
+    },
+    {
+      "ten": "Rota / Noro / máu ẩn trong phân",
+      "tu": [
+        "rota",
+        "noro",
+        "máu ẩn",
+        "máu trong phân",
+        "hồng cầu trong phân"
+      ]
+    },
+    {
+      "ten": "Sốt rét / ký sinh trùng",
+      "tu": [
+        "sốt rét",
+        "malaria",
+        "tsutsugamushi",
+        "toxocara",
+        "strongyloid",
+        "taenia",
+        "entamoeba",
+        "fasciola",
+        "echinococ",
+        "gnathostoma"
+      ]
+    },
+    {
+      "ten": "Chlamydia / Strep / lao / Rubella",
+      "tu": [
+        "chlamydia",
+        "strep",
+        "kháng nguyên vi khuẩn lao",
+        "rubella"
+      ]
+    },
+    {
+      "ten": "Troponin / CRP",
+      "tu": [
+        "troponin",
+        "CRP"
+      ]
+    },
+    {
+      "ten": "Tay chân miệng EV71",
+      "tu": [
+        "EV71",
+        "tay chân miệng",
+        "chân tay miệng",
+        "chân, tay, miệng"
+      ]
+    },
+    {
+      "ten": "Que thử nước tiểu",
+      "tu": [
+        "nước tiểu"
+      ]
+    },
+    {
+      "ten": "Đường huyết / HbA1c",
+      "tu": [
+        "đường huyết",
+        "đường máu",
+        "tiểu đường",
+        "HbA1c"
+      ]
+    }
+  ],
+  "can_co": [
+    "test",
+    "que thử",
+    "khay thử",
+    "thanh thử",
+    "rapid",
+    "cassette",
+    "kit thử",
+    "bộ thử"
+  ],
+  "loai_tru": [
+    "testosteron",
+    "ELISA",
+    "PCR",
+    "real-time",
+    "nồng độ ức chế",
+    "kháng sinh đồ",
+    "định danh",
+    "khử khuẩn",
+    "sát khuẩn",
+    "chỉ thị",
+    "ống nghiệm",
+    "hóa chất định lượng",
+    "định lượng",
+    "chất chuẩn",
+    "hiệu chuẩn",
+    "control",
+    "nội kiểm",
+    "ngoại kiểm",
+    "peroxide",
+    "peracetic",
+    "clo ",
+    "chlorine",
+    "miễn dịch -",
+    "test miễn dịch",
+    "khí máu",
+    "điện giải",
+    "đột biến gen",
+    "dị ứng"
+  ]
+}

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gói thầu đang mở</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%230e9f9a%22/%3E%3Cpath d=%22M9 8h14v3H9zM9 14h14v3H9zM9 20h9v3H9z%22 fill=%22white%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f3f6fa; --surface: #ffffff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0; --line-2: #eef2f7;
+  --brand: #0b5cad; --brand-2: #0e9f9a; --accent: #0b5cad; --accent-soft: #e6f0fb;
+  --ok: #15803d; --ok-bg: #e8f7ee; --bad: #c2410c; --bad-bg: #fdeee6; --warn: #b45309; --warn-bg: #fdf3e2;
+  --shadow: 0 1px 2px rgba(16,35,70,.06), 0 6px 20px rgba(16,35,70,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1420; --surface: #141d2b; --text: #e5ebf3; --muted: #93a3b8; --line: #243145; --line-2: #1b2636;
+    --brand: #3b8bdb; --brand-2: #22b3ad; --accent: #5aa2ec; --accent-soft: #16304d;
+    --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a2113; --warn: #fbbf24; --warn-bg: #3a2d12;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.hero { background: linear-gradient(120deg, var(--brand) 0%, #0a4a8c 45%, var(--brand-2) 100%); color: #fff; padding: 28px 16px 84px; }
+.hero-in { max-width: 1200px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 24px; margin: 0; }
+.sub { color: rgba(255,255,255,.85); margin: 10px 0 0; font-size: 14px; }
+.sub a, .nav a { color: #fff; }
+.nav { display: flex; gap: 8px; }
+.nav a { padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500;
+  background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); white-space: nowrap; }
+.nav a:hover { background: rgba(255,255,255,.24); }
+.wrap { max-width: 1200px; margin: -60px auto 0; padding: 0 16px 64px; position: relative; }
+.panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; border: 1px solid var(--line); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=search], input[type=text] { flex: 1 1 280px; min-width: 0; padding: 11px 14px; font-size: 15px; border: 1.5px solid var(--line);
+  border-radius: 12px; background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
+input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 4px var(--accent-soft); }
+label.lb { font-size: 13px; color: var(--muted); font-weight: 600; }
+button { padding: 10px 16px; font-size: 14px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer; font-weight: 600;
+  background: var(--surface); color: var(--text); font-family: inherit; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.chips label { cursor: pointer; }
+.chips input { display: none; }
+.chips span { display: inline-block; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); background: var(--surface); }
+.chips span b { font-weight: 600; color: var(--text); margin-left: 4px; }
+.chips input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chips input:checked + span b { color: #fff; }
+.sep { margin: 14px 0 0; padding-top: 14px; border-top: 1px dashed var(--line); }
+.opts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 12px; }
+.opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 2px 12px; }
+.status { color: var(--muted); font-size: 14px; }
+.list { display: grid; gap: 14px; }
+.pk { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.pk-h { padding: 14px 18px; border-left: 4px solid var(--brand-2); }
+.pk-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); }
+.chip.new { color: var(--ok); background: var(--ok-bg); }
+.chip.soon { color: var(--bad); background: var(--bad-bg); }
+.chip.mid { color: var(--warn); background: var(--warn-bg); }
+.code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); }
+.pk-name { font-size: 16px; font-weight: 700; margin: 0; }
+.pk-meta { color: var(--muted); font-size: 13.5px; margin-top: 4px; display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.pk-meta b { color: var(--text); font-weight: 600; }
+.pk-meta a { color: var(--accent); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600;
+  padding: 8px 10px; background: var(--line-2); border-top: 1px solid var(--line); }
+.tbl td { padding: 9px 10px; border-top: 1px solid var(--line-2); vertical-align: top; }
+.tbl td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl .grp { font-size: 12px; color: var(--brand-2); font-weight: 600; }
+.tbl .it { font-weight: 600; }
+.tbl .sub2 { color: var(--muted); font-size: 12.5px; }
+.spec { color: var(--muted); font-size: 12.5px; max-width: 440px; }
+.spec.cut { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.hl { background: #fff3b0; color: inherit; border-radius: 3px; }
+@media (prefers-color-scheme: dark) { .hl { background: #5a4a00; } }
+.empty { padding: 48px 16px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 14px; }
+.scroll { overflow-x: auto; }
+@media (max-width: 760px) {
+  .tbl thead { display: none; }
+  .tbl tr { display: block; border-top: 1px solid var(--line); padding: 8px 12px; }
+  .tbl td { display: block; border: 0; padding: 2px 0; }
+  .tbl td.n { text-align: left; }
+  .tbl td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: 12px; }
+  .spec { max-width: none; }
+}
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in">
+  <div class="top">
+    <h1>Gói thầu đang mở – sản phẩm quan tâm</h1>
+    <nav class="nav"><a href="/">Tra cứu TBYT</a></nav>
+  </div>
+  <p class="sub" id="sub">Dữ liệu từ <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>, cập nhật mỗi sáng.</p>
+</div></header>
+
+<div class="wrap">
+  <section class="panel">
+    <div class="row">
+      <input type="search" id="q" placeholder="Tìm trong mặt hàng, chủ đầu tư, thông số… (vd: HIV, Đồng Nai, 3 mặt vát)">
+      <button id="csv">Tải Excel (CSV)</button>
+    </div>
+    <div class="sep">
+      <div class="row">
+        <label class="lb" for="watch">Sản phẩm của tôi</label>
+        <input type="text" id="watch" placeholder="Từ khóa cách nhau bằng dấu phẩy, vd: HIV, Dengue NS1, kim gây tê tủy sống">
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="onlyWatch"> Chỉ hiện mặt hàng khớp "Sản phẩm của tôi"</label>
+        <label><input type="checkbox" id="onlyNew"> Chỉ gói mới (2 ngày gần đây)</label>
+        <label>Sắp xếp <select id="sort"><option value="han">Hạn đóng thầu gần nhất</option><option value="moi">Mới đăng trước</option><option value="gia">Giá gói lớn trước</option></select></label>
+      </div>
+    </div>
+    <div class="chips" id="groups"></div>
+  </section>
+
+  <div class="bar"><div class="status" id="status">Đang tải…</div></div>
+  <div class="list" id="list"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => n == null || n === '' ? '' : Number(n).toLocaleString('vi-VN');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+let DATA = null, picked = new Set();
+
+function store(k, v) { try { v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+function daysLeft(han) {
+  const t = new Date(han.replace(' ', 'T'));
+  return (t - new Date()) / 86400000;
+}
+
+function hl(text, words) {
+  let out = esc(text);
+  if (!words.length) return out;
+  const f = fold(text);
+  const marks = [];
+  for (const w of words) {
+    let i = 0;
+    while ((i = f.indexOf(w, i)) >= 0) { marks.push([i, i + w.length]); i += w.length; }
+  }
+  if (!marks.length) return out;
+  marks.sort((a, b) => a[0] - b[0]);
+  let res = '', pos = 0;
+  for (const [a, b] of marks) {
+    if (a < pos) continue;
+    res += esc(text.slice(pos, a)) + '<span class="hl">' + esc(text.slice(a, b)) + '</span>';
+    pos = b;
+  }
+  return res + esc(text.slice(pos));
+}
+
+function render() {
+  if (!DATA) return;
+  const q = fold($('#q').value.trim());
+  const watch = $('#watch').value.split(',').map(s => fold(s.trim())).filter(Boolean);
+  const onlyWatch = $('#onlyWatch').checked, onlyNew = $('#onlyNew').checked;
+  const now = new Date();
+  let pkgs = DATA.goi.map(p => {
+    const isNew = (now - new Date(p.lan_dau.replace(' ', 'T'))) / 86400000 < 2;
+    const items = p.hang_hoa.filter(h => {
+      if (picked.size && !picked.has(h.nhom)) return false;
+      const blob = fold([h.ten, h.ten_lo, h.tskt, h.hang, h.nhom].join(' '));
+      if (onlyWatch && watch.length && !watch.some(w => blob.includes(w))) return false;
+      if (q && !(blob.includes(q) || fold(p.cdt + ' ' + p.ten + ' ' + p.ma + ' ' + p.tinh).includes(q))) return false;
+      return true;
+    });
+    return { ...p, items, isNew };
+  }).filter(p => p.items.length && (!onlyNew || p.isNew) && daysLeft(p.han) > -0.01);
+  const s = $('#sort').value;
+  pkgs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'gia' ? (b.gia_goi || 0) - (a.gia_goi || 0) : a.han.localeCompare(b.han));
+  window._view = pkgs;
+  const nItems = pkgs.reduce((n, p) => n + p.items.length, 0);
+  $('#status').textContent = `${pkgs.length} gói, ${nItems} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '');
+  const words = [...watch, ...(q ? [q] : [])];
+  $('#list').innerHTML = pkgs.length ? pkgs.map(p => {
+    const d = daysLeft(p.han);
+    const dl = d < 1 ? `<span class="chip soon">Còn ${Math.max(0, Math.round(d * 24))} giờ</span>` : `<span class="chip ${d < 4 ? 'mid' : ''}">Còn ${Math.floor(d)} ngày</span>`;
+    return `<article class="pk"><div class="pk-h">
+      <div class="pk-top"><span class="code">${esc(p.ma)}</span><span class="chip">${esc(p.hinh_thuc)}</span>${p.isNew ? '<span class="chip new">Mới</span>' : ''}${dl}</div>
+      <h3 class="pk-name">${esc(p.ten)}</h3>
+      <div class="pk-meta"><span>Chủ đầu tư: <b>${hl(p.cdt, words)}</b></span>${p.tinh ? `<span>${esc(p.tinh)}</span>` : ''}
+        <span>Hạn: <b>${esc(p.han)}</b></span>${p.gia_goi ? `<span>Giá gói: <b>${fmt(p.gia_goi)} đ</b></span>` : ''}
+        <a href="${esc(p.link)}" target="_blank" rel="noopener">Xem trên muasamcong ↗</a></div></div>
+      <div class="scroll"><table class="tbl"><thead><tr><th>Mặt hàng</th><th>ĐVT</th><th style="text-align:right">Số lượng</th><th style="text-align:right">Giá trần lô</th><th style="text-align:right">Đơn giá ước tính</th><th>Hãng / xuất xứ</th><th>Thông số kỹ thuật</th></tr></thead><tbody>
+      ${p.items.map(h => `<tr>
+        <td><div class="grp">${esc(h.nhom)}</div><div class="it">${hl(h.ten, words)}</div>${h.lo ? `<div class="sub2">Lô ${esc(h.lo)}${h.ten_lo && h.ten_lo !== h.ten ? ' · ' + esc(h.ten_lo) : ''}</div>` : ''}</td>
+        <td data-l="ĐVT">${esc(h.dvt)}</td><td class="n" data-l="Số lượng">${fmt(h.sl)}</td>
+        <td class="n" data-l="Giá trần lô">${fmt(h.gia_lo)}</td><td class="n" data-l="Đơn giá">${fmt(h.don_gia)}</td>
+        <td data-l="Hãng">${esc([h.ky_ma, h.hang, h.xuat_xu].filter(x => x && !/^(-|_|\.|\/|không yêu cầu)$/i.test(x)).join(' · '))}</td>
+        <td><div class="spec cut" title="Bấm để xem đủ">${h.tskt ? hl(h.tskt, words) : '<i>Không có thông số riêng</i>'}</div></td></tr>`).join('')}
+      </tbody></table></div></article>`;
+  }).join('') : '<div class="empty"><b>Không có gói nào khớp</b>Thử bỏ bớt bộ lọc hoặc từ khóa.</div>';
+}
+
+function groups() {
+  const cnt = {};
+  DATA.goi.forEach(p => p.hang_hoa.forEach(h => cnt[h.nhom] = (cnt[h.nhom] || 0) + 1));
+  $('#groups').innerHTML = DATA.nhom.filter(g => cnt[g]).map(g =>
+    `<label><input type="checkbox" value="${esc(g)}"${picked.has(g) ? ' checked' : ''}><span>${esc(g)}<b>${cnt[g]}</b></span></label>`).join('');
+}
+
+function csv() {
+  const rows = [['Mã TBMT','Hình thức','Tên gói','Chủ đầu tư','Hạn','Nhóm','Mặt hàng','Mã lô','ĐVT','Số lượng','Giá trần lô','Đơn giá ước tính','Giá gói','Ký mã hiệu','Hãng','Xuất xứ','Thông số kỹ thuật','Link']];
+  (window._view || []).forEach(p => p.items.forEach(h => rows.push([p.ma, p.hinh_thuc, p.ten, p.cdt, p.han, h.nhom, h.ten, h.lo, h.dvt, h.sl, h.gia_lo, h.don_gia, p.gia_goi, h.ky_ma, h.hang, h.xuat_xu, h.tskt, p.link])));
+  const text = '﻿' + rows.map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'goi-thau-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+}
+
+$('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
+$('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
+['#q', '#watch'].forEach(s => $(s).addEventListener('input', () => { if (s === '#watch') store('gt_watch', $('#watch').value); render(); }));
+['#onlyWatch', '#onlyNew', '#sort'].forEach(s => $(s).addEventListener('change', () => { store('gt_onlyWatch', $('#onlyWatch').checked ? '1' : ''); render(); }));
+$('#csv').addEventListener('click', csv);
+
+$('#watch').value = load('gt_watch') || '';
+$('#onlyWatch').checked = load('gt_onlyWatch') === '1';
+
+fetch('/api/goi-thau').then(r => r.json()).then(d => {
+  DATA = d;
+  if (!d.goi) throw new Error(d.error || 'Chưa có dữ liệu');
+  groups(); render();
+}).catch(e => { $('#status').textContent = 'Chưa có dữ liệu gói thầu (' + e.message + ').'; });
+</script>
+</body>
+</html>
