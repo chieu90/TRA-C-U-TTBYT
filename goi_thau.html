@@ -108,7 +108,9 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 <div class="wrap">
   <section class="panel">
     <div class="row">
-      <input type="search" id="q" placeholder="Tìm trong mặt hàng, chủ đầu tư, thông số… (vd: HIV, Đồng Nai, 3 mặt vát)">
+      <input type="search" id="q" placeholder="Tìm trong mặt hàng, thông số… (vd: HIV, Dengue NS1)">
+      <input type="search" id="cdt" list="cdtList" placeholder="Chủ đầu tư / tỉnh (vd: Bệnh viện Nhi đồng, Đồng Nai)">
+      <datalist id="cdtList"></datalist>
       <button id="csv">Tải Excel (CSV)</button>
     </div>
     <div class="sep">
@@ -167,6 +169,7 @@ function hl(text, words) {
 function render() {
   if (!DATA) return;
   const q = fold($('#q').value.trim());
+  const cdt = fold($('#cdt').value.trim());
   const watch = $('#watch').value.split(',').map(s => fold(s.trim())).filter(Boolean);
   const onlyWatch = $('#onlyWatch').checked, onlyNew = $('#onlyNew').checked;
   const now = new Date();
@@ -180,13 +183,13 @@ function render() {
       return true;
     });
     return { ...p, items, isNew };
-  }).filter(p => p.items.length && (!onlyNew || p.isNew) && daysLeft(p.han) > -0.01);
+  }).filter(p => p.items.length && (!onlyNew || p.isNew) && daysLeft(p.han) > -0.01 && (!cdt || fold(p.cdt + ' ' + p.tinh).includes(cdt)));
   const s = $('#sort').value;
   pkgs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'gia' ? (b.gia_goi || 0) - (a.gia_goi || 0) : a.han.localeCompare(b.han));
   window._view = pkgs;
   const nItems = pkgs.reduce((n, p) => n + p.items.length, 0);
   $('#status').textContent = `${pkgs.length} gói, ${nItems} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '');
-  const words = [...watch, ...(q ? [q] : [])];
+  const words = [...watch, ...(q ? [q] : []), ...(cdt ? [cdt] : [])];
   $('#list').innerHTML = pkgs.length ? pkgs.map(p => {
     const d = daysLeft(p.han);
     const dl = d < 1 ? `<span class="chip soon">Còn ${Math.max(0, Math.round(d * 24))} giờ</span>` : `<span class="chip ${d < 4 ? 'mid' : ''}">Còn ${Math.floor(d)} ngày</span>`;
@@ -226,7 +229,7 @@ function csv() {
 
 $('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
-['#q', '#watch'].forEach(s => $(s).addEventListener('input', () => { if (s === '#watch') store('gt_watch', $('#watch').value); render(); }));
+['#q', '#cdt', '#watch'].forEach(s => $(s).addEventListener('input', () => { if (s === '#watch') store('gt_watch', $('#watch').value); render(); }));
 ['#onlyWatch', '#onlyNew', '#sort'].forEach(s => $(s).addEventListener('change', () => { store('gt_onlyWatch', $('#onlyWatch').checked ? '1' : ''); render(); }));
 $('#csv').addEventListener('click', csv);
 
@@ -236,6 +239,7 @@ $('#onlyWatch').checked = load('gt_onlyWatch') === '1';
 fetch('/api/goi-thau').then(r => r.json()).then(d => {
   DATA = d;
   if (!d.goi) throw new Error(d.error || 'Chưa có dữ liệu');
+  $('#cdtList').innerHTML = [...new Set(d.goi.map(p => p.cdt))].sort().map(c => `<option value="${esc(c)}">`).join('');
   groups(); render();
 }).catch(e => { $('#status').textContent = 'Chưa có dữ liệu gói thầu (' + e.message + ').'; });
 </script>
