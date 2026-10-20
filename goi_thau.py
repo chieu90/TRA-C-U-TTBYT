@@ -87,7 +87,8 @@ def forms(notify_id):
 
 
 def parse(body):
-    lots, items, files = {}, {}, []
+    lots, items, files, eval_files, texts = {}, {}, [], [], []
+    bdl162 = None
     for f in body:
         try:
             v = json.loads(f.get("formValue") or "null")
@@ -95,9 +96,15 @@ def parse(body):
             continue
         if not isinstance(v, dict):
             continue
+        texts.append(json.dumps(v, ensure_ascii=False))
+        if v.get("radioValue162") in (0, 1, "0", "1"):  # Bảng dữ liệu E-CDNT 16.2: giấy phép bán hàng
+            bdl162 = (int(v["radioValue162"]), clean(v.get("radioValue162Content") or ""))
         ft = v.get("fileTech")
         if isinstance(ft, dict) and ft.get("fileId"):
             files.append((ft["fileId"], ft.get("fileName") or ""))
+        f3 = v.get("fileName2")  # Chương III – tiêu chuẩn đánh giá kỹ thuật
+        if isinstance(f3, dict) and f3.get("fileId"):
+            eval_files.append((f3["fileId"], f3.get("fileName") or ""))
         for t in v.get("Table") or []:
             if t.get("lotNo"):
                 lots[str(t["id"])] = {"lo": t["lotNo"], "ten_lo": clean(t.get("lotName")),
@@ -108,7 +115,7 @@ def parse(body):
                 old = items.get(key)
                 if old is None or len(str(t.get("specification") or "")) > len(str(old.get("specification") or "")):
                     items[key] = t
-    return lots, list(items.values()), files
+    return lots, list(items.values()), files, eval_files, "\n".join(texts), bdl162
 
 
 # ---------- lọc theo sản phẩm quan tâm ----------
@@ -137,29 +144,56 @@ def group_of(name, kw):
 
 # ---------- thông số Chương V ----------
 
-def file_rows(file_id, file_name):
-    """Tải file Chương V, trả về các dòng bảng (list các ô)."""
+def file_data(file_id, file_name):
+    """Tải file đính kèm HSMT (Chương III/V), trả về {"rows": dòng bảng, "text": toàn văn}."""
     d = os.path.join(CACHE, "c5_" + file_id)
-    rows_path = d + ".rows.json"
-    if os.path.exists(rows_path):
-        return json.load(open(rows_path))
+    data_path = d + ".data.json"
+    if os.path.exists(data_path):
+        return json.load(open(data_path))
     os.makedirs(d, exist_ok=True)
     ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
     src = os.path.join(d, "c5." + ext)
     try:
         open(src, "wb").write(http(FILE_URL + file_id, timeout=300))
     except Exception:
-        return []
+        return {"rows": [], "text": ""}
     paths = [src]
     if ext in ("rar", "zip", "7z") and shutil.which("bsdtar"):
         subprocess.run(["bsdtar", "-xf", src, "-C", d], capture_output=True)
         paths = [p for p in glob.glob(d + "/**/*", recursive=True) if os.path.isfile(p) and not os.path.basename(p).startswith("~$")]
-    rows = []
+    rows, text = [], []
     for p in paths:
         rows += read_table_file(p)
-    json.dump(rows, open(rows_path, "w"), ensure_ascii=False)
+        text.append(read_text_file(p))
+    data = {"rows": rows, "text": clean_lines("\n".join(text))}
+    json.dump(data, open(data_path, "w"), ensure_ascii=False)
     shutil.rmtree(d, ignore_errors=True)
-    return rows
+    return data
+
+
+def file_rows(file_id, file_name):
+    return file_data(file_id, file_name)["rows"]
+
+
+def clean_lines(t):
+    return "\n".join(clean(x) for x in t.splitlines() if x.strip())
+
+
+def read_text_file(p):
+    ext = p.rsplit(".", 1)[-1].lower()
+    try:
+        if ext in ("doc", "docx", "rtf") and shutil.which("textutil"):
+            return subprocess.run(["textutil", "-convert", "txt", "-stdout", p], capture_output=True, timeout=180).stdout.decode("utf-8", "ignore")
+        if ext in ("xlsx", "xlsm"):
+            import openpyxl
+            wb = openpyxl.load_workbook(p, read_only=True, data_only=True)
+            return "\n".join(" | ".join(str(c) for c in r if c is not None) for ws in wb.worksheets for r in ws.iter_rows(values_only=True))
+        if ext == "pdf":
+            import fitz
+            return "".join(page.get_text() for page in fitz.open(p))
+    except Exception:
+        pass
+    return ""
 
 
 def read_table_file(p):
@@ -238,6 +272,43 @@ def meta_of(notify_id):
     return m
 
 
+# ---------- yêu cầu ủy quyền của hãng / chủ sở hữu ----------
+
+UQ = r"[uủ][yỷ] ?quyền"
+AUTH_RE = re.compile(r"giấy phép bán hàng|giấy " + UQ + "|" + UQ + r" (bán hàng )?(của|từ) (nhà sản xuất|hãng|chủ sở hữu|nhà phân phối|tổ chức|đơn vị)|được (nhà sản xuất|hãng|chủ sở hữu)[^.;]{0,30}" + UQ, re.I)
+AUTH_WHO = re.compile(r"nhà sản xuất|hãng|chủ sở hữu|nhà phân phối|đứng tên|giấy phép nhập khẩu|đăng ký lưu hành|số lưu hành|bán hàng", re.I)
+AUTH_NOT = re.compile(r"người được " + UQ + "|" + UQ + r" đại diện|đại diện (theo pháp luật|nhà thầu|hợp pháp)|người ký|ký đơn|liên danh|giấy " + UQ + r" \(nếu có\)|trường hợp " + UQ, re.I)
+AUTH_ALT = re.compile(r"hoặc (giấy chứng nhận )?quan hệ đối tác|hoặc (các )?tài liệu khác có giá trị tương đương|hoặc giấy cam kết|hoặc cam kết", re.I)
+AUTH_NO = re.compile(r"không (yêu cầu|bắt buộc)[^.;]{0,40}" + UQ + "|" + UQ + r"[^.;]{0,40}không (yêu cầu|bắt buộc)", re.I)
+
+
+def sentences(text):
+    for s in re.split(r"(?<=[.;])\s+|\n|\\n|\s-\s|\s\+\s", text):
+        s = s.strip(" -+'\"")
+        if 20 < len(s) < 700:
+            yield s
+
+
+def auth_requirement(sources):
+    """sources: [(nguồn, văn bản)] -> {"muc", "trich", "nguon"}.
+    Có yêu cầu / Không yêu cầu / Không ghi rõ (dùng cho gói không có Bảng dữ liệu E-CDNT 16.2)."""
+    best = None
+    rank = {"Có yêu cầu": 2, "Không yêu cầu": 1}
+    for src, text in sources:
+        for s in sentences(text or ""):
+            if AUTH_NO.search(s):
+                cand = ("Không yêu cầu", s, src)
+            elif AUTH_RE.search(s) and AUTH_WHO.search(s) and not AUTH_NOT.search(s):
+                cand = ("Có yêu cầu", s, src)
+            else:
+                continue
+            if best is None or rank[cand[0]] > rank[best[0]]:
+                best = cand
+    if not best:
+        return {"muc": "Không ghi rõ", "trich": "", "nguon": ""}
+    return {"muc": best[0], "trich": best[1][:400], "nguon": best[2]}
+
+
 # ---------- ghép lại ----------
 
 def detail_link(code, m):
@@ -276,7 +347,7 @@ def build(ids_path):
         except ValueError:
             pass
         try:
-            lots, items, files = parse(forms(m["id"]))
+            lots, items, files, eval_files, form_text, bdl162 = parse(forms(m["id"]))
         except Exception as e:
             print(code, "lỗi lấy chi tiết:", e, file=sys.stderr)
             continue
@@ -302,7 +373,9 @@ def build(ids_path):
                         "lo": lot.get("lo", ""), "ten_lo": lot.get("ten_lo", ""), "gia_lo": gia_lo,
                         "don_gia": round(gia_lo / qty) if (one and gia_lo and qty) else None,
                         "ky_ma": clean(t.get("code")), "hang": clean(t.get("manufacture")),
-                        "xuat_xu": clean(t.get("goodsOrigin")), "tskt": spec})
+                        "xuat_xu": clean(t.get("goodsOrigin")), "tskt": spec,
+                        "uy_quyen": auth_requirement([("Yêu cầu khác của mặt hàng", clean(t.get("otherRequirement") or "")),
+                                                      ("Thông số mặt hàng", spec)])})
         if not hit:
             continue
         if any(not h["tskt"] for h in hit) and files:
@@ -312,11 +385,28 @@ def build(ids_path):
             for h in hit:
                 if not h["tskt"] and rows:
                     h["tskt"] = clean(spec_from_rows(h["ten"], h["sl"], rows))
+        if bdl162 is not None:  # nguồn chính thức: Bảng dữ liệu, mục E-CDNT 16.2
+            pkg_auth = {"muc": "Có yêu cầu" if bdl162[0] else "Không yêu cầu", "nguon": "Bảng dữ liệu E-CDNT 16.2",
+                        "trich": bdl162[1] or ("Có yêu cầu Giấy phép hoặc Giấy ủy quyền bán hàng của nhà sản xuất, đại lý phân phối "
+                                               "hoặc Giấy chứng nhận quan hệ đối tác hoặc tài liệu khác có giá trị tương đương"
+                                               if bdl162[0] else "Không yêu cầu Giấy phép hoặc Giấy ủy quyền bán hàng")}
+            for h in hit:
+                h["uy_quyen"] = pkg_auth
+        else:  # chào giá trực tuyến: không có Bảng dữ liệu -> dò trong yêu cầu của mặt hàng / hồ sơ
+            srcs = [("Hồ sơ mời thầu (webform)", form_text)]
+            for fid, fname in eval_files:
+                srcs.append(("Chương III – tiêu chuẩn đánh giá", file_data(fid, fname)["text"]))
+            for fid, fname in files:
+                srcs.append(("Chương V – yêu cầu kỹ thuật", file_data(fid, fname)["text"]))
+            pkg_auth = auth_requirement(srcs)
+            for h in hit:
+                if h["uy_quyen"]["muc"] == "Không ghi rõ":
+                    h["uy_quyen"] = pkg_auth
         first = old.get(code) or now.strftime("%Y-%m-%d %H:%M")
         out.append({"ma": code, "ten": clean(m.get("name")), "cdt": clean(m.get("inv")), "tinh": clean(m.get("prov")),
                     "han": close[:16].replace("T", " "), "dang": (m.get("pub") or "")[:16].replace("T", " "),
                     "hinh_thuc": FORM_NAMES.get(m.get("bidForm"), m.get("bidForm") or ""), "gia_goi": num(m.get("price")),
-                    "lan_dau": first, "link": detail_link(code, m), "hang_hoa": hit})
+                    "lan_dau": first, "link": detail_link(code, m), "uy_quyen": pkg_auth, "hang_hoa": hit})
         print(code, len(hit), "mặt hàng", file=sys.stderr)
     out.sort(key=lambda p: p["han"])
     res = {"cap_nhat": now.strftime("%Y-%m-%d %H:%M"), "nhom": [g["ten"] for g in kw["nhom"]], "goi": out}
