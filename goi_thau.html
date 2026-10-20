@@ -208,7 +208,7 @@ function render() {
       <div class="pk-meta"><span>Chủ đầu tư: <b>${hl(p.cdt, words)}</b></span>${p.tinh ? `<span>${esc(p.tinh)}</span>` : ''}
         <span>Hạn: <b>${esc(p.han)}</b></span>${p.tg_hd && p.tg_hd.text ? `<span>Thực hiện HĐ: <b>${esc(p.tg_hd.text)}</b>${p.tg_hd.text.includes('ngày') ? '' : ` (${p.tg_hd.ngay} ngày)`}</span>` : ''}${p.gia_goi ? `<span>Giá gói: <b>${fmt(p.gia_goi)} đ</b></span>` : ''}
         <a href="${esc(p.link)}" target="_blank" rel="noopener">Xem trên muasamcong ↗</a></div>
-      ${p.uy_quyen && p.uy_quyen.trich ? `<div class="pk-meta"><span>Giấy phép bán hàng (${esc(p.uy_quyen.nguon)}): ${esc(p.uy_quyen.trich)}</span></div>` : ''}</div>
+</div>
       <div class="scroll"><table class="tbl"><thead><tr><th>Mặt hàng</th><th>ĐVT</th><th style="text-align:right">Số lượng</th><th style="text-align:right">Giá trần lô</th><th style="text-align:right">Đơn giá ước tính</th><th>Hãng / xuất xứ</th><th>Thông số kỹ thuật</th></tr></thead><tbody>
       ${p.items.map(h => `<tr>
         <td><div class="grp">${esc(h.nhom)}</div><div class="it">${hl(h.ten, words)}</div>${h.lo ? `<div class="sub2">Lô ${esc(h.lo)}${h.ten_lo && h.ten_lo !== h.ten ? ' · ' + esc(h.ten_lo) : ''}</div>` : ''}</td>
