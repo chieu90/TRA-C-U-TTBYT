@@ -37,6 +37,9 @@ h1 { font-size: 24px; margin: 0; }
 .nav a:hover { background: rgba(255,255,255,.24); }
 .wrap { max-width: 1200px; margin: -60px auto 0; padding: 0 16px 64px; position: relative; }
 .panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; border: 1px solid var(--line); }
+/* thanh tìm kiếm luôn nằm trên cùng khi cuộn trang */
+.stickybar { position: sticky; top: 8px; z-index: 30; padding: 12px 14px; margin-bottom: 12px; }
+@media (max-width: 760px) { .stickybar { top: 0; border-radius: 0 0 14px 14px; padding: 10px; } .stickybar input { flex-basis: 100%; } }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 input[type=search], input[type=text] { flex: 1 1 280px; min-width: 0; padding: 11px 14px; font-size: 15px; border: 1.5px solid var(--line);
   border-radius: 12px; background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
@@ -106,14 +109,16 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 </div></header>
 
 <div class="wrap">
-  <section class="panel">
+  <section class="panel stickybar">
     <div class="row">
       <input type="search" id="q" placeholder="Tìm trong mặt hàng, thông số… (vd: HIV, Dengue NS1)">
       <input type="search" id="cdt" list="cdtList" placeholder="Chủ đầu tư / tỉnh (vd: Bệnh viện Nhi đồng, Đồng Nai)">
       <datalist id="cdtList"></datalist>
       <button id="csv">Tải Excel (CSV)</button>
     </div>
-    <div class="sep">
+  </section>
+  <section class="panel">
+    <div>
       <div class="row">
         <label class="lb" for="watch">Sản phẩm của tôi</label>
         <input type="text" id="watch" placeholder="Từ khóa cách nhau bằng dấu phẩy, vd: HIV, Dengue NS1, kim gây tê tủy sống">
