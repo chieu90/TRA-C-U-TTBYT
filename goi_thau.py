@@ -252,21 +252,25 @@ def meta_of(notify_id):
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, "meta_" + notify_id + ".json")
     if os.path.exists(path) and time.time() - os.path.getmtime(path) < 86400:
-        return json.load(open(path))
+        m = json.load(open(path))
+        if "cperiod" in m:
+            return m
     n = (json.loads(http(HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail", {"body": {"id": notify_id}}))
          .get("body") or {}).get("bidNotification")
     if n:
         m = {"code": n.get("notifyNo"), "name": n.get("bidName"), "inv": n.get("investorName"),
              "prov": n.get("executionLocation") or "", "close": n.get("bidCloseDate"), "pub": n.get("publicDate"),
              "bidForm": n.get("bidForm"), "price": n.get("bidPrice"), "planNo": n.get("planNo"),
-             "processApply": n.get("processApply"), "bidMode": n.get("bidMode"), "stepCode": "notify-contractor-step-1-tbmt"}
+             "processApply": n.get("processApply"), "bidMode": n.get("bidMode"), "stepCode": "notify-contractor-step-1-tbmt",
+             "cperiod": n.get("contractPeriod"), "cunit": n.get("contractPeriodUnit")}
     else:  # chào giá trực tuyến rút gọn
         r = json.loads(http(HOST + "/o/egp-portal-contractor-selection-v2/services/online-reoffer/detail", {"id": notify_id}))
         ends = [d for d in (r.get("reofferCloseDate"), r.get("reofferOpenDate")) if d]
         m = {"code": r.get("notifyNo"), "name": r.get("bidName"), "inv": r.get("investorName"), "prov": "",
              "close": max(ends) if ends else None, "pub": r.get("publicDate"), "bidForm": r.get("bidForm") or "CGTTRG",
              "price": r.get("priceInit"), "planNo": r.get("planNo"), "processApply": r.get("processApply"),
-             "bidMode": r.get("bidMode"), "stepCode": "reoffer-price-step-1"}
+             "bidMode": r.get("bidMode"), "stepCode": "reoffer-price-step-1",
+             "cperiod": (r.get("bidDetail") or {}).get("cperiod"), "cunit": (r.get("bidDetail") or {}).get("cperiodUnit")}
     m["id"] = notify_id
     json.dump(m, open(path, "w"), ensure_ascii=False)
     return m
@@ -307,6 +311,21 @@ def auth_requirement(sources):
     if not best:
         return {"muc": "Không ghi rõ", "trich": "", "nguon": ""}
     return {"muc": best[0], "trich": best[1][:400], "nguon": best[2]}
+
+
+def contract_time(m, lots_raw):
+    """Thời gian thực hiện hợp đồng -> {"text": "365 ngày", "ngay": 365}. 12 tháng = 365 ngày."""
+    n, u = num(m.get("cperiod")), (m.get("cunit") or "").upper()
+    if n is None:  # lấy theo lô nếu gói không ghi
+        for t in lots_raw:
+            if num(t.get("cperiod")) is not None:
+                n, u = num(t.get("cperiod")), (t.get("cperiodUnit") or "").upper()
+                break
+    if n is None:
+        return {"text": "", "ngay": None}
+    unit = {"D": "ngày", "M": "tháng", "Y": "năm", "W": "tuần"}.get(u, u.lower())
+    days = {"D": n, "M": round(n * 365 / 12), "Y": n * 365, "W": n * 7}.get(u, n)
+    return {"text": f"{n} {unit}", "ngay": days}
 
 
 # ---------- ghép lại ----------
@@ -385,6 +404,9 @@ def build(ids_path):
             for h in hit:
                 if not h["tskt"] and rows:
                     h["tskt"] = clean(spec_from_rows(h["ten"], h["sl"], rows))
+        lots_raw = [t for f in forms(m["id"]) for t in ((json.loads(f.get("formValue") or "null") or {}).get("Table") or []
+                                                         if isinstance(json.loads(f.get("formValue") or "null"), dict) else []) if t.get("lotNo")]
+        tg_hd = contract_time(m, lots_raw)
         if bdl162 is not None:  # nguồn chính thức: Bảng dữ liệu, mục E-CDNT 16.2
             pkg_auth = {"muc": "Có yêu cầu" if bdl162[0] else "Không yêu cầu", "nguon": "Bảng dữ liệu E-CDNT 16.2",
                         "trich": bdl162[1] or ("Có yêu cầu Giấy phép hoặc Giấy ủy quyền bán hàng của nhà sản xuất, đại lý phân phối "
@@ -406,7 +428,7 @@ def build(ids_path):
         out.append({"ma": code, "ten": clean(m.get("name")), "cdt": clean(m.get("inv")), "tinh": clean(m.get("prov")),
                     "han": close[:16].replace("T", " "), "dang": (m.get("pub") or "")[:16].replace("T", " "),
                     "hinh_thuc": FORM_NAMES.get(m.get("bidForm"), m.get("bidForm") or ""), "gia_goi": num(m.get("price")),
-                    "lan_dau": first, "link": detail_link(code, m), "uy_quyen": pkg_auth, "hang_hoa": hit})
+                    "lan_dau": first, "link": detail_link(code, m), "uy_quyen": pkg_auth, "tg_hd": tg_hd, "hang_hoa": hit})
         print(code, len(hit), "mặt hàng", file=sys.stderr)
     out.sort(key=lambda p: p["han"])
     res = {"cap_nhat": now.strftime("%Y-%m-%d %H:%M"), "nhom": [g["ten"] for g in kw["nhom"]], "goi": out}

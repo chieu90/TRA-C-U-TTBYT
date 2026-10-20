@@ -128,6 +128,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
         <label><input type="checkbox" id="onlyWatch"> Chỉ hiện mặt hàng khớp "Sản phẩm của tôi"</label>
         <label><input type="checkbox" id="onlyNew"> Chỉ gói mới (2 ngày gần đây)</label>
         <label>Giấy phép bán hàng (ủy quyền) <select id="uq"><option value="">Tất cả</option><option>Không yêu cầu</option><option>Có yêu cầu</option><option>Không ghi rõ</option></select></label>
+        <label>Thời gian thực hiện HĐ <select id="tg"><option value="">Tất cả</option><option value="ngan">Dưới 12 tháng</option><option value="12">12 tháng (365 ngày)</option><option value="24">24 tháng (730 ngày)</option><option value="khac">Khác (13–23, trên 24 tháng)</option></select></label>
         <label>Sắp xếp <select id="sort"><option value="han">Hạn đóng thầu gần nhất</option><option value="moi">Mới đăng trước</option><option value="gia">Giá gói lớn trước</option></select></label>
       </div>
     </div>
@@ -177,7 +178,7 @@ function render() {
   if (!DATA) return;
   const q = fold($('#q').value.trim());
   const cdt = fold($('#cdt').value.trim());
-  const uq = $('#uq').value;
+  const uq = $('#uq').value, tg = $('#tg').value;
   const watch = $('#watch').value.split(',').map(s => fold(s.trim())).filter(Boolean);
   const onlyWatch = $('#onlyWatch').checked, onlyNew = $('#onlyNew').checked;
   const now = new Date();
@@ -191,7 +192,7 @@ function render() {
       return true;
     });
     return { ...p, items, isNew };
-  }).filter(p => p.items.length && (!onlyNew || p.isNew) && daysLeft(p.han) > -0.01 && (!cdt || fold(p.cdt + ' ' + p.tinh).includes(cdt)) && (!uq || (p.uy_quyen || {}).muc === uq));
+  }).filter(p => p.items.length && (!onlyNew || p.isNew) && daysLeft(p.han) > -0.01 && (!cdt || fold(p.cdt + ' ' + p.tinh).includes(cdt)) && (!uq || (p.uy_quyen || {}).muc === uq) && tgMatch(p.tg_hd, tg));
   const s = $('#sort').value;
   pkgs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'gia' ? (b.gia_goi || 0) - (a.gia_goi || 0) : a.han.localeCompare(b.han));
   window._view = pkgs;
@@ -205,7 +206,7 @@ function render() {
       <div class="pk-top"><span class="code">${esc(p.ma)}</span><span class="chip">${esc(p.hinh_thuc)}</span>${p.isNew ? '<span class="chip new">Mới</span>' : ''}${dl}${uqChip(p.uy_quyen)}</div>
       <h3 class="pk-name">${esc(p.ten)}</h3>
       <div class="pk-meta"><span>Chủ đầu tư: <b>${hl(p.cdt, words)}</b></span>${p.tinh ? `<span>${esc(p.tinh)}</span>` : ''}
-        <span>Hạn: <b>${esc(p.han)}</b></span>${p.gia_goi ? `<span>Giá gói: <b>${fmt(p.gia_goi)} đ</b></span>` : ''}
+        <span>Hạn: <b>${esc(p.han)}</b></span>${p.tg_hd && p.tg_hd.text ? `<span>Thực hiện HĐ: <b>${esc(p.tg_hd.text)}</b>${p.tg_hd.text.includes('ngày') ? '' : ` (${p.tg_hd.ngay} ngày)`}</span>` : ''}${p.gia_goi ? `<span>Giá gói: <b>${fmt(p.gia_goi)} đ</b></span>` : ''}
         <a href="${esc(p.link)}" target="_blank" rel="noopener">Xem trên muasamcong ↗</a></div>
       ${p.uy_quyen && p.uy_quyen.trich ? `<div class="pk-meta"><span>Giấy phép bán hàng (${esc(p.uy_quyen.nguon)}): ${esc(p.uy_quyen.trich)}</span></div>` : ''}</div>
       <div class="scroll"><table class="tbl"><thead><tr><th>Mặt hàng</th><th>ĐVT</th><th style="text-align:right">Số lượng</th><th style="text-align:right">Giá trần lô</th><th style="text-align:right">Đơn giá ước tính</th><th>Hãng / xuất xứ</th><th>Thông số kỹ thuật</th></tr></thead><tbody>
@@ -217,6 +218,16 @@ function render() {
         <td><div class="spec cut" title="Bấm để xem đủ">${h.tskt ? hl(h.tskt, words) : '<i>Không có thông số riêng</i>'}</div></td></tr>`).join('')}
       </tbody></table></div></article>`;
   }).join('') : '<div class="empty"><b>Không có gói nào khớp</b>Thử bỏ bớt bộ lọc hoặc từ khóa.</div>';
+}
+
+function tgMatch(t, f) {
+  if (!f) return true;
+  const d = t && t.ngay;
+  if (!d) return f === 'khac';
+  if (f === 'ngan') return d < 360;
+  if (f === '12') return d >= 360 && d <= 370;
+  if (f === '24') return d >= 725 && d <= 735;
+  return (d > 370 && d < 725) || d > 735;
 }
 
 function uqChip(u) {
@@ -234,8 +245,8 @@ function groups() {
 }
 
 function csv() {
-  const rows = [['Mã TBMT','Hình thức','Tên gói','Chủ đầu tư','Hạn','Nhóm','Mặt hàng','Mã lô','ĐVT','Số lượng','Giá trần lô','Đơn giá ước tính','Giá gói','Ký mã hiệu','Hãng','Xuất xứ','Thông số kỹ thuật','Giấy phép bán hàng (ủy quyền)','Nguồn / trích dẫn','Link']];
-  (window._view || []).forEach(p => p.items.forEach(h => rows.push([p.ma, p.hinh_thuc, p.ten, p.cdt, p.han, h.nhom, h.ten, h.lo, h.dvt, h.sl, h.gia_lo, h.don_gia, p.gia_goi, h.ky_ma, h.hang, h.xuat_xu, h.tskt, (h.uy_quyen || p.uy_quyen || {}).muc || '', [((h.uy_quyen || p.uy_quyen || {}).nguon || ''), ((h.uy_quyen || p.uy_quyen || {}).trich || '')].filter(Boolean).join(': '), p.link])));
+  const rows = [['Mã TBMT','Hình thức','Tên gói','Chủ đầu tư','Hạn','Nhóm','Mặt hàng','Mã lô','ĐVT','Số lượng','Giá trần lô','Đơn giá ước tính','Giá gói','Ký mã hiệu','Hãng','Xuất xứ','Thông số kỹ thuật','Giấy phép bán hàng (ủy quyền)','Nguồn / trích dẫn','Thời gian thực hiện HĐ','Số ngày thực hiện HĐ','Link']];
+  (window._view || []).forEach(p => p.items.forEach(h => rows.push([p.ma, p.hinh_thuc, p.ten, p.cdt, p.han, h.nhom, h.ten, h.lo, h.dvt, h.sl, h.gia_lo, h.don_gia, p.gia_goi, h.ky_ma, h.hang, h.xuat_xu, h.tskt, (h.uy_quyen || p.uy_quyen || {}).muc || '', [((h.uy_quyen || p.uy_quyen || {}).nguon || ''), ((h.uy_quyen || p.uy_quyen || {}).trich || '')].filter(Boolean).join(': '), (p.tg_hd || {}).text || '', (p.tg_hd || {}).ngay || '', p.link])));
   const text = '﻿' + rows.map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
@@ -246,7 +257,7 @@ function csv() {
 $('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
 ['#q', '#cdt', '#watch'].forEach(s => $(s).addEventListener('input', () => { if (s === '#watch') store('gt_watch', $('#watch').value); render(); }));
-['#onlyWatch', '#onlyNew', '#sort', '#uq'].forEach(s => $(s).addEventListener('change', () => { store('gt_onlyWatch', $('#onlyWatch').checked ? '1' : ''); render(); }));
+['#onlyWatch', '#onlyNew', '#sort', '#uq', '#tg'].forEach(s => $(s).addEventListener('change', () => { store('gt_onlyWatch', $('#onlyWatch').checked ? '1' : ''); render(); }));
 $('#csv').addEventListener('click', csv);
 
 $('#watch').value = load('gt_watch') || '';
