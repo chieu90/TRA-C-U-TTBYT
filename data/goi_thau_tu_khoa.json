@@ -21,7 +21,9 @@
         "HBcAb",
         "HBc ",
         "viêm gan B",
-        "siêu vi B"
+        "siêu vi B",
+        "viên gan B",
+        "viêm gan siêu vi B"
       ]
     },
     {
@@ -29,7 +31,9 @@
       "tu": [
         "HCV",
         "viêm gan C",
-        "siêu vi C"
+        "siêu vi C",
+        "viên gan C",
+        "viêm gan siêu vi C"
       ]
     },
     {
@@ -131,7 +135,13 @@
         "chlamydia",
         "strep",
         "kháng nguyên vi khuẩn lao",
-        "rubella"
+        "rubella",
+        "thử lao",
+        "test lao",
+        "nhanh lao",
+        "lao TB",
+        "tuberculosis",
+        "mycobacterium"
       ]
     },
     {
@@ -174,7 +184,11 @@
     "rapid",
     "cassette",
     "kit thử",
-    "bộ thử"
+    "bộ thử",
+    "khay xét nghiệm",
+    "xét nghiệm nhanh",
+    "chẩn đoán nhanh",
+    "chuẩn đoán nhanh"
   ],
   "loai_tru": [
     "testosteron",
