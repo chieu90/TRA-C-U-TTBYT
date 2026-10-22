@@ -339,6 +339,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not os.path.exists(path):
                     return self.send(404, {"error": "Chưa có dữ liệu gói thầu"})
                 self.send(200, open(path, "rb").read())
+            elif u.path == "/bao-gia":
+                self.send(200, open(os.path.join(HERE, "bao_gia.html"), "rb").read(), "text/html; charset=utf-8")
+            elif u.path == "/api/bao-gia":
+                path = os.path.join(HERE, "data", "bao_gia.json")
+                if not os.path.exists(path):
+                    return self.send(404, {"error": "Chưa có dữ liệu báo giá"})
+                self.send(200, open(path, "rb").read())
             elif u.path == "/api/info":
                 self.send(200, index_info)
             elif u.path == "/api/latest":
