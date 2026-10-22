@@ -390,12 +390,7 @@ def build(ids_path):
             old[p["ma"]] = p.get("lan_dau") or p.get("dang")
     out = []
     for code, m in meta.items():
-        close = m.get("close") or ""
-        try:
-            if close and datetime.fromisoformat(close[:19]) < now:
-                continue
-        except ValueError:
-            pass
+        close = m.get("close") or ""  # giữ cả gói đã đóng thầu; trang web tự đánh dấu và lọc
         try:
             lots, items, files, eval_files, form_text, bdl162 = parse(forms(m["id"]))
         except Exception as e:
