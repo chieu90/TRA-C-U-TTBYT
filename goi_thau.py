@@ -253,7 +253,7 @@ def meta_of(notify_id):
     path = os.path.join(CACHE, "meta_" + notify_id + ".json")
     if os.path.exists(path) and time.time() - os.path.getmtime(path) < 86400:
         m = json.load(open(path))
-        if "cperiod" in m:
+        if "cperiod" in m and "prov_v" in m:
             return m
     n = (json.loads(http(HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail", {"body": {"id": notify_id}}))
          .get("body") or {}).get("bidNotification")
@@ -266,14 +266,45 @@ def meta_of(notify_id):
     else:  # chào giá trực tuyến rút gọn
         r = json.loads(http(HOST + "/o/egp-portal-contractor-selection-v2/services/online-reoffer/detail", {"id": notify_id}))
         ends = [d for d in (r.get("reofferCloseDate"), r.get("reofferOpenDate")) if d]
-        m = {"code": r.get("notifyNo"), "name": r.get("bidName"), "inv": r.get("investorName"), "prov": "",
+        locs = (r.get("bidDetail") or {}).get("bidLocation") or []
+        m = {"code": r.get("notifyNo"), "name": r.get("bidName"), "inv": r.get("investorName"),
+             "prov": next((l.get("provName") for l in locs if l.get("provName")), ""),
              "close": max(ends) if ends else None, "pub": r.get("publicDate"), "bidForm": r.get("bidForm") or "CGTTRG",
              "price": r.get("priceInit"), "planNo": r.get("planNo"), "processApply": r.get("processApply"),
              "bidMode": r.get("bidMode"), "stepCode": "reoffer-price-step-1",
              "cperiod": (r.get("bidDetail") or {}).get("cperiod"), "cunit": (r.get("bidDetail") or {}).get("cperiodUnit")}
     m["id"] = notify_id
+    m["prov_v"] = 1
     json.dump(m, open(path, "w"), ensure_ascii=False)
     return m
+
+
+PROV_RE = re.compile(r"(?:Tỉnh|tỉnh|Thành phố|thành phố|TP\.?)\s+([A-ZĐ][^,;.\\/()\n\d]{1,30}?)\s*(?=$|[,;.\\/()\n]|\s-)")
+
+
+def short_prov(s):
+    """'Tỉnh Thái Nguyên' -> 'Thái Nguyên'; 'Thành phố Hồ Chí Minh' -> 'TP Hồ Chí Minh'."""
+    s = re.sub(r"[\'\"{}\[\]]", "", clean(s or "")).strip()
+    s = re.sub(r"^(Tỉnh|tỉnh|Thành phố|thành phố|TP\.?)\s+", "", s).strip()
+    return "TP Hồ Chí Minh" if s.lower() in ("hồ chí minh", "hcm") else s
+
+
+def province(m, form_list):
+    """Tỉnh/TP của gói: địa điểm (chào giá) -> địa chỉ chủ đầu tư trong HSMT -> tên chủ đầu tư."""
+    if m.get("prov"):
+        return short_prov(m["prov"])
+    for f in form_list:
+        try:
+            v = json.loads(f.get("formValue") or "null")
+        except ValueError:
+            continue
+        if isinstance(v, dict):
+            for k in ("investorAddress", "e_dkc_1_4_address", "procuringEntityAddress"):
+                found = PROV_RE.findall(clean(v.get(k) or ""))
+                if found:
+                    return short_prov(found[-1])
+    found = PROV_RE.findall(clean(m.get("inv") or ""))
+    return short_prov(found[-1]) if found else ""
 
 
 # ---------- yêu cầu ủy quyền của hãng / chủ sở hữu ----------
@@ -425,7 +456,7 @@ def build(ids_path):
                 if h["uy_quyen"]["muc"] == "Không ghi rõ":
                     h["uy_quyen"] = pkg_auth
         first = old.get(code) or now.strftime("%Y-%m-%d %H:%M")
-        out.append({"ma": code, "ten": clean(m.get("name")), "cdt": clean(m.get("inv")), "tinh": clean(m.get("prov")),
+        out.append({"ma": code, "ten": clean(m.get("name")), "cdt": clean(m.get("inv")), "tinh": province(m, forms(m["id"])),
                     "han": close[:16].replace("T", " "), "dang": (m.get("pub") or "")[:16].replace("T", " "),
                     "hinh_thuc": FORM_NAMES.get(m.get("bidForm"), m.get("bidForm") or ""), "gia_goi": num(m.get("price")),
                     "lan_dau": first, "link": detail_link(code, m), "uy_quyen": pkg_auth, "tg_hd": tg_hd, "hang_hoa": hit})
