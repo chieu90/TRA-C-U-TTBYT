@@ -101,6 +101,10 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .price { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .price b { font-weight: 700; }
 .qs { color: var(--muted); font-size: 12px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button { border-radius: 999px; }
+.tabs button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+.tabs button b { font-weight: 700; margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -109,24 +113,26 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
     <h1>Báo giá – sản phẩm quan tâm</h1>
     <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/">Tra cứu TBYT</a></nav>
   </div>
-  <p class="sub" id="sub">Giá từ Yêu cầu báo giá trên <a href="https://muasamcong.mof.gov.vn/web/guest/smart-price" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a> (mục Hóa chất/vật tư xét nghiệm, thiết bị y tế), cập nhật mỗi sáng. Mỗi mặt hàng có thể nhận nhiều báo giá từ các nhà cung cấp.</p>
+  <p class="sub" id="sub">Yêu cầu báo giá (YCBG) trên <a href="https://muasamcong.mof.gov.vn/web/guest/smart-price" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a> (mục Hóa chất/vật tư xét nghiệm, thiết bị y tế), cập nhật mỗi sáng. "Đang nhận báo giá": yêu cầu báo giá còn hạn có mặt hàng quan tâm. "Giá đã báo": các mức giá nhà cung cấp đã gửi (mỗi mặt hàng có thể có nhiều báo giá).</p>
 </div></header>
 
 <div class="wrap">
   <section class="panel stickybar">
     <div class="row">
       <input type="search" id="q" placeholder="Tìm trong mặt hàng, mô tả… (vd: HIV, Dengue NS1, 5 trong 1)">
-      <input type="search" id="noi" list="noiList" placeholder="Nơi yêu cầu / tỉnh / mã YCBG">
+      <input type="search" id="noi" list="noiList" placeholder="Đơn vị yêu cầu / tỉnh / mã YCBG">
       <datalist id="noiList"></datalist>
       <button id="csv">Tải Excel (CSV)</button>
     </div>
   </section>
   <section class="panel">
+    <div class="tabs" id="tabs"><button data-t="mo" class="on">Đang nhận báo giá<b id="nMo"></b></button><button data-t="gia">Giá đã báo<b id="nGia"></b></button></div>
     <div class="opts" style="margin-top:0">
       <label>Tỉnh/TP <select id="tinh"><option value="">Tất cả</option></select></label>
-      <label><input type="checkbox" id="coGia"> Chỉ mặt hàng đã có báo giá</label>
-      <label><input type="checkbox" id="onlyNew"> Chỉ báo giá mới (3 ngày gần đây)</label>
-      <label>Sắp xếp <select id="sort"><option value="moi">Mới nhất trước</option><option value="sl">Số lượng lớn trước</option><option value="bg">Nhiều báo giá trước</option></select></label>
+      <label class="only-gia"><input type="checkbox" id="coGia"> Chỉ mặt hàng đã có báo giá</label>
+      <label class="only-mo"><input type="checkbox" id="conHan" checked> Chỉ còn hạn nhận báo giá</label>
+      <label><input type="checkbox" id="onlyNew"> Chỉ mới (3 ngày gần đây)</label>
+      <label>Sắp xếp <select id="sort"></select></label>
     </div>
     <div class="chips" id="groups"></div>
   </section>
@@ -137,37 +143,76 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 
 <script>
 const $ = s => document.querySelector(s);
-let DATA = null; const picked = new Set();
+let DATA = null, TAB = 'mo', REF = {}; const picked = new Set();
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const fmt = n => n == null || n === '' ? '' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+const days = d => (new Date(String(d).replace(' ', 'T')) - new Date()) / 86400000;
+const median = a => { a = [...a].sort((x, y) => x - y); const m = a.length >> 1; return a.length ? (a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2) : null; };
+const SORTS = { mo: [['han', 'Hạn gần nhất trước'], ['moi', 'Mới đăng trước'], ['sl', 'Số lượng lớn trước']],
+                gia: [['moi', 'Mới nhất trước'], ['sl', 'Số lượng lớn trước'], ['bg', 'Nhiều báo giá trước']] };
+const unitKey = u => { u = fold(u).trim(); return /^(test|que|khay|cai|lan|xet nghiem|thanh)$/.test(u) ? 'test' : u; };
 
 function priceCell(h) {
   if (!h.so_bg) return '<span class="qs">Chưa có báo giá</span>';
   if (h.so_bg === 1) return `<span class="price"><b>${fmt(h.min)}</b></span><div class="qs">1 báo giá</div>`;
   return `<span class="price"><b>${fmt(h.tv)}</b></span><div class="qs">${h.so_bg} báo giá: ${fmt(h.min)} – ${fmt(h.max)}</div>`;
 }
+function refCell(h) {
+  const r = REF[h.nhom + '|' + unitKey(h.dvt)];
+  return r ? `<span class="price">${fmt(r.tv)}</span><div class="qs">trung vị ${r.n} mặt hàng cùng nhóm đã báo giá</div>` : '<span class="qs">—</span>';
+}
+
+function setTab(t) {
+  TAB = t;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.only-gia').forEach(e => e.style.display = t === 'gia' ? '' : 'none');
+  document.querySelectorAll('.only-mo').forEach(e => e.style.display = t === 'mo' ? '' : 'none');
+  $('#sort').innerHTML = SORTS[t].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  groups(); render();
+}
+
+function itemOk(h, q) { return (!picked.size || picked.has(h.nhom)) && (!q || fold(h.ten + ' ' + h.mo_ta + ' ' + h.nhom).includes(q)); }
 
 function render() {
   if (!DATA) return;
   const q = fold($('#q').value.trim()), noi = fold($('#noi').value.trim()), tinh = $('#tinh').value;
-  const coGia = $('#coGia').checked, onlyNew = $('#onlyNew').checked, s = $('#sort').value;
-  const now = new Date();
-  const items = DATA.items.filter(h => (!picked.size || picked.has(h.nhom)) && (!coGia || h.so_bg)
-    && (!tinh || h.tinh === tinh) && (!onlyNew || (now - new Date(h.hieu_luc)) / 86400000 < 3)
-    && (!q || fold(h.ten + ' ' + h.mo_ta + ' ' + h.nhom).includes(q))
-    && (!noi || fold(h.noi + ' ' + h.tinh + ' ' + h.ma).includes(noi)));
-  const by = new Map();
-  items.forEach(h => { if (!by.has(h.ma)) by.set(h.ma, { ma: h.ma, noi: h.noi, tinh: h.tinh, hieu_luc: h.hieu_luc, han: h.han, hl_ngay: h.hl_ngay, items: [] }); by.get(h.ma).items.push(h); });
-  let rqs = [...by.values()];
-  const sum = (r, f) => r.items.reduce((n, h) => n + (typeof f(h) === 'number' ? f(h) : 0), 0);
-  rqs.sort((a, b) => s === 'sl' ? sum(b, h => h.sl) - sum(a, h => h.sl) : s === 'bg' ? sum(b, h => h.so_bg) - sum(a, h => h.so_bg)
-    : (b.hieu_luc + b.ma).localeCompare(a.hieu_luc + a.ma));
-  if (s !== 'moi') rqs.forEach(r => r.items.sort((a, b) => s === 'sl' ? (b.sl || 0) - (a.sl || 0) : b.so_bg - a.so_bg));
+  const onlyNew = $('#onlyNew').checked, s = $('#sort').value, sum = (r, f) => r.items.reduce((n, h) => n + (typeof f(h) === 'number' ? f(h) : 0), 0);
+  let rqs;
+  if (TAB === 'mo') {
+    const conHan = $('#conHan').checked;
+    rqs = DATA.ycbg.map(r => ({ ...r, items: r.items.filter(h => itemOk(h, q)) })).filter(r => r.items.length
+      && (!conHan || days(r.han) > 0) && (!tinh || r.tinh === tinh) && (!onlyNew || days(r.dang) > -3)
+      && (!noi || fold(r.cdt + ' ' + r.tinh + ' ' + r.ma + ' ' + r.ten).includes(noi)));
+    rqs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'sl' ? sum(b, h => h.sl) - sum(a, h => h.sl) : a.han.localeCompare(b.han));
+  } else {
+    const coGia = $('#coGia').checked;
+    const items = DATA.items.filter(h => itemOk(h, q) && (!coGia || h.so_bg) && (!tinh || h.tinh === tinh)
+      && (!onlyNew || days(h.hieu_luc) > -3) && (!noi || fold(h.noi + ' ' + h.tinh + ' ' + h.ma).includes(noi)));
+    const by = new Map();
+    items.forEach(h => { if (!by.has(h.ma)) by.set(h.ma, { ma: h.ma, noi: h.noi, tinh: h.tinh, hieu_luc: h.hieu_luc, han: h.han, hl_ngay: h.hl_ngay, items: [] }); by.get(h.ma).items.push(h); });
+    rqs = [...by.values()];
+    rqs.sort((a, b) => s === 'sl' ? sum(b, h => h.sl) - sum(a, h => h.sl) : s === 'bg' ? sum(b, h => h.so_bg) - sum(a, h => h.so_bg)
+      : (b.hieu_luc + b.ma).localeCompare(a.hieu_luc + a.ma));
+  }
+  if (s === 'sl') rqs.forEach(r => r.items.sort((a, b) => (b.sl || 0) - (a.sl || 0)));
+  if (s === 'bg') rqs.forEach(r => r.items.sort((a, b) => b.so_bg - a.so_bg));
   window._view = rqs;
-  $('#status').textContent = `${rqs.length} yêu cầu báo giá, ${items.length} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '');
-  $('#list').innerHTML = rqs.length ? rqs.map(r => `<article class="pk"><div class="pk-h">
-      <div class="pk-top"><span class="code">${esc(r.ma)}</span><span class="chip">Hiệu lực từ ${esc(r.hieu_luc)}${r.hl_ngay ? ' · ' + esc(r.hl_ngay) + ' ngày' : ''}</span>${(now - new Date(r.hieu_luc)) / 86400000 < 3 ? '<span class="chip new">Mới</span>' : ''}</div>
+  const nItems = rqs.reduce((n, r) => n + r.items.length, 0);
+  $('#status').textContent = `${rqs.length} yêu cầu báo giá, ${nItems} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '');
+  $('#list').innerHTML = !rqs.length ? '<div class="empty">Không có yêu cầu báo giá phù hợp.</div>' : TAB === 'mo' ? rqs.map(r => {
+    const d = days(r.han);
+    const dl = d <= 0 ? '<span class="chip grey">Hết hạn nhận báo giá</span>' : d < 1 ? `<span class="chip soon">Còn ${Math.max(0, Math.round(d * 24))} giờ</span>` : `<span class="chip ${d < 3 ? 'mid' : ''}">Còn ${Math.floor(d)} ngày</span>`;
+    return `<article class="pk"><div class="pk-h">
+      <div class="pk-top"><span class="code">${esc(r.ma)}</span>${dl}${days(r.dang) > -3 ? '<span class="chip new">Mới</span>' : ''}<span class="chip grey">${r.items.length}/${r.tong_mh} mặt hàng quan tâm</span></div>
+      <p class="pk-name">${esc(r.ten)}</p>
+      <div class="pk-meta"><span>Đơn vị: <b>${esc(r.cdt)}</b></span>${r.tinh ? `<span>Tỉnh/TP: <b>${esc(r.tinh)}</b></span>` : ''}<span>Đăng: <b>${esc(r.dang)}</b></span><span>Hạn nhận báo giá: <b>${esc(r.han)}</b></span>${r.hl_ngay ? `<span>Hiệu lực báo giá: <b>${esc(r.hl_ngay)} ngày</b></span>` : ''}<a href="${esc(r.link)}" target="_blank" rel="noopener">Xem trên muasamcong ↗</a></div>
+    </div><div class="scroll"><table class="tbl"><thead><tr><th>Mặt hàng</th><th>ĐVT</th><th style="text-align:right">Số lượng</th><th style="text-align:right">Giá tham khảo</th><th>Mô tả / yêu cầu kỹ thuật</th></tr></thead><tbody>
+      ${r.items.map(h => `<tr><td data-l="Mặt hàng"><div class="grp">${esc(h.nhom)}</div><div class="it">${esc(h.ten)}</div></td>
+        <td data-l="ĐVT">${esc(h.dvt)}</td><td class="n" data-l="Số lượng">${fmt(h.sl)}</td><td class="n" data-l="Giá tham khảo">${refCell(h)}</td>
+        <td><div class="spec cut">${esc(h.mo_ta)}</div></td></tr>`).join('')}
+    </tbody></table></div></article>`; }).join('') : rqs.map(r => `<article class="pk"><div class="pk-h">
+      <div class="pk-top"><span class="code">${esc(r.ma)}</span><span class="chip">Hiệu lực từ ${esc(r.hieu_luc)}${r.hl_ngay ? ' · ' + esc(r.hl_ngay) + ' ngày' : ''}</span>${days(r.hieu_luc) > -3 ? '<span class="chip new">Mới</span>' : ''}</div>
       <p class="pk-name">${esc(r.noi || '(không ghi nơi yêu cầu)')}</p>
       <div class="pk-meta">${r.tinh ? `<span>Tỉnh/TP: <b>${esc(r.tinh)}</b></span>` : ''}<span>Hạn nhận báo giá: <b>${esc(r.han)}</b></span>
         <a href="https://muasamcong.mof.gov.vn/web/guest/smart-price" target="_blank" rel="noopener" title="Mở trang Giá từ Yêu cầu báo giá, nhập mã ${esc(r.ma)} vào ô Mã YCBG">Tra mã trên muasamcong ↗</a></div>
@@ -175,38 +220,52 @@ function render() {
       ${r.items.map(h => `<tr><td data-l="Mặt hàng"><div class="grp">${esc(h.nhom)}</div><div class="it">${esc(h.ten)}</div></td>
         <td data-l="ĐVT">${esc(h.dvt)}</td><td class="n" data-l="Số lượng">${fmt(h.sl)}</td><td class="n" data-l="Đơn giá">${priceCell(h)}</td>
         <td><div class="spec cut">${esc(h.mo_ta)}</div></td></tr>`).join('')}
-    </tbody></table></div></article>`).join('') : '<div class="empty">Không có báo giá phù hợp.</div>';
+    </tbody></table></div></article>`).join('');
 }
 
 function groups() {
-  const cnt = {}; DATA.items.forEach(h => cnt[h.nhom] = (cnt[h.nhom] || 0) + 1);
+  const cnt = {}, src = TAB === 'mo' ? DATA.ycbg.flatMap(r => r.items) : DATA.items;
+  src.forEach(h => cnt[h.nhom] = (cnt[h.nhom] || 0) + 1);
   $('#groups').innerHTML = DATA.nhom.filter(g => cnt[g]).map(g =>
     `<label><input type="checkbox" value="${esc(g)}"${picked.has(g) ? ' checked' : ''}><span>${esc(g)}<b>${cnt[g]}</b></span></label>`).join('');
 }
 
 function csv() {
-  const rows = [['Mã YCBG','Nơi yêu cầu','Tỉnh/TP','Hiệu lực từ','Hạn nhận báo giá','Nhóm','Mặt hàng','Mô tả','ĐVT','Số lượng','Số báo giá','Giá thấp nhất','Giá trung vị','Giá cao nhất','Tất cả giá báo']];
-  (window._view || []).forEach(r => r.items.forEach(h => rows.push([h.ma, h.noi, h.tinh, h.hieu_luc, h.han, h.nhom, h.ten, h.mo_ta, h.dvt, h.sl, h.so_bg, h.min, h.tv, h.max, (h.gia || []).join('; ')])));
+  let rows;
+  if (TAB === 'mo') {
+    rows = [['Mã YCBG','Tên YCBG','Đơn vị yêu cầu','Tỉnh/TP','Ngày đăng','Hạn nhận báo giá','Nhóm','Mặt hàng','Mô tả','ĐVT','Số lượng','Giá tham khảo (trung vị nhóm)','Link']];
+    (window._view || []).forEach(r => r.items.forEach(h => rows.push([r.ma, r.ten, r.cdt, r.tinh, r.dang, r.han, h.nhom, h.ten, h.mo_ta, h.dvt, h.sl, (REF[h.nhom + '|' + unitKey(h.dvt)] || {}).tv || '', r.link])));
+  } else {
+    rows = [['Mã YCBG','Nơi yêu cầu','Tỉnh/TP','Hiệu lực từ','Hạn nhận báo giá','Nhóm','Mặt hàng','Mô tả','ĐVT','Số lượng','Số báo giá','Giá thấp nhất','Giá trung vị','Giá cao nhất','Tất cả giá báo']];
+    (window._view || []).forEach(r => r.items.forEach(h => rows.push([h.ma, h.noi, h.tinh, h.hieu_luc, h.han, h.nhom, h.ten, h.mo_ta, h.dvt, h.sl, h.so_bg, h.min, h.tv, h.max, (h.gia || []).join('; ')])));
+  }
   const text = '\ufeff' + rows.map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'bao-gia-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = (TAB === 'mo' ? 'yeu-cau-bao-gia-' : 'gia-da-bao-') + new Date().toISOString().slice(0, 10) + '.csv';
   a.click();
 }
 
 $('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
 ['#q', '#noi'].forEach(s => $(s).addEventListener('input', render));
-['#tinh', '#coGia', '#onlyNew', '#sort'].forEach(s => $(s).addEventListener('change', render));
+['#tinh', '#coGia', '#conHan', '#onlyNew', '#sort'].forEach(s => $(s).addEventListener('change', render));
 $('#csv').addEventListener('click', csv);
 
 fetch('/api/bao-gia').then(r => r.json()).then(d => {
   if (!d.items) throw new Error(d.error || 'Chưa có dữ liệu');
+  d.ycbg = d.ycbg || [];
   DATA = d;
-  $('#noiList').innerHTML = [...new Set(d.items.map(h => h.noi).filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('');
-  const cntT = {}; d.items.forEach(h => { if (h.tinh) cntT[h.tinh] = (cntT[h.tinh] || 0) + 1; });
-  $('#tinh').innerHTML = '<option value="">Tất cả</option>' + Object.keys(cntT).sort((a, b) => a.localeCompare(b, 'vi')).map(t => `<option value="${esc(t)}">${esc(t)} (${cntT[t]})</option>`).join('');
-  groups(); render();
+  const acc = {};
+  d.items.forEach(h => { if (h.tv) (acc[h.nhom + '|' + unitKey(h.dvt)] ||= []).push(h.tv); });
+  Object.entries(acc).forEach(([k, v]) => REF[k] = { tv: median(v), n: v.length });
+  $('#nMo').textContent = d.ycbg.filter(r => days(r.han) > 0).length;
+  $('#nGia').textContent = new Set(d.items.map(h => h.ma)).size;
+  $('#noiList').innerHTML = [...new Set([...d.ycbg.map(r => r.cdt), ...d.items.map(h => h.noi)].filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('');
+  const cntT = {}; [...d.ycbg, ...d.items].forEach(h => { if (h.tinh) cntT[h.tinh] = (cntT[h.tinh] || 0) + 1; });
+  $('#tinh').innerHTML = '<option value="">Tất cả</option>' + Object.keys(cntT).sort((a, b) => a.localeCompare(b, 'vi')).map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  setTab('mo');
 }).catch(e => { $('#status').textContent = 'Chưa có dữ liệu báo giá (' + e.message + ').'; });
 </script>
 </body>
