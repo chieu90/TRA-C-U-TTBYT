@@ -128,13 +128,20 @@ def load_kw():
     return kw
 
 
-def group_of(name, kw):
+TEST_UOM = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
+REAGENT_RE = re.compile(r"chủng|atcc|cấy|kiểm soát|\bdna\b|\brna\b|môi trường|chất xét nghiệm|hóa chất|hoá chất|thuốc thử|chất chuẩn|chất hiệu chuẩn|hiệu chuẩn|calibrat|control|chứng|elecsys|architect|alinity|cobas|access|advia|vidas|liaison|maglumi|atellica|dxi|immulite")
+
+
+def group_of(name, kw, uom=None):
     n = " " + norm(name) + " "
     if n.startswith((" máy ", " thiết bị ", " hệ thống ")):  # máy móc, không phải vật tư test
         return None
     if any(b and b in n for b in kw["_bo"]):
         return None
-    if kw["_can"] and not any(c in n for c in kw["_can"]):
+    # tên phải có chữ kiểu test/que thử/khay thử...; riêng mặt hàng tính theo Test/Que/Khay
+    # mà tên chỉ ghi thương hiệu + chỉ số (vd "SDN BioNTN HbsAg") thì vẫn nhận, trừ hóa chất chạy máy
+    if kw["_can"] and not any(c in n for c in kw["_can"]) and not (
+            norm(uom or "") in TEST_UOM and not REAGENT_RE.search(n)):
         return None
     for ten, tus in kw["_nhom"]:
         if any((" " + t + " ") in n if len(t) <= 4 else t in n for t in tus):
@@ -401,7 +408,7 @@ def build(ids_path):
             per_lot.setdefault(str(t.get("parent")), []).append(t)
         hit = []
         for t in items:
-            g = group_of(t["name"], kw)
+            g = group_of(t["name"], kw, t.get("uom"))
             if not g:
                 continue
             lot = lots.get(str(t.get("parent")), {})
