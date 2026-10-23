@@ -8,6 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* logo Avanta mờ phủ toàn trang như watermark (không chặn thao tác chuột) */
+body::after { content: ""; position: fixed; inset: -50%; z-index: 9999; pointer-events: none;
+  background: url("/static/avanta-wm.png") repeat; background-size: 420px auto; opacity: .06; transform: rotate(-30deg); }
+@media (prefers-color-scheme: dark) { body::after { opacity: .07; } }
+@media print { body::after { opacity: .08; } }
+
 :root {
   --bg: #f3f6fa; --surface: #ffffff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0; --line-2: #eef2f7;
   --brand: #0b5cad; --brand-2: #0e9f9a; --accent: #0b5cad; --accent-soft: #e6f0fb;

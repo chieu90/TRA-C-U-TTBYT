@@ -332,6 +332,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if u.path == "/":
                 self.send(200, open(os.path.join(HERE, "index.html"), "rb").read(), "text/html; charset=utf-8")
+            elif re.fullmatch(r"/static/[\w.-]+\.png", u.path) and os.path.isfile(os.path.join(HERE, u.path.lstrip("/"))):
+                self.send(200, open(os.path.join(HERE, u.path.lstrip("/")), "rb").read(), "image/png")
             elif u.path == "/goi-thau":
                 self.send(200, open(os.path.join(HERE, "goi_thau.html"), "rb").read(), "text/html; charset=utf-8")
             elif u.path == "/api/goi-thau":
