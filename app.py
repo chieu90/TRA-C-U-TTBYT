@@ -150,7 +150,7 @@ if os.path.exists(INDEX_FILE):
 
 
 # ---------- Tự cập nhật hồ sơ mới công bố trên vimda ----------
-UPDATE_EVERY = int(os.environ.get("UPDATE_EVERY", 1800))   # giây; 0 = tắt
+UPDATE_EVERY = int(os.environ.get("UPDATE_EVERY", 0))   # giây; 0 = tắt, chỉ cập nhật khi bấm nút (POST /api/update)
 VN_TZ = 7 * 3600
 update_lock = threading.Lock()
 
@@ -211,6 +211,27 @@ def update_once():
     refresh_info(time.strftime("%d/%m/%Y %H:%M", time.gmtime(time.time() + VN_TZ)))
     print(f"Cập nhật vimda: +{len(added)} hồ sơ mới (kho {len(index_rows):,})", file=sys.stderr, flush=True)
     return len(added)
+
+
+def run_update():
+    """Cập nhật theo lệnh (nút "Cập nhật ngay"): chạy nền, trạng thái báo qua /api/info."""
+    if not update_lock.acquire(blocking=False):
+        return False
+    index_info["updating"] = True
+
+    def job():
+        try:
+            n = update_once()
+            index_info["last_added"] = n
+            index_info.pop("update_error", None)
+        except Exception as e:
+            index_info["update_error"] = str(e)
+            print(f"Cập nhật vimda lỗi: {e}", file=sys.stderr, flush=True)
+        finally:
+            index_info["updating"] = False
+            update_lock.release()
+    threading.Thread(target=job, daemon=True).start()
+    return True
 
 
 def updater():
@@ -373,6 +394,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         # Chuyển dữ liệu sang Apps Script của người dùng (trình duyệt gọi thẳng sẽ bị chặn CORS)
+        if self.path == "/api/update":
+            started = run_update()
+            return self.send(200, {"started": started, "updating": True})
         if self.path != "/api/sheets":
             return self.send(404, {"error": "Không tìm thấy"})
         try:
