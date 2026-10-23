@@ -1,12 +1,13 @@
 # dữ liệu / bộ nhớ đệm cục bộ — không đưa lên máy chủ
-vimda_cache.json
-*.tmp
-vimda_*.csv
-vimda_*.xlsx
-~$*
 *.log
-__pycache__/
-.claude/
+*.tmp
 .DS_Store
+.claude/
+__pycache__/
 app_cache.json
 index/
+public/
+vimda_*.csv
+vimda_*.xlsx
+vimda_cache.json
+~$*
