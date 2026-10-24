@@ -15,9 +15,14 @@ và lọc các mặt hàng thuộc sản phẩm quan tâm (cùng bộ từ khóa
 - Đầu ra: data/bao_gia.json — trang /bao-gia của app.py đọc file này.
 """
 import json, os, re, statistics, sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import goi_thau as g
+
+def now_vn():
+    """Giờ Việt Nam (máy chủ GitHub Actions chạy giờ UTC)."""
+    return datetime.now(timezone(timedelta(hours=7))).replace(tzinfo=None)
+
 
 URL = g.HOST + "/o/egp-portal-smart-price/services/smart/search_price"
 OUT_PATH = os.path.join(g.HERE, "data", "bao_gia.json")
@@ -73,7 +78,7 @@ def build_open(kw, old_open):
     # id từ lần quét bằng trình duyệt (nếu có trên máy) + các YCBG đã có trong dữ liệu cũ
     # -> chạy tự động trên máy chủ (GitHub Actions, không có thư mục index/) vẫn làm mới được YCBG đã biết
     ids = (json.load(open(IDS_PATH)) if os.path.exists(IDS_PATH) else []) + list(old_open)
-    now = datetime.now()
+    now = now_vn()
     out = {}
     for rq_id in dict.fromkeys(ids):
         prev = old_open.get(rq_id)
@@ -148,10 +153,10 @@ def build():
             "sl": qty(r.get("quantity")), "gia": prices, "so_bg": len(prices),
             "min": prices[0] if prices else None, "tv": statistics.median(prices) if prices else None,
             "max": prices[-1] if prices else None,
-            "lan_dau": (old.get(key) or {}).get("lan_dau") or datetime.now().strftime("%Y-%m-%d %H:%M")}
+            "lan_dau": (old.get(key) or {}).get("lan_dau") or now_vn().strftime("%Y-%m-%d %H:%M")}
     items = list({**old, **new}.values())
     items.sort(key=lambda i: (i["hieu_luc"], i["ma"]), reverse=True)
-    res = {"cap_nhat": datetime.now().strftime("%Y-%m-%d %H:%M"), "nhom": [x["ten"] for x in kw["nhom"]], "ycbg": ycbg, "items": items}
+    res = {"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nhom": [x["ten"] for x in kw["nhom"]], "ycbg": ycbg, "items": items}
     json.dump(res, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     print(f"Xong: {len(items)} dòng hàng ({len(new)} lấy lần này), {len({i['ma'] for i in items})} YCBG -> {OUT_PATH}", file=sys.stderr)
 
