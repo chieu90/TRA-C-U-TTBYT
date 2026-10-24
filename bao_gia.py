@@ -70,7 +70,9 @@ def ycbg_detail(rq_id):
 
 def build_open(kw, old_open):
     """YCBG (đang hoặc đã nhận báo giá) có mặt hàng thuộc sản phẩm quan tâm, từ danh sách id đã quét."""
-    ids = json.load(open(IDS_PATH)) if os.path.exists(IDS_PATH) else []
+    # id từ lần quét bằng trình duyệt (nếu có trên máy) + các YCBG đã có trong dữ liệu cũ
+    # -> chạy tự động trên máy chủ (GitHub Actions, không có thư mục index/) vẫn làm mới được YCBG đã biết
+    ids = (json.load(open(IDS_PATH)) if os.path.exists(IDS_PATH) else []) + list(old_open)
     now = datetime.now()
     out = {}
     for rq_id in dict.fromkeys(ids):
