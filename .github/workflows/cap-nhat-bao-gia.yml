@@ -1,0 +1,43 @@
+# Tự cập nhật dữ liệu Báo giá (tab "Giá đã báo" + làm mới các YCBG đã biết) mỗi 4 giờ,
+# không cần máy cá nhân hay Claude. Chỉ dùng API công khai của muasamcong (không qua reCAPTCHA).
+name: Cập nhật báo giá tự động
+
+on:
+  schedule:
+    - cron: "15 */4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cap-nhat-du-lieu
+  cancel-in-progress: false
+
+jobs:
+  bao-gia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Lấy báo giá từ muasamcong
+        run: python3 bao_gia.py
+      - name: Đẩy dữ liệu nếu có thay đổi
+        run: |
+          if python3 - <<'PY'
+          import json, subprocess, sys
+          old = subprocess.run(["git", "show", "HEAD:data/bao_gia.json"], capture_output=True, text=True).stdout
+          a, b = json.loads(old or "{}"), json.load(open("data/bao_gia.json", encoding="utf-8"))
+          a.pop("cap_nhat", None); b.pop("cap_nhat", None)
+          sys.exit(0 if a == b else 1)
+          PY
+          then echo "Không có dữ liệu mới."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/bao_gia.json
+          git commit -m "Tự cập nhật báo giá $(TZ=Asia/Ho_Chi_Minh date '+%d/%m/%Y %H:%M') [skip render]"
+          git pull --rebase origin main
+          git push
