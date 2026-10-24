@@ -5,13 +5,49 @@
   "outputDirectory": "public",
   "cleanUrls": true,
   "redirects": [
-    { "source": "/", "destination": "/goi-thau", "permanent": false }
+    {
+      "source": "/",
+      "destination": "/goi-thau",
+      "permanent": false
+    }
   ],
   "rewrites": [
-    { "source": "/api/goi-thau", "destination": "/goi_thau.json" },
-    { "source": "/api/bao-gia", "destination": "/bao_gia.json" }
+    {
+      "source": "/api/goi-thau",
+      "destination": "/goi_thau.json"
+    },
+    {
+      "source": "/api/bao-gia",
+      "destination": "/bao_gia.json"
+    }
   ],
   "headers": [
-    { "source": "/(goi_thau|bao_gia).json", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+    {
+      "source": "/(goi_thau|bao_gia).json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        }
+      ]
+    }
   ]
 }
