@@ -67,6 +67,9 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 2px 12px; }
 .status { color: var(--muted); font-size: 14px; }
+.upd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upd button:disabled { opacity: .7; cursor: progress; }
+
 .list { display: grid; gap: 14px; }
 .pk { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .pk-h { padding: 14px 18px; border-left: 4px solid var(--brand-2); }
@@ -143,7 +146,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
     <div class="chips" id="groups"></div>
   </section>
 
-  <div class="bar"><div class="status" id="status">Đang tải…</div></div>
+  <div class="bar"><div class="status" id="status">Đang tải…</div><div class="upd"><span class="status" id="updMsg"></span><button id="updBtn" class="pri" type="button" hidden>Cập nhật ngay</button></div></div>
   <div class="list" id="list"></div>
 </div>
 
@@ -286,6 +289,51 @@ fetch('/api/goi-thau').then(r => r.json()).then(d => {
   $('#tinh').innerHTML = '<option value="">Tất cả</option>' + Object.keys(cntT).sort((a, b) => a.localeCompare(b, 'vi')).map(t => `<option value="${esc(t)}">${esc(t)} (${cntT[t]})</option>`).join('');
   groups(); render();
 }).catch(e => { $('#status').textContent = 'Chưa có dữ liệu gói thầu (' + e.message + ').'; });
+
+// Nút "Cập nhật ngay" (chỉ hiện trên bản Vercel có /api/cap-nhat): chạy workflow GitHub rồi tự tải dữ liệu mới
+(() => {
+  const btn = document.getElementById('updBtn'), msg = document.getElementById('updMsg');
+  const DATA_URL = location.pathname.includes('bao-gia') ? '/api/bao-gia' : '/api/goi-thau';
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const vn = iso => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  const say = (t, busy) => { msg.textContent = t; btn.disabled = !!busy; btn.textContent = busy ? 'Đang cập nhật…' : 'Cập nhật ngay'; };
+  async function status() { const r = await fetch('/api/cap-nhat', { cache: 'no-store' }); if (!r.ok) throw 0; return r.json(); }
+  async function follow(since) {
+    const before = (DATA || {}).cap_nhat;
+    say('Đang lấy dữ liệu từ muasamcong (khoảng 3–6 phút)…', true);
+    let run;
+    for (let i = 0; i < 90; i++) {
+      await sleep(10000);
+      try { run = (await status()).run; } catch (e) { continue; }
+      if (run && Date.parse(run.created_at) >= since - 60000 && run.status === 'completed') break;
+    }
+    if (!run || run.status !== 'completed') return say('Chưa xong, tải lại trang sau ít phút để xem dữ liệu mới.');
+    if (run.conclusion !== 'success') return say('Lần cập nhật bị lỗi (' + (run.conclusion || '?') + '). Thử lại sau.');
+    say('Đã lấy xong, đang đưa dữ liệu lên trang…', true);
+    for (let i = 0; i < 18; i++) {  // Vercel triển khai lại ~1–2 phút
+      await sleep(10000);
+      try { const d = await (await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })).json();
+            if (d.cap_nhat && d.cap_nhat !== before) { say('Đã cập nhật lúc ' + d.cap_nhat + ', đang tải lại…', true); return location.reload(); } } catch (e) {}
+    }
+    say('Đã chạy xong, không có dữ liệu mới.');
+  }
+  status().then(s => {
+    btn.hidden = false;
+    if (!s.ready) { btn.disabled = true; msg.textContent = 'Chưa cài GH_TOKEN trên Vercel.'; return; }
+    if (s.run && s.run.status !== 'completed') return follow(Date.parse(s.run.created_at));
+    if (s.run) msg.textContent = 'Lần chạy gần nhất: ' + vn(s.run.updated_at);
+  }).catch(() => {});
+  btn.addEventListener('click', async () => {
+    const t = Date.now();
+    say('Đang gửi lệnh…', true);
+    try {
+      const r = await (await fetch('/api/cap-nhat', { method: 'POST' })).json();
+      if (!r.ok) return say('Không chạy được: ' + (r.error || 'lỗi'));
+      if (!r.started && r.reason === 'vua-chay') return say('Vừa cập nhật lúc ' + vn(r.run.created_at) + ', thử lại sau 5 phút.');
+      follow(r.started ? t : Date.parse(r.run.created_at));
+    } catch (e) { say('Không kết nối được, thử lại.'); }
+  });
+})();
 </script>
 </body>
 </html>
