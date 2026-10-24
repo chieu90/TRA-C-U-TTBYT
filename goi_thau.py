@@ -3,6 +3,7 @@
 Lấy chi tiết gói thầu trên muasamcong và lọc mặt hàng theo sản phẩm quan tâm.
 
     python3 goi_thau.py build index/goi_thau_ids.json
+    python3 goi_thau.py refresh      # chỉ làm mới hạn/tên/giá các gói đã có (chạy tự động trên máy chủ)
 
 - Đầu vào: file JSON {mã TBMT: {id, bidForm, name, inv, prov, close, price, pub}} — danh sách gói
   đang mở do bước quét hằng ngày (trình duyệt) lưu ra.
@@ -469,8 +470,42 @@ def build(ids_path):
     print(f"Xong: {len(out)} gói, {sum(len(p['hang_hoa']) for p in out)} mặt hàng -> {OUT_PATH}", file=sys.stderr)
 
 
+def refresh():
+    """Làm mới thông tin chung các gói đang có trong data/goi_thau.json (hạn khi gia hạn, tên, giá, tỉnh...)
+    qua API công khai, GIỮ NGUYÊN danh mục + thông số Chương V. Dùng cho chạy tự động trên máy chủ
+    (GitHub Actions) — việc tìm gói MỚI vẫn cần trình duyệt (reCAPTCHA) và lệnh build."""
+    res = json.load(open(OUT_PATH, encoding="utf-8"))
+    changed = 0
+    for p in res.get("goi", []):
+        nid = (re.search(r"notifyId=([0-9a-f-]{36})", p.get("link") or "") or [None, None])[1]
+        if not nid:
+            continue
+        cached = os.path.join(CACHE, "meta_" + nid + ".json")
+        if os.path.exists(cached):
+            os.remove(cached)  # luôn lấy bản mới nhất
+        try:
+            m = meta_of(nid)
+        except Exception as e:
+            print(p["ma"], "lỗi lấy thông tin chung:", e, file=sys.stderr)
+            continue
+        new = {"ten": clean(m.get("name")) or p.get("ten"), "cdt": clean(m.get("inv")) or p.get("cdt"),
+               "han": (m.get("close") or "")[:16].replace("T", " ") or p.get("han"),
+               "hinh_thuc": FORM_NAMES.get(m.get("bidForm"), m.get("bidForm") or "") or p.get("hinh_thuc"),
+               "gia_goi": num(m.get("price")) or p.get("gia_goi"), "link": detail_link(p["ma"], m)}
+        if m.get("prov"):
+            new["tinh"] = province(m, [])
+        if any(p.get(k) != v for k, v in new.items()):
+            changed += 1
+            p.update(new)
+    res["cap_nhat"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")
+    json.dump(res, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    print(f"Làm mới {len(res.get('goi', []))} gói, {changed} gói có thay đổi -> {OUT_PATH}", file=sys.stderr)
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "build":
         build(sys.argv[2])
+    elif len(sys.argv) == 2 and sys.argv[1] == "refresh":
+        refresh()
     else:
         print(__doc__)
