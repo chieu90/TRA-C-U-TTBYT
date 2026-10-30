@@ -79,11 +79,17 @@ def build_open(kw, old_open):
     # -> chạy tự động trên máy chủ (GitHub Actions, không có thư mục index/) vẫn làm mới được YCBG đã biết
     ids = (json.load(open(IDS_PATH)) if os.path.exists(IDS_PATH) else []) + list(old_open)
     now = now_vn()
-    out = {}
+    out, huy = {}, set()
     for rq_id in dict.fromkeys(ids):
         prev = old_open.get(rq_id)
         if prev and prev.get("han", "") < now.strftime("%Y-%m-%d %H:%M"):
-            out[rq_id] = prev  # đã hết hạn: giữ nguyên, không gọi lại
+            try:  # đã hết hạn: giữ nguyên nội dung, chỉ kiểm tra có bị hủy không
+                if ycbg_detail(rq_id).get("status") == g.HUY:
+                    huy.add(rq_id)
+                    continue
+            except Exception:
+                pass
+            out[rq_id] = prev
             continue
         try:
             d = ycbg_detail(rq_id)
@@ -91,6 +97,9 @@ def build_open(kw, old_open):
             print(rq_id, "lỗi lấy YCBG:", e, file=sys.stderr)
             if prev:
                 out[rq_id] = prev
+            continue
+        if d.get("status") == g.HUY:  # YCBG đã hủy
+            huy.add(rq_id)
             continue
         try:
             locs = json.loads(d.get("location") or "[]")
@@ -123,8 +132,8 @@ def build_open(kw, old_open):
                     f"&type=es-ycbg&stepCode=request-quote-step-1&id={rq_id}&notifyNo={d.get('requestQuoteNo')}&step=tbmt&bidForm={d.get('requestQuoteType')}",
             "lan_dau": (prev or {}).get("lan_dau") or now.strftime("%Y-%m-%d %H:%M")}
     res = sorted(out.values(), key=lambda r: r["han"])
-    print(f"YCBG: {len(ids)} id -> {len(res)} YCBG có sản phẩm quan tâm", file=sys.stderr)
-    return res
+    print(f"YCBG: {len(ids)} id -> {len(res)} YCBG có sản phẩm quan tâm ({len(huy)} đã hủy, bỏ qua)", file=sys.stderr)
+    return res, huy
 
 
 def build():
@@ -134,9 +143,12 @@ def build():
         prev = json.load(open(OUT_PATH, encoding="utf-8"))
         old = {it["key"]: it for it in prev.get("items", [])}
         old_open = {r["id"]: r for r in prev.get("ycbg", [])}
-    ycbg = build_open(kw, old_open)
+    ycbg, huy = build_open(kw, old_open)
+    old = {k: v for k, v in old.items() if k.split("|")[0] not in huy}
     new = {}
     for (rq_id, row_key), quotes in fetch().items():
+        if rq_id in huy:
+            continue
         r = quotes[0]
         name = g.clean(r.get("itemName"))
         desc = g.clean(r.get("description"))

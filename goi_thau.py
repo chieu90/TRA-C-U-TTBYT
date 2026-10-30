@@ -255,13 +255,16 @@ def spec_from_rows(name, qty, rows):
     return max(cands, key=len) if cands else ""
 
 
+HUY = "03"  # status của TBMT / chào giá đã hủy (trang chi tiết hiện "Thông tin huỷ thông báo mời thầu")
+
+
 def meta_of(notify_id):
     """Thông tin chung của gói (tên, chủ đầu tư, hạn, giá...) qua API công khai."""
     os.makedirs(CACHE, exist_ok=True)
     path = os.path.join(CACHE, "meta_" + notify_id + ".json")
     if os.path.exists(path) and time.time() - os.path.getmtime(path) < 86400:
         m = json.load(open(path))
-        if "cperiod" in m and "prov_v" in m:
+        if "cperiod" in m and "prov_v" in m and "status" in m:
             return m
     n = (json.loads(http(HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail", {"body": {"id": notify_id}}))
          .get("body") or {}).get("bidNotification")
@@ -270,6 +273,7 @@ def meta_of(notify_id):
              "prov": n.get("executionLocation") or "", "close": n.get("bidCloseDate"), "pub": n.get("publicDate"),
              "bidForm": n.get("bidForm"), "price": n.get("bidPrice"), "planNo": n.get("planNo"),
              "processApply": n.get("processApply"), "bidMode": n.get("bidMode"), "stepCode": "notify-contractor-step-1-tbmt",
+             "status": n.get("status"),
              "cperiod": n.get("contractPeriod"), "cunit": n.get("contractPeriodUnit")}
     else:  # chào giá trực tuyến rút gọn
         r = json.loads(http(HOST + "/o/egp-portal-contractor-selection-v2/services/online-reoffer/detail", {"id": notify_id}))
@@ -279,7 +283,7 @@ def meta_of(notify_id):
              "prov": next((l.get("provName") for l in locs if l.get("provName")), ""),
              "close": max(ends) if ends else None, "pub": r.get("publicDate"), "bidForm": r.get("bidForm") or "CGTTRG",
              "price": r.get("priceInit"), "planNo": r.get("planNo"), "processApply": r.get("processApply"),
-             "bidMode": r.get("bidMode"), "stepCode": "reoffer-price-step-1",
+             "bidMode": r.get("bidMode"), "stepCode": "reoffer-price-step-1", "status": r.get("status"),
              "cperiod": (r.get("bidDetail") or {}).get("cperiod"), "cunit": (r.get("bidDetail") or {}).get("cperiodUnit")}
     m["id"] = notify_id
     m["prov_v"] = 1
@@ -398,6 +402,9 @@ def build(ids_path):
             old[p["ma"]] = p.get("lan_dau") or p.get("dang")
     out = []
     for code, m in meta.items():
+        if m.get("status") == HUY:
+            print(code, "đã hủy -> bỏ qua", file=sys.stderr)
+            continue
         close = m.get("close") or ""  # giữ cả gói đã đóng thầu; trang web tự đánh dấu và lọc
         try:
             lots, items, files, eval_files, form_text, bdl162 = parse(forms(m["id"]))
@@ -476,7 +483,9 @@ def refresh():
     (GitHub Actions) — việc tìm gói MỚI vẫn cần trình duyệt (reCAPTCHA) và lệnh build."""
     res = json.load(open(OUT_PATH, encoding="utf-8"))
     changed = 0
+    keep = []
     for p in res.get("goi", []):
+        keep.append(p)
         nid = (re.search(r"notifyId=([0-9a-f-]{36})", p.get("link") or "") or [None, None])[1]
         if not nid:
             continue
@@ -488,6 +497,11 @@ def refresh():
         except Exception as e:
             print(p["ma"], "lỗi lấy thông tin chung:", e, file=sys.stderr)
             continue
+        if m.get("status") == HUY:
+            keep.pop()
+            changed += 1
+            print(p["ma"], "đã hủy -> bỏ", file=sys.stderr)
+            continue
         new = {"ten": clean(m.get("name")) or p.get("ten"), "cdt": clean(m.get("inv")) or p.get("cdt"),
                "han": (m.get("close") or "")[:16].replace("T", " ") or p.get("han"),
                "hinh_thuc": FORM_NAMES.get(m.get("bidForm"), m.get("bidForm") or "") or p.get("hinh_thuc"),
@@ -497,6 +511,7 @@ def refresh():
         if any(p.get(k) != v for k, v in new.items()):
             changed += 1
             p.update(new)
+    res["goi"] = keep
     res["cap_nhat"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")
     json.dump(res, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     print(f"Làm mới {len(res.get('goi', []))} gói, {changed} gói có thay đổi -> {OUT_PATH}", file=sys.stderr)
