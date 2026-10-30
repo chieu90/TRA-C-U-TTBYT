@@ -23,7 +23,7 @@
   ],
   "headers": [
     {
-      "source": "/(goi_thau|bao_gia).json",
+      "source": "/(goi_thau.json|bao_gia.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -46,6 +46,15 @@
         {
           "key": "Content-Type",
           "value": "application/manifest+json"
+        }
+      ]
+    },
+    {
+      "source": "/(bao-gia-dang-nhan|gia-da-bao).csv",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/csv; charset=utf-8"
         }
       ]
     }
