@@ -37,6 +37,31 @@ def ten(r):
     return g.clean(r.get("tenThietBi") or r.get("danhMucHangHoa"))
 
 
+PACK_RE = re.compile(r"(\d{1,4})\s*(?:que|test|miếng|strip|strips|tests)\s*/\s*(?:hộp|lọ|hop|box|vial)|(?:hộp|lọ|box)\s*(?:\d+\s*lọ\s*x\s*)?(\d{1,4})\s*(?:que|test|miếng|strips?)")
+
+
+def sl_test(r):
+    """Số test: đơn vị test/que/khay -> số lượng; đơn vị hộp/lọ -> số lượng x quy cách (vd 'hộp 50 que') nếu đọc được."""
+    sl = r.get("khoiLuongDouble")
+    if not sl:
+        return None
+    u = g.norm(r.get("donViTinh") or "")
+    if u in PER_TEST:
+        return sl
+    # que/test tính theo "cái", "miếng", "1 que+1 kim"...: mỗi đơn vị là một lần thử
+    if (u in ("cái", "chiếc", "miếng", "test/cái", "que/cái") or u.startswith("1 que")) and re.search(r"\b(que|test|khay)\b", g.norm(ten(r))):
+        return sl
+    if g.norm(r.get("donViTinh") or "") in ("hộp", "lọ", "hop", "box"):
+        t = g.norm(" ".join(g.clean(r.get(k)) for k in ("tenThietBi", "danhMucHangHoa", "nhanHieu", "cauHinh")))
+        m2 = re.search(r"(\d{1,2})\s*lọ\s*x\s*(\d{1,4})\s*(?:que|test|miếng|strips?)", t)  # hộp 2 lọ x 25 que
+        m = PACK_RE.search(t)
+        if m2 or m:
+            n = int(m2.group(1)) * int(m2.group(2)) if m2 else int(m.group(1) or m.group(2))
+            if 5 <= n <= 1000:
+                return sl * n
+    return None
+
+
 def don_gia(r):
     v = r.get("donGia") if r.get("donGia") is not None else r.get("donGiaDuThau")
     sl = r.get("khoiLuongDouble") or 0
@@ -56,7 +81,7 @@ def keywords(kw):
 def classify(r, kw):
     """Nhóm test nhanh của một dòng trúng thầu, None nếu không phải test nhanh."""
     name, uom = ten(r), r.get("donViTinh")
-    extra = g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("cauHinh"))[:300]
+    extra = g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")) + " " + g.clean(r.get("cauHinh"))[:300]
     txt = g.norm(name + " " + extra)
     # ELISA, CLIA, PCR, hóa chất chạy máy, pin/phụ kiện máy: xét trong tên + nhãn hiệu
     # (mô tả test nhanh hay ghi "độ nhạy so với PCR/ELISA" nên không xét mô tả)
@@ -65,8 +90,9 @@ def classify(r, kw):
         return None
     if any(c in g.norm(name) for c in kw["_can"]):  # tên đã ghi rõ test/que thử/khay thử...
         return g.group_of(name, kw, uom)
-    # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu hoặc mô tả
-    if RAPID_RE.search(txt):
+    # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu, mô tả,
+    # hoặc tính theo đơn vị test/que/khay mà không phải hóa chất chạy máy
+    if RAPID_RE.search(txt) or (g.norm(uom or "") in PER_TEST and not g.REAGENT_RE.search(short)):
         return g.group_of("test " + name + " " + g.clean(r.get("nhanHieu")), kw, uom) or g.group_of("test " + name + " " + extra, kw, uom)
     return None
 
@@ -115,7 +141,7 @@ def results(kw):
             items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
                           ten(r), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
                           g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), don_gia(r),
-                          "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or ""])
+                          "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or "", sl_test(r)])
         p = pk.setdefault(r["maTbmt"], {"ma": r["maTbmt"], "cdt": g.clean(r.get("tenCdtBmt")), "ma_cdt": r.get("maCdt"),
                                          "tinh": g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), "")),
                                          "kq": (r.get("ngayDangTaiKqlcnt") or "")[:10], "hinh_thuc": g.FORM_NAMES.get(r.get("bidForm"), r.get("bidForm") or ""),
@@ -132,7 +158,7 @@ def build():
     kq, items = results(kw)
     items.sort(key=lambda r: r[3], reverse=True)
     json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"] if x["ten"] not in DASH_BO],
-               "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc"],
+               "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test"],
                "rows": items}, open(TT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
     for p in goi:

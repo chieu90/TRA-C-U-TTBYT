@@ -266,11 +266,15 @@ const money = v => v >= 1e9 ? (v / 1e9).toLocaleString('vi-VN', { maximumFractio
 const day = s => s ? s.split('-').reverse().join('/') : '';
 const UNIT1 = /^(test|que|khay|thanh|test\/khay|test\/que|kit)$/i;
 // tên hãng / nhà thầu ghi nhiều kiểu -> khóa gộp bỏ dấu câu, hậu tố công ty
-const brandKey = s => fold(s).replace(/\b(co|ltd|inc|corp|corporation|gmbh|llc|limited|company|s\.?a|ag|co\.,?ltd)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+// hãng ghi nhiều kiểu (TaiDoc Technology Corporation / Taidoc Technlogy Corp - Đài Loan / ... Wugu Factory):
+// gộp theo từ có nghĩa đầu tiên sau khi bỏ địa danh, quốc gia, hậu tố công ty
+const BRAND_STOP = new Set('cong ty tnhh co phan cty ctcp tap doan san xuat hang thuong hieu hangzhou zhejiang beijing shanghai guangzhou shenzhen xiamen jiangsu nanjing wuhan tianjin changchun qingdao jiangxi shandong hunan suzhou dai loan taiwan trung quoc china han quoc korea viet nam vietnam my usa duc germany nhat japan an do india anh uk phap italy y province of the and'.split(' '));
+const brandKey = s => { const w = fold(s).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(x => x && !BRAND_STOP.has(x));
+  if (!w.length) return ''; return w[0].length <= 3 && w[1] ? w[0] + ' ' + w[1] : w[0]; };
 let R = [], view = [], page = 0, pick = {};
 // chỉ số đang xem: giá trị (đ) hoặc số lượng test (chỉ tính dòng có ĐVT là test/que/khay; dòng tính theo hộp/bộ không quy đổi được)
 const M = () => $('#metric').value;
-const val = r => M() === 'sl' ? (r.per ? r.sl || 0 : 0) : r.tien;
+const val = r => M() === 'sl' ? r.sl_test || 0 : r.tien;
 const show = v => M() === 'sl' ? fmtQty(v) : money(v);
 const unit = () => M() === 'sl' ? ' test' : ' đ';
 const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu' : v >= 1e4 ? Math.round(v / 1e3).toLocaleString('vi-VN') + ' nghìn' : num(v);
@@ -278,7 +282,7 @@ const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFracti
 function load(d) {
   const c = d.cot;
   R = d.rows.map(a => { const o = {}; c.forEach((k, i) => o[k] = a[i]); o.tien = (o.sl || 0) * (o.don_gia || 0);
-    o.per = UNIT1.test((o.dvt || '').trim()); o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
+    o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
     o.s = fold([o.ma, o.cdt, o.ten, o.hang, o.nhan, o.ky_ma, o.nha_thau].join(' ')); return o; });
   const months = [...new Set(R.map(r => r.ngay.slice(0, 7)))].sort();
   const opt = m => `<option value="${m}">Tháng ${+m.slice(5)}/${m.slice(0, 4)}</option>`;
@@ -337,7 +341,7 @@ function hover(el, lines) {
 }
 
 function render() {
-  const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.per ? r.sl || 0 : 0), 0);
+  const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.sl_test || 0), 0);
   const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk));
   $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
       : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
@@ -355,7 +359,7 @@ function render() {
   $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}</span>`).join('');
   const sl = M() === 'sl';
   $('#mTitle').textContent = sl ? 'Số lượng test trúng thầu theo tháng' : 'Giá trị trúng thầu theo tháng';
-  $('#mCap').textContent = sl ? 'Tổng số test (chỉ dòng có ĐVT là test/que/khay; dòng tính theo hộp/bộ không quy đổi được), theo ngày đăng kết quả' : 'Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả';
+  $('#mCap').textContent = sl ? 'Tổng số test (đơn vị test/que/khay; hộp/lọ quy đổi theo quy cách ghi trong tên hoặc mô tả, vd "hộp 50 que"), theo ngày đăng kết quả' : 'Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả';
   document.querySelectorAll('.by').forEach(e => e.textContent = sl ? 'Top 10 theo số lượng test' : 'Top 10 theo giá trị');
   document.querySelector('.by2').textContent = sl ? 'Số lượng test theo nhóm' : 'Giá trị trúng theo nhóm';
   hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
