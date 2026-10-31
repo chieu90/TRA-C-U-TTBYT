@@ -19,11 +19,15 @@
     {
       "source": "/api/bao-gia",
       "destination": "/bao_gia.json"
+    },
+    {
+      "source": "/api/co-so-y-te",
+      "destination": "/co_so_y_te.json"
     }
   ],
   "headers": [
     {
-      "source": "/(goi_thau.json|bao_gia.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
+      "source": "/(goi_thau.json|bao_gia.json|co_so_y_te.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
       "headers": [
         {
           "key": "Cache-Control",

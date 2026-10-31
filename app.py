@@ -369,6 +369,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not os.path.exists(path):
                     return self.send(404, {"error": "Chưa có dữ liệu báo giá"})
                 self.send(200, open(path, "rb").read())
+            elif u.path == "/co-so-y-te":
+                self.send(200, open(os.path.join(HERE, "co_so_y_te.html"), "rb").read(), "text/html; charset=utf-8")
+            elif u.path == "/api/co-so-y-te":
+                path = os.path.join(HERE, "data", "co_so_y_te.json")
+                if not os.path.exists(path):
+                    return self.send(404, {"error": "Chưa có dữ liệu cơ sở y tế"})
+                self.send(200, open(path, "rb").read())
             elif u.path == "/api/info":
                 self.send(200, index_info)
             elif u.path == "/api/latest":

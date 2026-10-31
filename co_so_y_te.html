@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cơ sở y tế</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%230e9f9a%22/%3E%3Cpath d=%22M9 8h14v3H9zM9 14h14v3H9zM9 20h9v3H9z%22 fill=%22white%22/%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="theme-color" content="#0b5cad">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cơ sở y tế">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* logo Avanta mờ phủ toàn trang như watermark (không chặn thao tác chuột) */
+body::after { content: ""; position: fixed; inset: -50%; z-index: 9999; pointer-events: none;
+  background: url("/static/avanta-wm.png") repeat; background-size: 420px auto; opacity: .06; transform: rotate(-30deg); }
+@media (prefers-color-scheme: dark) { body::after { opacity: .07; } }
+@media print { body::after { opacity: .08; } }
+
+:root {
+  --bg: #f3f6fa; --surface: #ffffff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0; --line-2: #eef2f7;
+  --brand: #0b5cad; --brand-2: #0e9f9a; --accent: #0b5cad; --accent-soft: #e6f0fb;
+  --ok: #15803d; --ok-bg: #e8f7ee; --bad: #c2410c; --bad-bg: #fdeee6; --warn: #b45309; --warn-bg: #fdf3e2;
+  --shadow: 0 1px 2px rgba(16,35,70,.06), 0 6px 20px rgba(16,35,70,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1420; --surface: #141d2b; --text: #e5ebf3; --muted: #93a3b8; --line: #243145; --line-2: #1b2636;
+    --brand: #3b8bdb; --brand-2: #22b3ad; --accent: #5aa2ec; --accent-soft: #16304d;
+    --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a2113; --warn: #fbbf24; --warn-bg: #3a2d12;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.hero { background: linear-gradient(120deg, var(--brand) 0%, #0a4a8c 45%, var(--brand-2) 100%); color: #fff; padding: 28px 16px 84px; }
+.hero-in { max-width: 1200px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 24px; margin: 0; }
+.sub { color: rgba(255,255,255,.85); margin: 10px 0 0; font-size: 14px; }
+.sub a, .nav a { color: #fff; }
+.nav { display: flex; gap: 8px; }
+.nav a { padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500;
+  background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); white-space: nowrap; }
+.nav a:hover { background: rgba(255,255,255,.24); }
+.wrap { max-width: 1200px; margin: -60px auto 0; padding: 0 16px 64px; position: relative; }
+.panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; border: 1px solid var(--line); }
+/* thanh tìm kiếm luôn nằm trên cùng khi cuộn trang */
+.stickybar { position: sticky; top: 8px; z-index: 30; padding: 12px 14px; margin-bottom: 12px; }
+@media (max-width: 760px) { .stickybar { top: 0; border-radius: 0 0 14px 14px; padding: 10px; } .stickybar input { flex-basis: 100%; } }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=search], input[type=text] { flex: 1 1 280px; min-width: 0; padding: 11px 14px; font-size: 15px; border: 1.5px solid var(--line);
+  border-radius: 12px; background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
+input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 4px var(--accent-soft); }
+label.lb { font-size: 13px; color: var(--muted); font-weight: 600; }
+button { padding: 10px 16px; font-size: 14px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer; font-weight: 600;
+  background: var(--surface); color: var(--text); font-family: inherit; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.chips label { cursor: pointer; }
+.chips input { display: none; }
+.chips span { display: inline-block; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); background: var(--surface); }
+.chips span b { font-weight: 600; color: var(--text); margin-left: 4px; }
+.chips input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chips input:checked + span b { color: #fff; }
+.sep { margin: 14px 0 0; padding-top: 14px; border-top: 1px dashed var(--line); }
+.opts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 12px; }
+.opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 2px 12px; }
+.status { color: var(--muted); font-size: 14px; }
+.upd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upd button:disabled { opacity: .7; cursor: progress; }
+
+.list { display: grid; gap: 14px; }
+.pk { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.pk-h { padding: 14px 18px; border-left: 4px solid var(--brand-2); }
+.pk-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); }
+.chip.new { color: var(--ok); background: var(--ok-bg); }
+.chip.soon { color: var(--bad); background: var(--bad-bg); }
+.chip.mid { color: var(--warn); background: var(--warn-bg); }
+.chip.grey { color: var(--muted); background: var(--line-2); }
+.code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); }
+.pk-name { font-size: 16px; font-weight: 700; margin: 0; }
+.pk-meta { color: var(--muted); font-size: 13.5px; margin-top: 4px; display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.pk-meta b { color: var(--text); font-weight: 600; }
+.pk-meta a { color: var(--accent); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600;
+  padding: 8px 10px; background: var(--line-2); border-top: 1px solid var(--line); }
+.tbl td { padding: 9px 10px; border-top: 1px solid var(--line-2); vertical-align: top; }
+.tbl td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl .grp { font-size: 12px; color: var(--brand-2); font-weight: 600; }
+.tbl .it { font-weight: 600; }
+.tbl .sub2 { color: var(--muted); font-size: 12.5px; }
+.spec { color: var(--muted); font-size: 12.5px; max-width: 440px; }
+.spec.cut { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.hl { background: #fff3b0; color: inherit; border-radius: 3px; }
+@media (prefers-color-scheme: dark) { .hl { background: #5a4a00; } }
+.empty { padding: 48px 16px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 14px; }
+.scroll { overflow-x: auto; }
+@media (max-width: 760px) {
+  .tbl thead { display: none; }
+  .tbl tr { display: block; border-top: 1px solid var(--line); padding: 8px 12px; }
+  .tbl td { display: block; border: 0; padding: 2px 0; }
+  .tbl td.n { text-align: left; }
+  .tbl td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: 12px; }
+  .spec { max-width: none; }
+}
+
+/* ===== tối ưu điện thoại / app cài trên màn hình chính ===== */
+.tabbar, .fbtn { display: none; }
+@media (max-width: 760px) {
+  .hero { padding: calc(14px + env(safe-area-inset-top)) 14px 64px; }
+  h1 { font-size: 19px; line-height: 1.3; }
+  .hero .sub, .hero .nav { display: none; }
+  .wrap { margin-top: -52px; padding: 0 10px calc(84px + env(safe-area-inset-bottom)); }
+  .stickybar { top: env(safe-area-inset-top); }
+  input[type=search], input[type=text], select { font-size: 16px; }
+  .stickybar .row { gap: 8px; }
+  .stickybar #csv { display: none; }
+  .fbtn { display: inline-flex; flex: 1 1 auto; justify-content: center; }
+  .filters { display: none; }
+  body.flt-open .filters { display: block; }
+  .opts { flex-direction: column; align-items: stretch; gap: 10px; }
+  .opts label { justify-content: space-between; }
+  .opts label:has(input[type=checkbox]) { justify-content: flex-start; }
+  .opts select { flex: 1; max-width: 62%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips span { white-space: nowrap; }
+  .bar { margin: 14px 2px 10px; }
+  .upd { width: 100%; justify-content: space-between; }
+  .pk { border-radius: 12px; }
+  .pk-h { padding: 12px 14px; }
+  .pk-name { font-size: 15px; }
+  .pk-meta { font-size: 13px; gap: 2px 12px; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface);
+    border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(16,35,70,.08); }
+  .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 10px;
+    font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: none; }
+  .tabbar a svg { width: 22px; height: 22px; }
+  .tabbar a.on { color: var(--accent); background: var(--accent-soft); }
+}
+.cs-h { padding: 14px 18px; border-left: 4px solid var(--brand); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.cs-name { font-size: 16px; font-weight: 700; margin: 0; }
+.cs-cnt { display: flex; gap: 6px; flex-wrap: wrap; }
+.more { display: block; margin: 14px auto 0; }
+.stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.stat div { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in">
+  <div class="top">
+    <h1>Cơ sở y tế – gói thầu test nhanh</h1>
+    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/">Tra cứu TBYT</a></nav>
+  </div>
+  <p class="sub" id="sub">Các gói thầu có mặt hàng test nhanh của từng cơ sở y tế và tình trạng gói. Dữ liệu từ <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>.</p>
+</div></header>
+
+<div class="wrap">
+  <section class="panel stickybar">
+    <div class="row">
+      <input type="search" id="q" placeholder="Tên cơ sở, tỉnh hoặc mã gói (vd: Chợ Rẫy, Nghệ An, IB2600…)">
+      <button id="fbtn" class="fbtn" type="button">Bộ lọc ▾</button><button id="csv">Tải Excel (CSV)</button>
+    </div>
+  </section>
+  <section class="panel filters">
+    <div class="opts" style="margin-top:0">
+      <label>Tỉnh/TP <select id="tinh"><option value="">Tất cả</option></select></label>
+      <label>Nhóm test <select id="nhom"><option value="">Tất cả</option></select></label>
+      <label>Sắp xếp <select id="sort"><option value="mo">Có gói đang mở trước</option><option value="nhieu">Nhiều gói nhất</option><option value="moi">Hoạt động gần nhất</option><option value="ten">Tên A–Z</option></select></label>
+    </div>
+    <div class="chips" id="tts"></div>
+    <div class="stat" id="stat"></div>
+  </section>
+
+  <div class="bar"><div class="status" id="status">Đang tải…</div></div>
+  <div class="list" id="list"></div>
+  <button class="more" id="more" hidden>Xem thêm</button>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => n == null || n === '' ? '' : Number(n).toLocaleString('vi-VN');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+const day = s => s ? s.slice(0, 10).split('-').reverse().join('/') : '';
+const TT = { mo: ['Đang mở', 'new'], dong: ['Đã đóng – chờ kết quả', 'mid'], kq: ['Đã có kết quả', ''], huy: ['Đã hủy', 'grey'] };
+let DATA = null, VIEW = [], shown = 60, picked = new Set(Object.keys(TT));
+
+// tình trạng tính theo giờ hiện tại: gói chưa có kết quả / chưa hủy thì xét hạn đóng thầu
+function tt(p) {
+  if (p.tt) return p.tt;
+  return p.han && new Date(p.han.replace(' ', 'T')) > new Date() ? 'mo' : 'dong';
+}
+
+function filter() {
+  const q = fold($('#q').value.trim()), tinh = $('#tinh').value, nhom = $('#nhom').value;
+  VIEW = [];
+  for (const c of DATA.co_so) {
+    if (tinh && c.tinh !== tinh) continue;
+    const hitName = !q || fold(c.ten + ' ' + c.tinh).includes(q);
+    const goi = c.goi.filter(p => picked.has(tt(p)) && (!nhom || p.nhom.includes(nhom)) && (hitName || fold(p.ma + ' ' + p.ten).includes(q)));
+    if (goi.length) VIEW.push({ ...c, goi });
+  }
+  const last = c => c.goi.reduce((m, p) => Math.max(m, +new Date((p.kq || p.dang || '1970').replace(' ', 'T'))), 0);
+  const open = c => c.goi.filter(p => tt(p) === 'mo').length;
+  const by = { mo: (a, b) => open(b) - open(a) || b.goi.length - a.goi.length, nhieu: (a, b) => b.goi.length - a.goi.length,
+               moi: (a, b) => last(b) - last(a), ten: (a, b) => a.ten.localeCompare(b.ten, 'vi') }[$('#sort').value];
+  VIEW.sort(by);
+  shown = 60;
+  render();
+}
+
+function render() {
+  const n = VIEW.reduce((s, c) => s + c.goi.length, 0);
+  $('#status').textContent = `${fmt(VIEW.length)} cơ sở y tế · ${fmt(n)} gói thầu test nhanh năm ${DATA.nam} · cập nhật ${day(DATA.cap_nhat)} ${DATA.cap_nhat.slice(11)}`;
+  $('#list').innerHTML = VIEW.length ? VIEW.slice(0, shown).map(c => {
+    const cnt = {};
+    c.goi.forEach(p => { const t = tt(p); cnt[t] = (cnt[t] || 0) + 1; });
+    return `<article class="pk"><div class="cs-h"><div><p class="cs-name">${esc(c.ten)}</p><div class="pk-meta"><span>${esc(c.tinh || 'Chưa rõ tỉnh')}</span><span><b>${c.goi.length}</b> gói</span></div></div>
+      <div class="cs-cnt">${Object.keys(TT).filter(t => cnt[t]).map(t => `<span class="chip ${TT[t][1]}">${TT[t][0]}: ${cnt[t]}</span>`).join('')}</div></div>
+      <div class="scroll"><table class="tbl"><thead><tr><th>Gói thầu</th><th>Tình trạng</th><th>Ngày</th><th>Nhóm test</th><th style="text-align:right">Giá trị (đ)</th></tr></thead><tbody>
+      ${c.goi.map(p => { const t = tt(p);
+        const code = p.link ? `<a class="code" href="${esc(p.link)}" target="_blank" rel="noopener">${esc(p.ma)}</a>` : `<span class="code">${esc(p.ma)}</span>`;
+        const ngay = t === 'kq' ? `KQ ${day(p.kq)}` : t === 'huy' ? `Đăng ${day(p.dang)}` : `Hạn ${day(p.han)} ${p.han.slice(11)}`;
+        const gt = t === 'kq' && p.gia_trung ? `${fmt(p.gia_trung)}<div class="sub2">giá trúng test nhanh</div>` : p.gia_tri ? `${fmt(p.gia_tri)}<div class="sub2">giá gói</div>` : '';
+        return `<tr><td data-l="Gói">${code}${p.ten ? `<div class="it">${esc(p.ten)}</div>` : ''}<div class="sub2">${esc(p.hinh_thuc)}${p.so_mh ? ` · ${p.so_mh} mặt hàng test` : ''}</div></td>
+          <td data-l="Tình trạng"><span class="chip ${TT[t][1]}">${TT[t][0]}</span></td><td data-l="Ngày" class="sub2">${ngay}</td>
+          <td data-l="Nhóm" class="sub2">${esc(p.nhom.join(', '))}</td><td data-l="Giá trị" class="n">${gt}</td></tr>`; }).join('')}
+      </tbody></table></div></article>`;
+  }).join('') : '<div class="empty">Không có cơ sở nào khớp bộ lọc.</div>';
+  $('#more').hidden = shown >= VIEW.length;
+}
+
+function counts() {
+  const cnt = {}, all = DATA.co_so.flatMap(c => c.goi);
+  all.forEach(p => { const t = tt(p); cnt[t] = (cnt[t] || 0) + 1; });
+  $('#tts').innerHTML = Object.keys(TT).map(t => `<label><input type="checkbox" value="${t}"${picked.has(t) ? ' checked' : ''}><span>${TT[t][0]}<b>${cnt[t] || 0}</b></span></label>`).join('');
+  const open = DATA.co_so.filter(c => c.goi.some(p => tt(p) === 'mo')).length;
+  $('#stat').innerHTML = `<div><b>${fmt(DATA.co_so.length)}</b><span>cơ sở y tế có gói test nhanh ${DATA.nam}</span></div>
+    <div><b>${fmt(all.length)}</b><span>gói thầu</span></div><div><b>${fmt(open)}</b><span>cơ sở đang có gói mở</span></div>
+    <div><b>${fmt(cnt.dong || 0)}</b><span>gói đã đóng, chờ kết quả</span></div>`;
+}
+
+function csv() {
+  const rows = [['Cơ sở y tế', 'Tỉnh/TP', 'Mã gói', 'Tên gói', 'Hình thức', 'Tình trạng', 'Ngày đăng', 'Hạn đóng thầu', 'Ngày có KQ', 'Nhóm test', 'Số mặt hàng test', 'Giá gói', 'Giá trúng test nhanh', 'Link']];
+  VIEW.forEach(c => c.goi.forEach(p => rows.push([c.ten, c.tinh, p.ma, p.ten, p.hinh_thuc, TT[tt(p)][0], p.dang, p.han, p.kq || '', p.nhom.join(', '), p.so_mh ?? '', p.gia_tri ?? '', p.gia_trung ?? '', p.link])));
+  const text = '﻿' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'co-so-y-te-goi-thau-test-nhanh-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+}
+
+fetch('/api/co-so-y-te').then(r => r.json()).then(d => {
+  DATA = d;
+  const tinh = [...new Set(d.co_so.map(c => c.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+  $('#tinh').innerHTML += tinh.map(t => `<option>${esc(t)}</option>`).join('');
+  const nh = new Set(d.co_so.flatMap(c => c.goi.flatMap(p => p.nhom)));
+  $('#nhom').innerHTML += d.nhom.filter(x => nh.has(x)).map(x => `<option>${esc(x)}</option>`).join('');
+  counts();
+  filter();
+}).catch(() => { $('#status').textContent = 'Không tải được dữ liệu.'; });
+
+let tmr;
+$('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(filter, 200); });
+['#tinh', '#nhom', '#sort'].forEach(s => $(s).addEventListener('change', filter));
+$('#tts').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); filter(); });
+$('#more').addEventListener('click', () => { shown += 60; render(); });
+$('#csv').addEventListener('click', csv);
+$('#fbtn').addEventListener('click', () => document.body.classList.toggle('flt-open'));
+if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => { if (r.ok) navigator.serviceWorker.register('/sw.js'); }).catch(() => {});
+</script>
+<nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Lên đầu</span></a></nav>
+</body>
+</html>
