@@ -187,6 +187,17 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .active button { padding: 4px 10px; font-size: 12.5px; border-radius: 999px; }
 .tbl td.n, .tbl th.n { text-align: right; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.ms { position: relative; }
+.ms > button { font-weight: 500; padding: 9px 12px; border: 1.5px solid var(--line); background: var(--bg); max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms .dd { display: none; position: absolute; z-index: 50; top: calc(100% + 6px); left: 0; width: 300px; max-height: 360px; overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; }
+.ms.open .dd { display: block; }
+.ms .dd label { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
+.ms .dd label:hover { background: var(--line-2); }
+.ms .dd label b { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12px; }
+.ms .dd .act { display: flex; gap: 6px; padding: 4px 4px 8px; border-bottom: 1px solid var(--line-2); margin-bottom: 4px; }
+.ms .dd .act button { padding: 4px 10px; font-size: 12.5px; }
+@media (max-width: 760px) { .ms, .ms > button { width: 100%; max-width: none; } .ms .dd { width: 100%; } }
 select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; }
 @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi.big { grid-column: 1 / -1; } .grid2 { grid-template-columns: 1fr; } }
 </style>
@@ -207,7 +218,8 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
       <select id="from" aria-label="Từ tháng"></select>
       <select id="to" aria-label="Đến tháng"></select>
       <select id="metric" aria-label="Chỉ số"><option value="tien">Theo giá trị (đ)</option><option value="sl">Theo số lượng test</option></select>
-      <select id="nhom" aria-label="Nhóm test"><option value="">Tất cả nhóm test</option></select>
+      <div class="ms" id="nhomBox"><button type="button" id="nhomBtn" aria-haspopup="true">Tất cả nhóm test ▾</button>
+        <div class="dd"><div class="act"><button type="button" data-a="all">Chọn tất cả</button><button type="button" data-a="none">Bỏ chọn</button></div><div id="nhomList"></div></div></div>
       <select id="tinh" aria-label="Tỉnh/TP"><option value="">Tất cả tỉnh/TP</option></select>
       <button id="reset" type="button">Bỏ lọc</button>
     </div>
@@ -225,7 +237,7 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
   <div class="grid2">
     <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
     <section class="card"><h2>Hãng sản xuất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
-    <section class="card"><h2>Nhóm test</h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để lọc</p><div class="hb" id="nh"></div></section>
+    <section class="card"><h2>Nhóm test</h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
     <section class="card"><h2>Tỉnh/TP</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
   </div>
 
@@ -273,15 +285,17 @@ function load(d) {
   $('#from').innerHTML = months.map(opt).join(''); $('#to').innerHTML = months.map(opt).join('');
   $('#from').value = months[0]; $('#to').value = months[months.length - 1];
   const nh = new Set(R.map(r => r.nhom));
-  $('#nhom').innerHTML += d.nhom.filter(x => nh.has(x)).map(x => `<option>${esc(x)}</option>`).join('');
+  const cnt = {}; R.forEach(r => cnt[r.nhom] = (cnt[r.nhom] || 0) + 1);
+  $('#nhomList').innerHTML = d.nhom.filter(x => nh.has(x)).map(x => `<label><input type="checkbox" value="${esc(x)}"> ${esc(x)}<b>${cnt[x]}</b></label>`).join('');
   $('#tinh').innerHTML += [...new Set(R.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(x => `<option>${esc(x)}</option>`).join('');
   $('#sub').textContent = `Mặt hàng test nhanh trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
   apply();
 }
 
 function apply() {
-  const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = $('#nhom').value, tinh = $('#tinh').value;
-  view = R.filter(r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom || r.nhom === nhom) && (!tinh || r.tinh === tinh)
+  const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
+  $('#nhomBtn').textContent = (!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : `${nhom.size} nhóm test`) + ' ▾';
+  view = R.filter(r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom.size || nhom.has(r.nhom)) && (!tinh || r.tinh === tinh)
     && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk));
   page = 0;
   $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn]].filter(Boolean)
@@ -346,7 +360,7 @@ function render() {
   document.querySelector('.by2').textContent = sl ? 'Số lượng test theo nhóm' : 'Giá trị trúng theo nhóm';
   hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
   hbar($('#hang'), group(r => r.hk, r => r.hang).slice(0, 10), d => { pick.hk = d.k; pick.hn = d.label; apply(); });
-  hbar($('#nh'), group(r => r.nhom), d => { $('#nhom').value = d.k; apply(); });
+  hbar($('#nh'), group(r => r.nhom), d => { const i = [...document.querySelectorAll('#nhomList input')].find(x => x.value === d.k); if (i) { i.checked = !i.checked; apply(); } });
   hbar($('#tp'), group(r => r.tinh || 'Chưa rõ').slice(0, 10), d => { if (d.k !== 'Chưa rõ') { $('#tinh').value = d.k; apply(); } });
   // dải giá
   const gp = new Map(); view.filter(r => UNIT1.test((r.dvt || '').trim()) && r.don_gia > 0).forEach(r => (gp.get(r.nhom) || gp.set(r.nhom, []).get(r.nhom)).push(r.don_gia));
@@ -380,12 +394,19 @@ function csv() {
 fetch('/api/trung-thau').then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
-['#from', '#to', '#nhom', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
+['#from', '#to', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
 $('#active').addEventListener('click', e => { const k = e.target.dataset.k; if (k) { delete pick[k]; apply(); } });
-$('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; $('#nhom').value = ''; $('#tinh').value = '';
+$('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; setNhom(false); $('#tinh').value = '';
   $('#from').selectedIndex = 0; $('#to').selectedIndex = $('#to').options.length - 1; apply(); });
 $('#prev').onclick = () => { page--; rows(); }; $('#next').onclick = () => { page++; rows(); };
 $('#csv').addEventListener('click', csv);
+// chọn nhiều nhóm test: không chọn nhóm nào = tất cả
+function setNhom(on) { document.querySelectorAll('#nhomList input').forEach(i => i.checked = on); }
+$('#nhomBtn').addEventListener('click', e => { e.stopPropagation(); $('#nhomBox').classList.toggle('open'); });
+$('#nhomBox').addEventListener('click', e => e.stopPropagation());
+$('#nhomList').addEventListener('change', apply);
+$('#nhomBox .act').addEventListener('click', e => { const a = e.target.dataset.a; if (a) { setNhom(a === 'all'); apply(); } });
+document.addEventListener('click', () => $('#nhomBox').classList.remove('open'));
 if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => { if (r.ok) navigator.serviceWorker.register('/sw.js'); }).catch(() => {});
 </script>
 <nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Trúng thầu</span></a><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Lên đầu</span></a></nav>
