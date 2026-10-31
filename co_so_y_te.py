@@ -12,7 +12,7 @@ Nguồn (đều là API công khai / dữ liệu sẵn có, không đụng trang
 
 Tình trạng: "Đã có kết quả" (có trong dữ liệu KQLCNT) > "Đã hủy" > theo hạn đóng thầu
 ("Đang mở" / "Đã đóng – chờ kết quả", trang web tự tính theo giờ hiện tại).
-Đầu ra: data/co_so_y_te.json — trang /co-so-y-te đọc file này.
+Đầu ra: data/co_so_y_te.json (trang /co-so-y-te) và data/trung_thau.json (trang /trung-thau, Dashboard kết quả trúng thầu).
 """
 import glob, json, os, re, sys
 from datetime import datetime, timedelta, timezone
@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import goi_thau as g
 
 OUT_PATH = os.path.join(g.HERE, "data", "co_so_y_te.json")
+TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng mặt hàng trúng thầu cho trang Dashboard
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
 KEYWORDS = [("test", "all-1"), ("test nhanh", "exact"), ("que thử", "exact"), ("khay thử", "exact"),
@@ -46,7 +47,7 @@ def prc(kw, mt, frm, to, page):
 
 
 def results(kw):
-    """{mã TBMT: gói đã có kết quả} từ dữ liệu trúng thầu năm YEAR, chỉ tính mặt hàng test nhanh."""
+    """({mã TBMT: gói đã có kết quả}, [dòng mặt hàng trúng]) từ dữ liệu trúng thầu năm YEAR, chỉ tính mặt hàng test nhanh."""
     rows = {}
     for q, mt in KEYWORDS:
         for m in range(1, 13):  # chia theo tháng: mỗi truy vấn trả tối đa 10.000 dòng
@@ -59,11 +60,16 @@ def results(kw):
             for r in got:
                 rows[r["id"]] = r
         print(f"{q}: {len(rows)} dòng", file=sys.stderr)
-    pk = {}
+    pk, items = {}, []
     for r in rows.values():
         nhom = g.group_of(g.clean(r.get("tenThietBi")), kw, r.get("donViTinh"))
         if not nhom or not r.get("maTbmt"):
             continue
+        tinh = g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), ""))
+        items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
+                      g.clean(r.get("tenThietBi")), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
+                      g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), r.get("donGia"),
+                      "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or ""])
         p = pk.setdefault(r["maTbmt"], {"ma": r["maTbmt"], "cdt": g.clean(r.get("tenCdtBmt")), "ma_cdt": r.get("maCdt"),
                                          "tinh": g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), "")),
                                          "kq": (r.get("ngayDangTaiKqlcnt") or "")[:10], "hinh_thuc": g.FORM_NAMES.get(r.get("bidForm"), r.get("bidForm") or ""),
@@ -71,13 +77,17 @@ def results(kw):
         p["so_mh"] += 1
         p["gia_tri"] += (r.get("donGia") or 0) * (r.get("khoiLuongDouble") or 0)
         p["nhom"].add(nhom)
-    return pk
+    return pk, items
 
 
 def build():
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
-    kq = results(kw)
+    kq, items = results(kw)
+    items.sort(key=lambda r: r[3], reverse=True)
+    json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"]],
+               "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc"],
+               "rows": items}, open(TT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
     for p in goi:
         if (p.get("dang") or p.get("lan_dau") or "")[:4] != YEAR:

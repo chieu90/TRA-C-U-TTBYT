@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trúng thầu</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%230e9f9a%22/%3E%3Cpath d=%22M9 8h14v3H9zM9 14h14v3H9zM9 20h9v3H9z%22 fill=%22white%22/%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="theme-color" content="#0b5cad">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trúng thầu">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* logo Avanta mờ phủ toàn trang như watermark (không chặn thao tác chuột) */
+body::after { content: ""; position: fixed; inset: -50%; z-index: 9999; pointer-events: none;
+  background: url("/static/avanta-wm.png") repeat; background-size: 420px auto; opacity: .06; transform: rotate(-30deg); }
+@media (prefers-color-scheme: dark) { body::after { opacity: .07; } }
+@media print { body::after { opacity: .08; } }
+
+:root {
+  --bg: #f3f6fa; --surface: #ffffff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0; --line-2: #eef2f7;
+  --brand: #0b5cad; --brand-2: #0e9f9a; --accent: #0b5cad; --accent-soft: #e6f0fb;
+  --ok: #15803d; --ok-bg: #e8f7ee; --bad: #c2410c; --bad-bg: #fdeee6; --warn: #b45309; --warn-bg: #fdf3e2;
+  --shadow: 0 1px 2px rgba(16,35,70,.06), 0 6px 20px rgba(16,35,70,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1420; --surface: #141d2b; --text: #e5ebf3; --muted: #93a3b8; --line: #243145; --line-2: #1b2636;
+    --brand: #3b8bdb; --brand-2: #22b3ad; --accent: #5aa2ec; --accent-soft: #16304d;
+    --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a2113; --warn: #fbbf24; --warn-bg: #3a2d12;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+.hero { background: linear-gradient(120deg, var(--brand) 0%, #0a4a8c 45%, var(--brand-2) 100%); color: #fff; padding: 28px 16px 84px; }
+.hero-in { max-width: 1200px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 24px; margin: 0; }
+.sub { color: rgba(255,255,255,.85); margin: 10px 0 0; font-size: 14px; }
+.sub a, .nav a { color: #fff; }
+.nav { display: flex; gap: 8px; }
+.nav a { padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500;
+  background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); white-space: nowrap; }
+.nav a:hover { background: rgba(255,255,255,.24); }
+.wrap { max-width: 1200px; margin: -60px auto 0; padding: 0 16px 64px; position: relative; }
+.panel { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; border: 1px solid var(--line); }
+/* thanh tìm kiếm luôn nằm trên cùng khi cuộn trang */
+.stickybar { position: sticky; top: 8px; z-index: 30; padding: 12px 14px; margin-bottom: 12px; }
+@media (max-width: 760px) { .stickybar { top: 0; border-radius: 0 0 14px 14px; padding: 10px; } .stickybar input { flex-basis: 100%; } }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+input[type=search], input[type=text] { flex: 1 1 280px; min-width: 0; padding: 11px 14px; font-size: 15px; border: 1.5px solid var(--line);
+  border-radius: 12px; background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
+input:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 4px var(--accent-soft); }
+label.lb { font-size: 13px; color: var(--muted); font-weight: 600; }
+button { padding: 10px 16px; font-size: 14px; border-radius: 10px; border: 1px solid var(--line); cursor: pointer; font-weight: 600;
+  background: var(--surface); color: var(--text); font-family: inherit; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.chips label { cursor: pointer; }
+.chips input { display: none; }
+.chips span { display: inline-block; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); background: var(--surface); }
+.chips span b { font-weight: 600; color: var(--text); margin-left: 4px; }
+.chips input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chips input:checked + span b { color: #fff; }
+.sep { margin: 14px 0 0; padding-top: 14px; border-top: 1px dashed var(--line); }
+.opts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-top: 12px; }
+.opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 22px 2px 12px; }
+.status { color: var(--muted); font-size: 14px; }
+.upd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upd button:disabled { opacity: .7; cursor: progress; }
+
+.list { display: grid; gap: 14px; }
+.pk { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.pk-h { padding: 14px 18px; border-left: 4px solid var(--brand-2); }
+.pk-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  color: var(--accent); background: var(--accent-soft); }
+.chip.new { color: var(--ok); background: var(--ok-bg); }
+.chip.soon { color: var(--bad); background: var(--bad-bg); }
+.chip.mid { color: var(--warn); background: var(--warn-bg); }
+.chip.grey { color: var(--muted); background: var(--line-2); }
+.code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); }
+.pk-name { font-size: 16px; font-weight: 700; margin: 0; }
+.pk-meta { color: var(--muted); font-size: 13.5px; margin-top: 4px; display: flex; gap: 6px 18px; flex-wrap: wrap; }
+.pk-meta b { color: var(--text); font-weight: 600; }
+.pk-meta a { color: var(--accent); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600;
+  padding: 8px 10px; background: var(--line-2); border-top: 1px solid var(--line); }
+.tbl td { padding: 9px 10px; border-top: 1px solid var(--line-2); vertical-align: top; }
+.tbl td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl .grp { font-size: 12px; color: var(--brand-2); font-weight: 600; }
+.tbl .it { font-weight: 600; }
+.tbl .sub2 { color: var(--muted); font-size: 12.5px; }
+.spec { color: var(--muted); font-size: 12.5px; max-width: 440px; }
+.spec.cut { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.hl { background: #fff3b0; color: inherit; border-radius: 3px; }
+@media (prefers-color-scheme: dark) { .hl { background: #5a4a00; } }
+.empty { padding: 48px 16px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 14px; }
+.scroll { overflow-x: auto; }
+@media (max-width: 760px) {
+  .tbl thead { display: none; }
+  .tbl tr { display: block; border-top: 1px solid var(--line); padding: 8px 12px; }
+  .tbl td { display: block; border: 0; padding: 2px 0; }
+  .tbl td.n { text-align: left; }
+  .tbl td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: 12px; }
+  .spec { max-width: none; }
+}
+
+/* ===== tối ưu điện thoại / app cài trên màn hình chính ===== */
+.tabbar, .fbtn { display: none; }
+@media (max-width: 760px) {
+  .hero { padding: calc(14px + env(safe-area-inset-top)) 14px 64px; }
+  h1 { font-size: 19px; line-height: 1.3; }
+  .hero .sub, .hero .nav { display: none; }
+  .wrap { margin-top: -52px; padding: 0 10px calc(84px + env(safe-area-inset-bottom)); }
+  .stickybar { top: env(safe-area-inset-top); }
+  input[type=search], input[type=text], select { font-size: 16px; }
+  .stickybar .row { gap: 8px; }
+  .stickybar #csv { display: none; }
+  .fbtn { display: inline-flex; flex: 1 1 auto; justify-content: center; }
+  .filters { display: none; }
+  body.flt-open .filters { display: block; }
+  .opts { flex-direction: column; align-items: stretch; gap: 10px; }
+  .opts label { justify-content: space-between; }
+  .opts label:has(input[type=checkbox]) { justify-content: flex-start; }
+  .opts select { flex: 1; max-width: 62%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips span { white-space: nowrap; }
+  .bar { margin: 14px 2px 10px; }
+  .upd { width: 100%; justify-content: space-between; }
+  .pk { border-radius: 12px; }
+  .pk-h { padding: 12px 14px; }
+  .pk-name { font-size: 15px; }
+  .pk-meta { font-size: 13px; gap: 2px 12px; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface);
+    border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(16,35,70,.08); }
+  .tabbar a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 10px;
+    font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: none; }
+  .tabbar a svg { width: 22px; height: 22px; }
+  .tabbar a.on { color: var(--accent); background: var(--accent-soft); }
+}
+:root { --series-1: #2a78d6; --grid: #e7ebf0; }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --grid: #243145; } }
+.kpis { display: grid; grid-template-columns: 1.6fr repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.kpi .lbl { color: var(--muted); font-size: 13px; }
+.kpi .val { font-size: 26px; font-weight: 700; margin-top: 2px; }
+.kpi.big .val { font-size: 40px; line-height: 1.15; }
+.kpi .note { color: var(--muted); font-size: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.card h2 { font-size: 15px; margin: 0 0 2px; }
+.card .cap { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+.full { margin-bottom: 14px; }
+/* cột theo tháng */
+.cols { position: relative; height: 200px; margin: 8px 0 0 44px; }
+.cols .gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--grid); }
+.cols .gl span { position: absolute; left: -44px; top: -8px; width: 38px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cols .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.cols .c { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: default; }
+.cols .c i { display: block; width: 100%; max-width: 24px; background: var(--series-1); border-radius: 4px 4px 0 0; min-height: 1px; }
+.cols .c:hover i, .cols .c:focus i { filter: brightness(1.15); }
+.xl { display: flex; gap: 2px; margin-left: 44px; }
+.xl span { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
+/* thanh ngang */
+.hb { display: grid; gap: 4px; }
+.hb .r { display: grid; grid-template-columns: minmax(0, 42%) 1fr; gap: 10px; align-items: center; padding: 3px 4px; border-radius: 8px; cursor: pointer; }
+.hb .r:hover, .hb .r:focus { background: var(--line-2); outline: none; }
+.hb .n { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb .t { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hb .t i { display: block; height: 14px; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.hb .t b { font-size: 12.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; z-index: 60; pointer-events: none; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  border-radius: 10px; padding: 8px 10px; font-size: 12.5px; max-width: 320px; display: none; }
+.tip strong { display: block; font-size: 15px; }
+.tip span { color: var(--muted); }
+.active { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.active button { padding: 4px 10px; font-size: 12.5px; border-radius: 999px; }
+.tbl td.n, .tbl th.n { text-align: right; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--muted); font-size: 13px; }
+select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi.big { grid-column: 1 / -1; } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in">
+  <div class="top">
+    <h1>Kết quả trúng thầu test nhanh</h1>
+    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/">Tra cứu TBYT</a></nav>
+  </div>
+  <p class="sub" id="sub">Mặt hàng test nhanh trong các kết quả lựa chọn nhà thầu đăng trên <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>.</p>
+</div></header>
+
+<div class="wrap">
+  <section class="panel stickybar">
+    <div class="row">
+      <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
+      <select id="from" aria-label="Từ tháng"></select>
+      <select id="to" aria-label="Đến tháng"></select>
+      <select id="nhom" aria-label="Nhóm test"><option value="">Tất cả nhóm test</option></select>
+      <select id="tinh" aria-label="Tỉnh/TP"><option value="">Tất cả tỉnh/TP</option></select>
+      <button id="reset" type="button">Bỏ lọc</button>
+    </div>
+    <div class="active" id="active"></div>
+  </section>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card full">
+    <h2>Giá trị trúng thầu theo tháng</h2>
+    <p class="cap">Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả</p>
+    <div class="cols" id="month"></div><div class="xl" id="monthX"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="nt"></div></section>
+    <section class="card"><h2>Hãng sản xuất</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="hang"></div></section>
+    <section class="card"><h2>Nhóm test</h2><p class="cap">Giá trị trúng theo nhóm · bấm để lọc</p><div class="hb" id="nh"></div></section>
+    <section class="card"><h2>Tỉnh/TP</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="tp"></div></section>
+  </div>
+
+  <section class="card full">
+    <h2>Dải đơn giá trúng theo nhóm test</h2>
+    <p class="cap">Chỉ tính mặt hàng có đơn vị tính là test / que / khay (giá một lần thử)</p>
+    <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th></tr></thead><tbody id="gia"></tbody></table></div>
+  </section>
+
+  <section class="card full">
+    <div class="bar" style="margin:0 0 10px"><div><h2>Chi tiết mặt hàng trúng thầu</h2><p class="cap" id="cnt" style="margin:0"></p></div><button id="csv">Tải Excel (CSV)</button></div>
+    <div class="scroll"><table class="tbl"><thead><tr><th>Ngày KQ</th><th>Cơ sở y tế</th><th>Mặt hàng</th><th>Hãng / ký mã</th><th>Nhà thầu trúng</th><th class="n">SL</th><th class="n">Đơn giá</th><th class="n">Thành tiền</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager"><button id="prev">‹ Trước</button><span id="pg"></span><button id="next">Sau ›</button></div>
+  </section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+const num = n => n == null ? '' : Math.round(n).toLocaleString('vi-VN');
+// tiền rút gọn: 1,2 tỷ / 350 tr
+const money = v => v >= 1e9 ? (v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' tỷ'
+  : v >= 1e6 ? Math.round(v / 1e6).toLocaleString('vi-VN') + ' tr' : num(v);
+const day = s => s ? s.split('-').reverse().join('/') : '';
+const UNIT1 = /^(test|que|khay|thanh|test\/khay|test\/que|kit)$/i;
+// tên hãng / nhà thầu ghi nhiều kiểu -> khóa gộp bỏ dấu câu, hậu tố công ty
+const brandKey = s => fold(s).replace(/\b(co|ltd|inc|corp|corporation|gmbh|llc|limited|company|s\.?a|ag|co\.,?ltd)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+let R = [], view = [], page = 0, pick = {};
+
+function load(d) {
+  const c = d.cot;
+  R = d.rows.map(a => { const o = {}; c.forEach((k, i) => o[k] = a[i]); o.tien = (o.sl || 0) * (o.don_gia || 0);
+    o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
+    o.s = fold([o.ma, o.cdt, o.ten, o.hang, o.nhan, o.ky_ma, o.nha_thau].join(' ')); return o; });
+  const months = [...new Set(R.map(r => r.ngay.slice(0, 7)))].sort();
+  const opt = m => `<option value="${m}">Tháng ${+m.slice(5)}/${m.slice(0, 4)}</option>`;
+  $('#from').innerHTML = months.map(opt).join(''); $('#to').innerHTML = months.map(opt).join('');
+  $('#from').value = months[0]; $('#to').value = months[months.length - 1];
+  const nh = new Set(R.map(r => r.nhom));
+  $('#nhom').innerHTML += d.nhom.filter(x => nh.has(x)).map(x => `<option>${esc(x)}</option>`).join('');
+  $('#tinh').innerHTML += [...new Set(R.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(x => `<option>${esc(x)}</option>`).join('');
+  $('#sub').textContent = `Mặt hàng test nhanh trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
+  apply();
+}
+
+function apply() {
+  const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = $('#nhom').value, tinh = $('#tinh').value;
+  view = R.filter(r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom || r.nhom === nhom) && (!tinh || r.tinh === tinh)
+    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk));
+  page = 0;
+  $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn]].filter(Boolean)
+    .map(([k, s]) => `<button data-k="${k}" type="button">${esc(s)} ✕</button>`).join('');
+  render();
+}
+
+function group(key, label) {
+  const m = new Map();
+  view.forEach(r => [].concat(key(r)).forEach(k => { if (!k) return; const g = m.get(k) || { k, v: 0, n: 0, names: new Map() };
+    g.v += r.tien; g.n++; const nm = label ? label(r) : k; g.names.set(nm, (g.names.get(nm) || 0) + 1); m.set(k, g); }));
+  return [...m.values()].map(g => ({ ...g, label: [...g.names].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.v - a.v);
+}
+
+function hbar(el, data, onPick) {
+  const max = data[0]?.v || 1;
+  el.innerHTML = '';
+  if (!data.length) { el.innerHTML = '<p class="cap">Không có dữ liệu.</p>'; return; }
+  data.forEach(d => {
+    const row = document.createElement('div'); row.className = 'r'; row.tabIndex = 0;
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = d.label;
+    const tr = document.createElement('div'); tr.className = 't';
+    const bar = document.createElement('i'); bar.style.width = Math.max(1, d.v / max * 78) + '%';
+    const v = document.createElement('b'); v.textContent = money(d.v);
+    tr.append(bar, v); row.append(n, tr); el.append(row);
+    const tipText = [money(d.v) + ' đ', d.label, `${num(d.n)} dòng mặt hàng`];
+    hover(row, tipText);
+    if (onPick) { row.onclick = () => onPick(d); row.onkeydown = e => { if (e.key === 'Enter') onPick(d); }; }
+  });
+}
+
+function hover(el, lines) {
+  const tip = $('#tip');
+  const show = e => { tip.replaceChildren(); const s = document.createElement('strong'); s.textContent = lines[0]; tip.append(s);
+    lines.slice(1).forEach(x => { const sp = document.createElement('span'); sp.textContent = x; tip.append(sp, document.createElement('br')); });
+    tip.style.display = 'block'; const b = (e.clientX != null && e.type !== 'focus') ? { x: e.clientX, y: e.clientY } : (r => ({ x: r.left + r.width / 2, y: r.top }))(el.getBoundingClientRect());
+    tip.style.left = Math.min(b.x + 12, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = Math.max(8, b.y - tip.offsetHeight - 10) + 'px'; };
+  el.onpointermove = show; el.onfocus = show; el.onpointerleave = el.onblur = () => tip.style.display = 'none';
+}
+
+function render() {
+  const tot = view.reduce((s, r) => s + r.tien, 0);
+  const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk));
+  $('#kpis').innerHTML = `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(view.length)} dòng mặt hàng</div></div>
+    <div class="kpi"><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
+    <div class="kpi"><div class="lbl">Cơ sở y tế mua</div><div class="val">${num(cs.size)}</div></div>
+    <div class="kpi"><div class="lbl">Nhà thầu trúng</div><div class="val">${num(nt.size)}</div></div>
+    <div class="kpi"><div class="lbl">Hãng sản xuất</div><div class="val">${num(hg.size)}</div></div>`;
+  // theo tháng
+  const ms = []; for (let m = $('#from').value; m <= $('#to').value; m = next(m)) ms.push(m);
+  const mv = ms.map(m => ({ m, v: 0, n: 0 })); view.forEach(r => { const o = mv.find(x => x.m === r.ngay.slice(0, 7)); if (o) { o.v += r.tien; o.n++; } });
+  const top = nice(Math.max(...mv.map(x => x.v), 1));
+  const box = $('#month'); box.innerHTML = [1, .5, 0].map(f => `<div class="gl" style="top:${(1 - f) * 100}%"><span>${f ? money(top * f) : '0'}</span></div>`).join('') + '<div class="bars"></div>';
+  mv.forEach(x => { const c = document.createElement('div'); c.className = 'c'; c.tabIndex = 0; const i = document.createElement('i'); i.style.height = (x.v / top * 100) + '%'; c.append(i);
+    box.lastChild.append(c); hover(c, [money(x.v) + ' đ', `Tháng ${+x.m.slice(5)}/${x.m.slice(0, 4)}`, `${num(x.n)} dòng mặt hàng`]); });
+  $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}</span>`).join('');
+  hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
+  hbar($('#hang'), group(r => r.hk, r => r.hang).slice(0, 10), d => { pick.hk = d.k; pick.hn = d.label; apply(); });
+  hbar($('#nh'), group(r => r.nhom), d => { $('#nhom').value = d.k; apply(); });
+  hbar($('#tp'), group(r => r.tinh || 'Chưa rõ').slice(0, 10), d => { if (d.k !== 'Chưa rõ') { $('#tinh').value = d.k; apply(); } });
+  // dải giá
+  const gp = new Map(); view.filter(r => UNIT1.test((r.dvt || '').trim()) && r.don_gia > 0).forEach(r => (gp.get(r.nhom) || gp.set(r.nhom, []).get(r.nhom)).push(r.don_gia));
+  $('#gia').innerHTML = [...gp].sort((a, b) => b[1].length - a[1].length).map(([k, v]) => { v.sort((a, b) => a - b); const md = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+    return `<tr><td>${esc(k)}</td><td class="n">${num(v.length)}</td><td class="n">${num(v[0])}</td><td class="n"><b>${num(md)}</b></td><td class="n">${num(v[v.length - 1])}</td></tr>`; }).join('') || '<tr><td colspan="5" class="sub2">Không có dữ liệu.</td></tr>';
+  rows();
+}
+
+function rows() {
+  const per = 50, pages = Math.max(1, Math.ceil(view.length / per));
+  $('#cnt').textContent = `${num(view.length)} dòng · mới nhất trước`;
+  $('#rows').innerHTML = view.slice(page * per, page * per + per).map(r => `<tr><td data-l="Ngày KQ" class="sub2">${day(r.ngay)}<div class="code">${esc(r.ma)}</div></td>
+    <td data-l="Cơ sở">${esc(r.cdt)}<div class="sub2">${esc(r.tinh)}</div></td><td data-l="Mặt hàng"><div class="grp">${esc(r.nhom)}</div>${esc(r.ten)}</td>
+    <td data-l="Hãng" class="sub2">${esc(r.hang)}${r.ky_ma ? `<div>${esc(r.ky_ma)}</div>` : ''}${r.xuat_xu ? `<div>${esc(r.xuat_xu)}</div>` : ''}</td>
+    <td data-l="Nhà thầu" class="sub2">${esc(r.nha_thau)}</td><td data-l="SL" class="n">${num(r.sl)} ${esc(r.dvt)}</td><td data-l="Đơn giá" class="n">${num(r.don_gia)}</td><td data-l="Thành tiền" class="n">${num(r.tien)}</td></tr>`).join('')
+    || '<tr><td colspan="8" class="sub2">Không có mặt hàng nào khớp bộ lọc.</td></tr>';
+  $('#pg').textContent = `Trang ${page + 1}/${pages}`; $('#prev').disabled = page === 0; $('#next').disabled = page >= pages - 1;
+}
+
+const next = m => { let [y, mo] = m.split('-').map(Number); mo++; if (mo > 12) { mo = 1; y++; } return `${y}-${String(mo).padStart(2, '0')}`; };
+const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= v); };
+
+function csv() {
+  const head = ['Ngày KQ', 'Mã gói', 'Cơ sở y tế', 'Tỉnh/TP', 'Nhóm test', 'Mặt hàng', 'Hãng sản xuất', 'Nhãn hiệu', 'Ký mã hiệu', 'Xuất xứ', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền', 'Nhà thầu trúng'];
+  const text = '﻿' + [head, ...view.map(r => [day(r.ngay), r.ma, r.cdt, r.tinh, r.nhom, r.ten, r.hang, r.nhan, r.ky_ma, r.xuat_xu, r.dvt, r.sl, r.don_gia, r.tien, r.nha_thau])]
+    .map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'trung-thau-test-nhanh-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+}
+
+fetch('/api/trung-thau').then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
+let tmr;
+$('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
+['#from', '#to', '#nhom', '#tinh'].forEach(s => $(s).addEventListener('change', apply));
+$('#active').addEventListener('click', e => { const k = e.target.dataset.k; if (k) { delete pick[k]; apply(); } });
+$('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; $('#nhom').value = ''; $('#tinh').value = '';
+  $('#from').selectedIndex = 0; $('#to').selectedIndex = $('#to').options.length - 1; apply(); });
+$('#prev').onclick = () => { page--; rows(); }; $('#next').onclick = () => { page++; rows(); };
+$('#csv').addEventListener('click', csv);
+if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => { if (r.ok) navigator.serviceWorker.register('/sw.js'); }).catch(() => {});
+</script>
+<nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Trúng thầu</span></a><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Lên đầu</span></a></nav>
+</body>
+</html>

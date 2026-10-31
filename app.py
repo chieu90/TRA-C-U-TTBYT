@@ -376,6 +376,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not os.path.exists(path):
                     return self.send(404, {"error": "Chưa có dữ liệu cơ sở y tế"})
                 self.send(200, open(path, "rb").read())
+            elif u.path == "/trung-thau":
+                self.send(200, open(os.path.join(HERE, "trung_thau.html"), "rb").read(), "text/html; charset=utf-8")
+            elif u.path == "/api/trung-thau":
+                path = os.path.join(HERE, "data", "trung_thau.json")
+                if not os.path.exists(path):
+                    return self.send(404, {"error": "Chưa có dữ liệu trúng thầu"})
+                self.send(200, open(path, "rb").read())
             elif u.path == "/api/info":
                 self.send(200, index_info)
             elif u.path == "/api/latest":
