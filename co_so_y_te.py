@@ -131,8 +131,14 @@ def results(kw):
             for r in got:
                 rows[r["id"]] = r
         print(f"{q}: {first['totalElements']} -> tổng {len(rows)} dòng", file=sys.stderr)
-    pk, items = {}, []
+    # cùng một mặt hàng trúng thầu đôi khi có 2 bản ghi giống hệt nhau (khác id) -> chỉ tính một lần
+    uniq = {}
     for r in rows.values():
+        k = (r.get("maTbmt"), ten(r), r.get("kyMaHieu"), r.get("khoiLuongDouble"), don_gia(r), tuple(r.get("winningName") or []))
+        uniq.setdefault(k, r)
+    print(f"Bỏ {len(rows) - len(uniq)} bản ghi trùng", file=sys.stderr)
+    pk, items = {}, []
+    for r in uniq.values():
         nhom = classify(r, kw)
         if not nhom or not r.get("maTbmt"):
             continue
