@@ -23,6 +23,7 @@ OUT_PATH = os.path.join(g.HERE, "data", "co_so_y_te.json")
 TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng mặt hàng trúng thầu cho trang Dashboard
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
+DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
 KEYWORDS = [("test", "all-1"), ("test nhanh", "exact"), ("que thử", "exact"), ("khay thử", "exact"),
             ("xét nghiệm nhanh", "exact"), ("chẩn đoán nhanh", "exact"), ("thanh thử", "exact"), ("kit thử", "exact")]
 
@@ -66,10 +67,11 @@ def results(kw):
         if not nhom or not r.get("maTbmt"):
             continue
         tinh = g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), ""))
-        items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
-                      g.clean(r.get("tenThietBi")), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
-                      g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), r.get("donGia"),
-                      "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or ""])
+        if nhom not in DASH_BO:
+            items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
+                          g.clean(r.get("tenThietBi")), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
+                          g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), r.get("donGia"),
+                          "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or ""])
         p = pk.setdefault(r["maTbmt"], {"ma": r["maTbmt"], "cdt": g.clean(r.get("tenCdtBmt")), "ma_cdt": r.get("maCdt"),
                                          "tinh": g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), "")),
                                          "kq": (r.get("ngayDangTaiKqlcnt") or "")[:10], "hinh_thuc": g.FORM_NAMES.get(r.get("bidForm"), r.get("bidForm") or ""),
@@ -85,7 +87,7 @@ def build():
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items = results(kw)
     items.sort(key=lambda r: r[3], reverse=True)
-    json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"]],
+    json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"] if x["ten"] not in DASH_BO],
                "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc"],
                "rows": items}, open(TT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
