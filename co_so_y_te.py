@@ -24,8 +24,51 @@ TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng m
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
 DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
-KEYWORDS = [("test", "all-1"), ("test nhanh", "exact"), ("que thử", "exact"), ("khay thử", "exact"),
-            ("xét nghiệm nhanh", "exact"), ("chẩn đoán nhanh", "exact"), ("thanh thử", "exact"), ("kit thử", "exact")]
+# dấu hiệu test nhanh trong mô tả / nhãn hiệu, dùng khi tên hàng không có chữ test/que thử/khay thử
+RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
+NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
+                         r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch")
+
+ACCESSORY_RE = re.compile(r"^(pin|kim|bút|lancet|dung dịch|vỏ|hộp đựng|giá đỡ|máy|thiết bị|hệ thống)\b|\bpin\b|\bcột\b|hóa chất|hoá chất")
+PER_TEST = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
+
+def ten(r):
+    """Tên hàng: kết quả tab Thiết bị y tế ghi ở tenThietBi, tab Hàng hóa ghi ở danhMucHangHoa."""
+    return g.clean(r.get("tenThietBi") or r.get("danhMucHangHoa"))
+
+
+def don_gia(r):
+    v = r.get("donGia") if r.get("donGia") is not None else r.get("donGiaDuThau")
+    sl = r.get("khoiLuongDouble") or 0
+    # lỗi nhập liệu hay gặp: ghi thành tiền vào ô đơn giá (vd 4.000 test x 196 triệu/test) -> chia lại theo số lượng
+    if v and sl > 1 and g.norm(r.get("donViTinh") or "") in PER_TEST and v > 1_000_000:
+        v = v / sl
+    return v
+
+
+def keywords(kw):
+    """Từ khóa tìm trong dữ liệu trúng thầu: chữ chỉ dạng test nhanh + tên chỉ số của từng nhóm
+    (để bắt cả mặt hàng ghi kiểu "Sinh phẩm chẩn đoán HIV", "Determine HBsAg 2")."""
+    ws = list(kw.get("can_co", [])) + [t.strip() for n in kw["nhom"] for t in n["tu"]]
+    return [(w, "exact" if " " in w else "all-1") for w in dict.fromkeys(w for w in ws if len(w) >= 3)]
+
+
+def classify(r, kw):
+    """Nhóm test nhanh của một dòng trúng thầu, None nếu không phải test nhanh."""
+    name, uom = ten(r), r.get("donViTinh")
+    extra = g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("cauHinh"))[:300]
+    txt = g.norm(name + " " + extra)
+    # ELISA, CLIA, PCR, hóa chất chạy máy, pin/phụ kiện máy: xét trong tên + nhãn hiệu
+    # (mô tả test nhanh hay ghi "độ nhạy so với PCR/ELISA" nên không xét mô tả)
+    short = g.norm(name + " " + g.clean(r.get("nhanHieu")))
+    if NOT_RAPID_RE.search(short) or ACCESSORY_RE.search(g.norm(name)) or any(b and b in " " + g.norm(name) + " " for b in kw["_bo"]):
+        return None
+    if any(c in g.norm(name) for c in kw["_can"]):  # tên đã ghi rõ test/que thử/khay thử...
+        return g.group_of(name, kw, uom)
+    # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu hoặc mô tả
+    if RAPID_RE.search(txt):
+        return g.group_of("test " + name + " " + g.clean(r.get("nhanHieu")), kw, uom) or g.group_of("test " + name + " " + extra, kw, uom)
+    return None
 
 
 def now_vn():
@@ -40,44 +83,45 @@ def key_of(name):
 def prc(kw, mt, frm, to, page):
     body = [{"pageSize": 100, "pageNumber": page, "query": [{
         "index": "es-smart-pricing", "keyWord": kw, "keyWordNotMatch": "", "matchType": mt,
-        "matchFields": ["ten_thiet_bi", "ma_hs", "xuat_xu", "ma_tbmt", "ky_ma_hieu", "nhan_hieu", "hang_san_xuat"],
-        "filters": [{"fieldName": "type", "searchType": "in", "fieldValues": ["HANG_HOA"]},
-                    {"fieldName": "tab", "searchType": "in", "fieldValues": ["THIET_BI_VAT_TU_Y_TE"]},
-                    {"fieldName": "ngay_dang_tai_kqlcnt", "searchType": "range", "from": frm, "to": to}]}]}]
+        "matchFields": ["ten_thiet_bi", "danh_muc_hang_hoa", "ma_hs", "xuat_xu", "ma_tbmt", "ky_ma_hieu", "nhan_hieu", "hang_san_xuat"],
+        # không lọc theo tab: muasamcong xếp nhiều kết quả test nhanh vào tab "Hàng hóa" thay vì "Thiết bị, vật tư y tế"
+        "filters": [{"fieldName": "ngay_dang_tai_kqlcnt", "searchType": "range", "from": frm, "to": to}]}]}]
     return json.loads(g.http(PRC_URL, body))["page"]
 
 
 def results(kw):
     """({mã TBMT: gói đã có kết quả}, [dòng mặt hàng trúng]) từ dữ liệu trúng thầu năm YEAR, chỉ tính mặt hàng test nhanh."""
     rows = {}
-    for q, mt in KEYWORDS:
-        for m in range(1, 13):  # chia theo tháng: mỗi truy vấn trả tối đa 10.000 dòng
-            frm = f"{YEAR}-{m:02d}-01"
-            to = f"{YEAR}-{m + 1:02d}-01" if m < 12 else f"{int(YEAR) + 1}-01-01"
-            pg = prc(q, mt, frm, to, 0)
+    year = [(f"{YEAR}-01-01", f"{int(YEAR) + 1}-01-01")]
+    months = [(f"{YEAR}-{m:02d}-01", f"{YEAR}-{m + 1:02d}-01" if m < 12 else f"{int(YEAR) + 1}-01-01") for m in range(1, 13)]
+    for q, mt in keywords(kw):
+        first = prc(q, mt, *year[0], 0)
+        # mỗi truy vấn trả tối đa 10.000 dòng -> từ khóa nhiều kết quả thì chia theo tháng
+        for frm, to in (year if first["totalElements"] < 9500 else months):
+            pg = first if (frm, to) == year[0] else prc(q, mt, frm, to, 0)
             got = list(pg["content"])
             for p in range(1, min(pg["totalPages"], 100)):
                 got += prc(q, mt, frm, to, p)["content"]
             for r in got:
                 rows[r["id"]] = r
-        print(f"{q}: {len(rows)} dòng", file=sys.stderr)
+        print(f"{q}: {first['totalElements']} -> tổng {len(rows)} dòng", file=sys.stderr)
     pk, items = {}, []
     for r in rows.values():
-        nhom = g.group_of(g.clean(r.get("tenThietBi")), kw, r.get("donViTinh"))
+        nhom = classify(r, kw)
         if not nhom or not r.get("maTbmt"):
             continue
         tinh = g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), ""))
         if nhom not in DASH_BO:
             items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
-                          g.clean(r.get("tenThietBi")), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
-                          g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), r.get("donGia"),
+                          ten(r), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
+                          g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), don_gia(r),
                           "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or ""])
         p = pk.setdefault(r["maTbmt"], {"ma": r["maTbmt"], "cdt": g.clean(r.get("tenCdtBmt")), "ma_cdt": r.get("maCdt"),
                                          "tinh": g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), "")),
                                          "kq": (r.get("ngayDangTaiKqlcnt") or "")[:10], "hinh_thuc": g.FORM_NAMES.get(r.get("bidForm"), r.get("bidForm") or ""),
                                          "so_mh": 0, "gia_tri": 0, "nhom": set()})
         p["so_mh"] += 1
-        p["gia_tri"] += (r.get("donGia") or 0) * (r.get("khoiLuongDouble") or 0)
+        p["gia_tri"] += (don_gia(r) or 0) * (r.get("khoiLuongDouble") or 0)
         p["nhom"].add(nhom)
     return pk, items
 
