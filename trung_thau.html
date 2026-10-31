@@ -206,6 +206,7 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
       <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
       <select id="from" aria-label="Từ tháng"></select>
       <select id="to" aria-label="Đến tháng"></select>
+      <select id="metric" aria-label="Chỉ số"><option value="tien">Theo giá trị (đ)</option><option value="sl">Theo số lượng test</option></select>
       <select id="nhom" aria-label="Nhóm test"><option value="">Tất cả nhóm test</option></select>
       <select id="tinh" aria-label="Tỉnh/TP"><option value="">Tất cả tỉnh/TP</option></select>
       <button id="reset" type="button">Bỏ lọc</button>
@@ -216,16 +217,16 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
   <div class="kpis" id="kpis"></div>
 
   <section class="card full">
-    <h2>Giá trị trúng thầu theo tháng</h2>
-    <p class="cap">Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả</p>
+    <h2 id="mTitle">Giá trị trúng thầu theo tháng</h2>
+    <p class="cap" id="mCap"></p>
     <div class="cols" id="month"></div><div class="xl" id="monthX"></div>
   </section>
 
   <div class="grid2">
-    <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="nt"></div></section>
-    <section class="card"><h2>Hãng sản xuất</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="hang"></div></section>
-    <section class="card"><h2>Nhóm test</h2><p class="cap">Giá trị trúng theo nhóm · bấm để lọc</p><div class="hb" id="nh"></div></section>
-    <section class="card"><h2>Tỉnh/TP</h2><p class="cap">Top 10 theo giá trị · bấm để lọc</p><div class="hb" id="tp"></div></section>
+    <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
+    <section class="card"><h2>Hãng sản xuất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
+    <section class="card"><h2>Nhóm test</h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để lọc</p><div class="hb" id="nh"></div></section>
+    <section class="card"><h2>Tỉnh/TP</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
   </div>
 
   <section class="card full">
@@ -255,11 +256,17 @@ const UNIT1 = /^(test|que|khay|thanh|test\/khay|test\/que|kit)$/i;
 // tên hãng / nhà thầu ghi nhiều kiểu -> khóa gộp bỏ dấu câu, hậu tố công ty
 const brandKey = s => fold(s).replace(/\b(co|ltd|inc|corp|corporation|gmbh|llc|limited|company|s\.?a|ag|co\.,?ltd)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 let R = [], view = [], page = 0, pick = {};
+// chỉ số đang xem: giá trị (đ) hoặc số lượng test (chỉ tính dòng có ĐVT là test/que/khay; dòng tính theo hộp/bộ không quy đổi được)
+const M = () => $('#metric').value;
+const val = r => M() === 'sl' ? (r.per ? r.sl || 0 : 0) : r.tien;
+const show = v => M() === 'sl' ? fmtQty(v) : money(v);
+const unit = () => M() === 'sl' ? ' test' : ' đ';
+const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu' : v >= 1e4 ? Math.round(v / 1e3).toLocaleString('vi-VN') + ' nghìn' : num(v);
 
 function load(d) {
   const c = d.cot;
   R = d.rows.map(a => { const o = {}; c.forEach((k, i) => o[k] = a[i]); o.tien = (o.sl || 0) * (o.don_gia || 0);
-    o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
+    o.per = UNIT1.test((o.dvt || '').trim()); o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
     o.s = fold([o.ma, o.cdt, o.ten, o.hang, o.nhan, o.ky_ma, o.nha_thau].join(' ')); return o; });
   const months = [...new Set(R.map(r => r.ngay.slice(0, 7)))].sort();
   const opt = m => `<option value="${m}">Tháng ${+m.slice(5)}/${m.slice(0, 4)}</option>`;
@@ -285,8 +292,8 @@ function apply() {
 function group(key, label) {
   const m = new Map();
   view.forEach(r => [].concat(key(r)).forEach(k => { if (!k) return; const g = m.get(k) || { k, v: 0, n: 0, names: new Map() };
-    g.v += r.tien; g.n++; const nm = label ? label(r) : k; g.names.set(nm, (g.names.get(nm) || 0) + 1); m.set(k, g); }));
-  return [...m.values()].map(g => ({ ...g, label: [...g.names].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.v - a.v);
+    g.v += val(r); g.n++; const nm = label ? label(r) : k; g.names.set(nm, (g.names.get(nm) || 0) + 1); m.set(k, g); }));
+  return [...m.values()].filter(g => g.v > 0).map(g => ({ ...g, label: [...g.names].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b.v - a.v);
 }
 
 function hbar(el, data, onPick) {
@@ -298,9 +305,9 @@ function hbar(el, data, onPick) {
     const n = document.createElement('div'); n.className = 'n'; n.textContent = d.label;
     const tr = document.createElement('div'); tr.className = 't';
     const bar = document.createElement('i'); bar.style.width = Math.max(1, d.v / max * 78) + '%';
-    const v = document.createElement('b'); v.textContent = money(d.v);
+    const v = document.createElement('b'); v.textContent = show(d.v);
     tr.append(bar, v); row.append(n, tr); el.append(row);
-    const tipText = [money(d.v) + ' đ', d.label, `${num(d.n)} dòng mặt hàng`];
+    const tipText = [num(d.v) + unit(), d.label, `${num(d.n)} dòng mặt hàng`];
     hover(row, tipText);
     if (onPick) { row.onclick = () => onPick(d); row.onkeydown = e => { if (e.key === 'Enter') onPick(d); }; }
   });
@@ -316,21 +323,27 @@ function hover(el, lines) {
 }
 
 function render() {
-  const tot = view.reduce((s, r) => s + r.tien, 0);
+  const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.per ? r.sl || 0 : 0), 0);
   const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk));
-  $('#kpis').innerHTML = `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(view.length)} dòng mặt hàng</div></div>
+  $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
+      : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
     <div class="kpi"><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
     <div class="kpi"><div class="lbl">Cơ sở y tế mua</div><div class="val">${num(cs.size)}</div></div>
     <div class="kpi"><div class="lbl">Nhà thầu trúng</div><div class="val">${num(nt.size)}</div></div>
     <div class="kpi"><div class="lbl">Hãng sản xuất</div><div class="val">${num(hg.size)}</div></div>`;
   // theo tháng
   const ms = []; for (let m = $('#from').value; m <= $('#to').value; m = next(m)) ms.push(m);
-  const mv = ms.map(m => ({ m, v: 0, n: 0 })); view.forEach(r => { const o = mv.find(x => x.m === r.ngay.slice(0, 7)); if (o) { o.v += r.tien; o.n++; } });
+  const mv = ms.map(m => ({ m, v: 0, n: 0 })); view.forEach(r => { const o = mv.find(x => x.m === r.ngay.slice(0, 7)); if (o) { o.v += val(r); o.n++; } });
   const top = nice(Math.max(...mv.map(x => x.v), 1));
-  const box = $('#month'); box.innerHTML = [1, .5, 0].map(f => `<div class="gl" style="top:${(1 - f) * 100}%"><span>${f ? money(top * f) : '0'}</span></div>`).join('') + '<div class="bars"></div>';
+  const box = $('#month'); box.innerHTML = [1, .5, 0].map(f => `<div class="gl" style="top:${(1 - f) * 100}%"><span>${f ? show(top * f) : '0'}</span></div>`).join('') + '<div class="bars"></div>';
   mv.forEach(x => { const c = document.createElement('div'); c.className = 'c'; c.tabIndex = 0; const i = document.createElement('i'); i.style.height = (x.v / top * 100) + '%'; c.append(i);
-    box.lastChild.append(c); hover(c, [money(x.v) + ' đ', `Tháng ${+x.m.slice(5)}/${x.m.slice(0, 4)}`, `${num(x.n)} dòng mặt hàng`]); });
+    box.lastChild.append(c); hover(c, [num(x.v) + unit(), `Tháng ${+x.m.slice(5)}/${x.m.slice(0, 4)}`, `${num(x.n)} dòng mặt hàng`]); });
   $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}</span>`).join('');
+  const sl = M() === 'sl';
+  $('#mTitle').textContent = sl ? 'Số lượng test trúng thầu theo tháng' : 'Giá trị trúng thầu theo tháng';
+  $('#mCap').textContent = sl ? 'Tổng số test (chỉ dòng có ĐVT là test/que/khay; dòng tính theo hộp/bộ không quy đổi được), theo ngày đăng kết quả' : 'Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả';
+  document.querySelectorAll('.by').forEach(e => e.textContent = sl ? 'Top 10 theo số lượng test' : 'Top 10 theo giá trị');
+  document.querySelector('.by2').textContent = sl ? 'Số lượng test theo nhóm' : 'Giá trị trúng theo nhóm';
   hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
   hbar($('#hang'), group(r => r.hk, r => r.hang).slice(0, 10), d => { pick.hk = d.k; pick.hn = d.label; apply(); });
   hbar($('#nh'), group(r => r.nhom), d => { $('#nhom').value = d.k; apply(); });
@@ -367,7 +380,7 @@ function csv() {
 fetch('/api/trung-thau').then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
-['#from', '#to', '#nhom', '#tinh'].forEach(s => $(s).addEventListener('change', apply));
+['#from', '#to', '#nhom', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
 $('#active').addEventListener('click', e => { const k = e.target.dataset.k; if (k) { delete pick[k]; apply(); } });
 $('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; $('#nhom').value = ''; $('#tinh').value = '';
   $('#from').selectedIndex = 0; $('#to').selectedIndex = $('#to').options.length - 1; apply(); });
