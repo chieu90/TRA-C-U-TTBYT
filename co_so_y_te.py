@@ -22,10 +22,10 @@ import goi_thau as g
 OUT_PATH = os.path.join(g.HERE, "data", "co_so_y_te.json")
 TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng mặt hàng trúng thầu cho trang KQ Test
 DH_PATH = os.path.join(g.HERE, "data", "duong_huyet.json")  # que thử đường huyết cho trang KQ Đường Huyết
-DH_NHOM = "Đường huyết / HbA1c"
+DH_NHOM = "Đường huyết"
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
-DASH_BO = {"Que thử nước tiểu", "Đường huyết / HbA1c"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
+DASH_BO = {"Que thử nước tiểu", "Đường huyết"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
 DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c|\bcrp\b|c-reactive|protein phản ứng c")  # mặt hàng không đưa vào Dashboard
 DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết", "Troponin / CRP": "Troponin"}
 HBA1C_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # tên nhóm hiển thị trên Dashboard
@@ -33,7 +33,7 @@ HBA1C_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # tên nhóm hiển thị
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
                          r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch|"
-                         r"chất thử|assay|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
+                         r"chất thử|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
 # hãng chỉ làm hóa chất chạy máy / ELISA / PCR / vi sinh: không phải test nhanh
 NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun")
 
@@ -82,8 +82,14 @@ def don_gia(r):
 def keywords(kw):
     """Từ khóa tìm trong dữ liệu trúng thầu: chữ chỉ dạng test nhanh + tên chỉ số của từng nhóm
     (để bắt cả mặt hàng ghi kiểu "Sinh phẩm chẩn đoán HIV", "Determine HBsAg 2")."""
-    ws = list(kw.get("can_co", [])) + [t.strip() for n in kw["nhom"] for t in n["tu"]]
+    ws = list(kw.get("can_co", [])) + [t.strip() for n in kw["nhom"] for t in n["tu"]] + EXTRA_Q
     return [(w, "exact" if " " in w else "all-1") for w in dict.fromkeys(w for w in ws if len(w) >= 3)]
+
+
+# tìm thêm theo cách ghi tắt và theo hãng test nhanh lớn: bắt mặt hàng tên chỉ ghi "TB IgG/IgM combo", "OnSite ...", "Bioline ..."
+EXTRA_Q = ["TB IgG", "IgG/IgM", "Rapid Test", "Combo Rapid", "OnSite", "Bioline", "Determine", "CTK Biotech", "Beijing Genesee", "SD Biosensor",
+           "Abbott Diagnostics", "ACON", "Wondfo", "InTec", "Alltest", "Assure Tech", "Medicon", "GenBody", "Citest", "Healgen", "Orient Gene",
+           "Testsea", "Hangzhou Biotest", "Hightop", "ABON", "Atlas", "GeneSign", "Asan", "Humasis", "Standard Q"]
 
 
 def classify(r, kw):
@@ -97,7 +103,9 @@ def classify(r, kw):
     if NOT_RAPID_RE.search(short) or NOT_RAPID_MAKER.search(g.norm(r.get("hangSanXuat") or "")) or ACCESSORY_RE.search(g.norm(name)) or any(b and b in " " + g.norm(name) + " " for b in kw["_bo"]):
         return None
     if any(c in g.norm(name) for c in kw["_can"]):  # tên đã ghi rõ test/que thử/khay thử...
-        return g.group_of(name, kw, uom)
+        # tên chung chung ("Test nhanh", "Que thử xét nghiệm định tính"): xác định nhóm theo nhãn hiệu / ký mã, rồi mô tả
+        return (g.group_of(name, kw, uom) or g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom)
+                or g.group_of(name + " " + g.clean(r.get("cauHinh"))[:150], kw, uom))
     # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu, mô tả,
     # hoặc tính theo đơn vị test/que/khay mà không phải hóa chất chạy máy
     if RAPID_RE.search(txt) or (g.norm(uom or "") in PER_TEST and not g.REAGENT_RE.search(short)):
@@ -236,6 +244,14 @@ def canon_brands(items, idx_hang):
                 merge[k] = big
                 break
     out = [merge.get(k, k) for k in out]
+    # cùng ký mã hiệu thì cùng hãng: theo hãng được ghi nhiều nhất cho ký mã đó (vd R0053C ghi lúc CTK, lúc Genesee)
+    km = {}
+    for r, k in zip(items, out):
+        code = re.sub(r"[^a-z0-9]", "", _fold(r[8] if len(r) > 8 else ""))
+        if len(code) >= 4 and k:
+            km.setdefault(code, Counter())[k] += 1
+    fix = {code: cn.most_common(1)[0][0] for code, cn in km.items() if sum(cn.values()) >= 3 and cn.most_common(1)[0][1] / sum(cn.values()) >= 0.6}
+    out = [fix.get(re.sub(r"[^a-z0-9]", "", _fold(r[8] if len(r) > 8 else "")), k) for r, k in zip(items, out)]
     labels = {}
     for r, k in zip(items, out):
         if k:

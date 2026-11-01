@@ -143,6 +143,18 @@ def build():
         prev = json.load(open(OUT_PATH, encoding="utf-8"))
         old = {it["key"]: it for it in prev.get("items", [])}
         old_open = {r["id"]: r for r in prev.get("ycbg", [])}
+        # dữ liệu cộng dồn từ các lần trước: phân nhóm lại theo bộ từ khóa hiện tại, bỏ mặt hàng không còn quan tâm
+        regroup = lambda it: g.group_of(it["ten"], kw, it.get("dvt")) or g.group_of(it["ten"] + " " + (it.get("mo_ta") or "")[:120], kw, it.get("dvt"))
+        for k, it in list(old.items()):
+            nh = regroup(it)
+            if nh:
+                it["nhom"] = nh
+            else:
+                del old[k]
+        for k, r in list(old_open.items()):
+            r["items"] = [dict(it, nhom=regroup(it)) for it in r.get("items", []) if regroup(it)]
+            if not r["items"]:
+                del old_open[k]
     ycbg, huy = build_open(kw, old_open)
     old = {k: v for k, v in old.items() if k.split("|")[0] not in huy}
     new = {}

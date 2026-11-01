@@ -23,7 +23,12 @@
         "viêm gan B",
         "siêu vi B",
         "viên gan B",
-        "viêm gan siêu vi B"
+        "viêm gan siêu vi B",
+        "hbs",
+        "anti hbs",
+        "hbv",
+        "kháng nguyên hbs",
+        "kháng nguyên bề mặt"
       ]
     },
     {
@@ -50,7 +55,10 @@
       "tu": [
         "dengue",
         "sốt xuất huyết",
-        "NS1"
+        "NS1",
+        "ns1ag",
+        "ns1 ag",
+        "dengue ns1"
       ]
     },
     {
@@ -59,7 +67,9 @@
         "giang mai",
         "syphilis",
         "TPHA",
-        "RPR"
+        "RPR",
+        "treponema",
+        "pallidum"
       ]
     },
     {
@@ -70,7 +80,13 @@
         "covid",
         "sars-cov",
         "RSV",
-        "adeno"
+        "adeno",
+        "hợp bào hô hấp",
+        "hô hấp",
+        "andeno",
+        "flu a",
+        "flu b",
+        "sars cov"
       ]
     },
     {
@@ -78,7 +94,11 @@
       "tu": [
         "pylori",
         "test nhanh HP",
-        "HP dạ dày"
+        "HP dạ dày",
+        "viêm dạ dày",
+        "pylor",
+        "helicobacter",
+        "hp"
       ]
     },
     {
@@ -93,7 +113,19 @@
         "MDMA",
         "THC",
         "ketamin",
-        "chất gây nghiện"
+        "chất gây nghiện",
+        "codein",
+        "codeine",
+        "marijuana",
+        "cần sa",
+        "opiate",
+        "opiat",
+        "drug",
+        "doa",
+        "mop",
+        "met/",
+        "morphine",
+        "amp/"
       ]
     },
     {
@@ -113,22 +145,12 @@
         "máu trong phân",
         "hồng cầu trong phân",
         "rotavirus",
-        "norovirus"
-      ]
-    },
-    {
-      "ten": "Sốt rét / ký sinh trùng",
-      "tu": [
-        "sốt rét",
-        "malaria",
-        "tsutsugamushi",
-        "toxocara",
-        "strongyloid",
-        "taenia",
-        "entamoeba",
-        "fasciola",
-        "echinococ",
-        "gnathostoma"
+        "norovirus",
+        "rôta",
+        "rotavirrus",
+        "fob",
+        "hồng cầu ẩn",
+        "máu ẩn trong phân"
       ]
     },
     {
@@ -143,14 +165,19 @@
         "nhanh lao",
         "lao TB",
         "tuberculosis",
-        "mycobacterium"
+        "mycobacterium",
+        "lao",
+        "tb",
+        "tubeculosis",
+        "kháng thể kháng lao",
+        "kháng thể lao",
+        "bệnh lao"
       ]
     },
     {
-      "ten": "Troponin / CRP",
+      "ten": "Troponin",
       "tu": [
-        "troponin",
-        "CRP"
+        "troponin"
       ]
     },
     {
@@ -159,7 +186,59 @@
         "EV71",
         "tay chân miệng",
         "chân tay miệng",
-        "chân, tay, miệng"
+        "chân, tay, miệng",
+        "enterovirus"
+      ]
+    },
+    {
+      "ten": "AFP / CEA / PSA",
+      "tu": [
+        "afp",
+        "cea",
+        "psa",
+        "alpha fetoprotein",
+        "kháng nguyên ung thư"
+      ]
+    },
+    {
+      "ten": "Aspergillus / nấm",
+      "tu": [
+        "aspergillus",
+        "galactomannan",
+        "galactomanan",
+        "cryptococ",
+        "candida"
+      ]
+    },
+    {
+      "ten": "Vi khuẩn kháng carbapenem",
+      "tu": [
+        "carbapenem",
+        "kpc",
+        "ndm",
+        "oxa 48",
+        "oxa-48",
+        "resist 5",
+        "resist-5"
+      ]
+    },
+    {
+      "ten": "Ối vỡ / sinh non (IGFBP-1)",
+      "tu": [
+        "igfbp",
+        "actim prom",
+        "actim partus",
+        "ối vỡ",
+        "rỉ ối"
+      ]
+    },
+    {
+      "ten": "Sốt mò (Tsutsugamushi)",
+      "tu": [
+        "tsutsugamushi",
+        "sốt mò",
+        "scrub typhus",
+        "orientia"
       ]
     },
     {
@@ -169,12 +248,11 @@
       ]
     },
     {
-      "ten": "Đường huyết / HbA1c",
+      "ten": "Đường huyết",
       "tu": [
         "đường huyết",
         "đường máu",
         "tiểu đường",
-        "HbA1c",
         "que thử đường",
         "test đường",
         "que đường",
@@ -229,6 +307,14 @@
     "khí máu",
     "điện giải",
     "đột biến gen",
-    "dị ứng"
+    "dị ứng",
+    "hba1c",
+    "hb a1c",
+    "crp",
+    "c-reactive",
+    "sốt rét",
+    "malaria",
+    "ký sinh trùng",
+    "kí sinh trùng"
   ]
 }

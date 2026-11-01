@@ -134,7 +134,8 @@ REAGENT_RE = re.compile(r"chủng|atcc|cấy|kiểm soát|\bdna\b|\brna\b|môi t
 
 
 def group_of(name, kw, uom=None):
-    n = " " + norm(name) + " "
+    # "bán định lượng" (que thử nước tiểu) không phải xét nghiệm định lượng chạy máy trong danh sách loại trừ
+    n = " " + norm(name).replace("bán định lượng", "bán đl") + " "
     if n.startswith((" máy ", " thiết bị ", " hệ thống ")):  # máy móc, không phải vật tư test
         return None
     if any(b and b in n for b in kw["_bo"]):
