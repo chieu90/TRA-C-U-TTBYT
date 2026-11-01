@@ -23,7 +23,7 @@ OUT_PATH = os.path.join(g.HERE, "data", "co_so_y_te.json")
 TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng mặt hàng trúng thầu cho trang Dashboard
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
-DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
+DASH_BO = {"Que thử nước tiểu", "Đường huyết / HbA1c"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
 DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c|\bcrp\b|c-reactive|protein phản ứng c")  # mặt hàng không đưa vào Dashboard
 DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết", "Troponin / CRP": "Troponin"}  # tên nhóm hiển thị trên Dashboard
 # dấu hiệu test nhanh trong mô tả / nhãn hiệu, dùng khi tên hàng không có chữ test/que thử/khay thử
