@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trúng thầu</title>
+<title>KQ Test</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%230e9f9a%22/%3E%3Cpath d=%22M9 8h14v3H9zM9 14h14v3H9zM9 20h9v3H9z%22 fill=%22white%22/%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="theme-color" content="#0b5cad">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Trúng thầu">
+<meta name="apple-mobile-web-app-title" content="KQ Test">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -225,8 +225,8 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
 <body>
 <header class="hero"><div class="hero-in">
   <div class="top">
-    <h1>Kết quả trúng thầu test nhanh</h1>
-    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/">Tra cứu TBYT</a></nav>
+    <h1 id="h1">Kết quả trúng thầu test nhanh</h1>
+    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/">Tra cứu TBYT</a></nav>
   </div>
   <p class="sub" id="sub">Mặt hàng test nhanh trong các kết quả lựa chọn nhà thầu đăng trên <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>.</p>
 </div></header>
@@ -276,7 +276,7 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
   <section class="card full">
     <h2>Dải đơn giá trúng theo nhóm test</h2>
     <p class="cap">Đơn giá: chỉ tính mặt hàng có đơn vị test / que / khay (giá một lần thử, bỏ giá trên 1 triệu đ/test do nhập sai). Số lượng: tổng số test trúng thầu theo hãng.</p>
-    <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th><th class="n">Tổng SL test</th><th class="n">InTec</th><th class="n">Wondfo</th><th class="n">Genesee</th><th class="n">Hãng khác</th></tr></thead><tbody id="gia"></tbody></table></div>
+    <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th><th class="n">Tổng SL test</th><th class="n" id="f1">InTec</th><th class="n" id="f2">Wondfo</th><th class="n" id="f3">Genesee</th><th class="n">Hãng khác</th></tr></thead><tbody id="gia"></tbody></table></div>
   </section>
 
   <section class="card full">
@@ -290,6 +290,15 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
 
 <script>
 const $ = s => document.querySelector(s);
+// cùng một giao diện cho 2 trang: /trung-thau (KQ Test) và /duong-huyet (KQ Đường Huyết)
+const PG = location.pathname.startsWith('/duong-huyet')
+  ? { api: '/api/duong-huyet', path: '/duong-huyet', doc: 'KQ Đường Huyết', title: 'Kết quả trúng thầu que thử đường huyết', what: 'que thử đường huyết',
+      focus: [['taidoc', 'TaiDoc'], ['acon', 'ACON'], ['roche', 'Roche']] }
+  : { api: '/api/trung-thau', path: '/trung-thau', doc: 'KQ Test', title: 'Kết quả trúng thầu test nhanh', what: 'test nhanh',
+      focus: [['intec', 'InTec'], ['wondfo', 'Wondfo'], ['genesee', 'Genesee']] };
+document.title = PG.doc; $('#h1').textContent = PG.title;
+PG.focus.forEach((f, i) => $('#f' + (i + 1)).textContent = f[1]);
+document.querySelectorAll('.nav a').forEach(a => { if (a.getAttribute('href') === PG.path) a.remove(); });
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const num = n => n == null ? '' : Math.round(n).toLocaleString('vi-VN');
@@ -327,7 +336,7 @@ function load(d) {
   const cnt = {}; R.forEach(r => cnt[r.nhom] = (cnt[r.nhom] || 0) + 1);
   $('#nhomList').innerHTML = d.nhom.filter(x => nh.has(x)).map(x => `<label><input type="checkbox" value="${esc(x)}"> ${esc(x)}<b>${cnt[x]}</b></label>`).join('');
   $('#tinh').innerHTML += [...new Set(R.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(x => `<option>${esc(x)}</option>`).join('');
-  $('#sub').textContent = `Mặt hàng test nhanh trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
+  $('#sub').textContent = `Mặt hàng ${PG.what} trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
   fromUrl();
   apply();
 }
@@ -381,7 +390,7 @@ function render() {
   const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.sl_test || 0), 0);
   const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk).filter(k => k !== 'Không ghi rõ'));
   $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
-      : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
+      : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu ${PG.what}</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
     <div class="kpi"><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
     <div class="kpi"><div class="lbl">Cơ sở y tế mua</div><div class="val">${num(cs.size)}</div></div>
     <div class="kpi"><div class="lbl">Nhà thầu trúng</div><div class="val">${num(nt.size)}</div></div>
@@ -396,7 +405,7 @@ function render() {
   $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}</span>`).join('');
   const sl = M() === 'sl';
   $('#mTitle').textContent = sl ? 'Số lượng test trúng thầu theo tháng' : 'Giá trị trúng thầu theo tháng';
-  $('#mCap').textContent = sl ? 'Tổng số test (đơn vị test/que/khay; hộp/lọ quy đổi theo quy cách ghi trong tên hoặc mô tả, vd "hộp 50 que"), theo ngày đăng kết quả' : 'Tổng giá trị mặt hàng test nhanh (số lượng × đơn giá trúng), theo ngày đăng kết quả';
+  $('#mCap').textContent = sl ? 'Tổng số test (đơn vị test/que/khay; hộp/lọ quy đổi theo quy cách ghi trong tên hoặc mô tả, vd "hộp 50 que"), theo ngày đăng kết quả' : `Tổng giá trị ${PG.what} (số lượng × đơn giá trúng), theo ngày đăng kết quả`;
   document.querySelectorAll('.by').forEach(e => e.textContent = sl ? 'Top 10 theo số lượng test' : 'Top 10 theo giá trị');
   document.querySelector('.by2').textContent = sl ? 'Số lượng test theo nhóm' : 'Giá trị trúng theo nhóm';
   hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
@@ -406,9 +415,9 @@ function render() {
   hbar($('#tp'), group(r => r.tinh || 'Chưa rõ').slice(0, 10), d => { if (d.k !== 'Chưa rõ') { $('#tinh').value = d.k; apply(); } });
   // dải giá
   // số lượng test theo hãng (InTec, Wondfo, Genesee, còn lại) cho từng nhóm
-  const FOCUS = ['intec', 'wondfo', 'genesee'], brandOf = r => FOCUS.find(b => fold(r.hn).includes(b)) || 'khac';
-  const gp = new Map(), q = new Map(), qt = { tong: 0, intec: 0, wondfo: 0, genesee: 0, khac: 0 };
-  view.forEach(r => { const o = q.get(r.nhom) || q.set(r.nhom, { tong: 0, intec: 0, wondfo: 0, genesee: 0, khac: 0 }).get(r.nhom); const n = r.sl_test || 0;
+  const FOCUS = PG.focus.map(f => f[0]), brandOf = r => FOCUS.find(b => fold(r.hn).includes(b)) || 'khac';
+  const gp = new Map(), q = new Map(), qt = Object.fromEntries(['tong', 'khac', ...FOCUS].map(b => [b, 0]));
+  view.forEach(r => { const o = q.get(r.nhom) || q.set(r.nhom, Object.fromEntries(['tong', 'khac', ...FOCUS].map(b => [b, 0]))).get(r.nhom); const n = r.sl_test || 0;
     o.tong += n; o[brandOf(r)] += n; qt.tong += n; qt[brandOf(r)] += n;
     if (UNIT1.test((r.dvt || '').trim()) && r.don_gia > 0 && r.don_gia <= 1e6) (gp.get(r.nhom) || gp.set(r.nhom, []).get(r.nhom)).push(r.don_gia); });
   const qc = o => `<td class="n"><b>${num(o.tong)}</b></td>` + FOCUS.concat('khac').map(b => `<td class="n">${o[b] ? num(o[b]) : '–'}</td>`).join('');
@@ -480,15 +489,15 @@ function rankRows() {
     <td class="n">${num(g.goi.size)}</td><td class="n">${num(g.n)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub2">Không có dữ liệu.</td></tr>';
 }
 document.addEventListener('click', e => { const a = e.target.closest('a[data-xem]'); if (!a) return; e.preventDefault();
-  const p = state(); p.set('xem', a.dataset.xem); window.open('/trung-thau?' + p.toString(), '_blank', 'noopener'); });
+  const p = state(); p.set('xem', a.dataset.xem); window.open(PG.path + '?' + p.toString(), '_blank', 'noopener'); });
 $('#rq').addEventListener('input', rankRows);
-$('#back').addEventListener('click', e => { e.preventDefault(); location.href = '/trung-thau?' + state().toString(); });
+$('#back').addEventListener('click', e => { e.preventDefault(); location.href = PG.path + '?' + state().toString(); });
 $('#rcsv').addEventListener('click', () => {
   const [title, col] = VIEWS[XEM], rows = [['#', col, 'Giá trị (đ)', 'Số lượng test', 'Thị phần (%)', 'Số gói', 'Số dòng'], ...RANK.map(g => [g.i, g.label, Math.round(g.tien), g.sl, g.pct.toFixed(2), g.goi.size, g.n])];
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
   a.download = 'xep-hang-' + XEM + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); });
 
-fetch('/api/trung-thau').then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
+fetch(PG.api).then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
 ['#from', '#to', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
@@ -506,6 +515,7 @@ $('#nhomBox .act').addEventListener('click', e => { const a = e.target.dataset.a
 document.addEventListener('click', () => $('#nhomBox').classList.remove('open'));
 if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => { if (r.ok) navigator.serviceWorker.register('/sw.js'); }).catch(() => {});
 </script>
-<nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Trúng thầu</span></a><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span>Lên đầu</span></a></nav>
+<nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>KQ Test</span></a><a href="/duong-huyet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg><span>Đường huyết</span></a></nav>
+<script>document.querySelectorAll('.tabbar a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === PG.path));</script>
 </body>
 </html>

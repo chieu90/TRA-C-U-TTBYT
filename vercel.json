@@ -27,11 +27,15 @@
     {
       "source": "/api/trung-thau",
       "destination": "/trung_thau.json"
+    },
+    {
+      "source": "/api/duong-huyet",
+      "destination": "/duong_huyet.json"
     }
   ],
   "headers": [
     {
-      "source": "/(goi_thau.json|bao_gia.json|co_so_y_te.json|trung_thau.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
+      "source": "/(goi_thau.json|bao_gia.json|co_so_y_te.json|trung_thau.json|duong_huyet.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
       "headers": [
         {
           "key": "Cache-Control",
