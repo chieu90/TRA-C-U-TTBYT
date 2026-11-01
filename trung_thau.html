@@ -198,6 +198,20 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .ms .dd .act { display: flex; gap: 6px; padding: 4px 4px 8px; border-bottom: 1px solid var(--line-2); margin-bottom: 4px; }
 .ms .dd .act button { padding: 4px 10px; font-size: 12.5px; }
 @media (max-width: 760px) { .ms, .ms > button { width: 100%; max-width: none; } .ms .dd { width: 100%; } }
+.sl { display: none; }
+/* màn hình rộng: bộ lọc nằm ở thanh bên trái, nội dung bên phải */
+@media (min-width: 1000px) {
+  .wrap { max-width: 1440px; }
+  .layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .side { position: sticky; top: 12px; margin: 0; max-height: calc(100vh - 24px); overflow: auto; padding: 16px; }
+  .side .row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .side .row > * { width: 100%; max-width: none; flex: none; }
+  .side .sl { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
+  .side .ms > button { width: 100%; max-width: none; text-align: left; }
+  .side .ms .dd { display: block; position: static; width: auto; max-height: 340px; box-shadow: none; margin-top: 6px; padding: 4px; }
+  .side .ms > button { pointer-events: none; }
+  .side #reset { margin-top: 8px; }
+}
 select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; }
 @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi.big { grid-column: 1 / -1; } .grid2 { grid-template-columns: 1fr; } }
 </style>
@@ -211,20 +225,26 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
   <p class="sub" id="sub">Mặt hàng test nhanh trong các kết quả lựa chọn nhà thầu đăng trên <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>.</p>
 </div></header>
 
-<div class="wrap">
-  <section class="panel stickybar">
+<div class="wrap"><div class="layout">
+  <aside class="panel stickybar side">
     <div class="row">
+      <span class="sl">Tìm kiếm</span>
       <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
+      <span class="sl">Thời gian</span>
       <select id="from" aria-label="Từ tháng"></select>
       <select id="to" aria-label="Đến tháng"></select>
+      <span class="sl">Xem theo</span>
       <select id="metric" aria-label="Chỉ số"><option value="tien">Theo giá trị (đ)</option><option value="sl">Theo số lượng test</option></select>
+      <span class="sl">Tỉnh/TP</span>
+      <select id="tinh" aria-label="Tỉnh/TP"><option value="">Tất cả tỉnh/TP</option></select>
+      <span class="sl">Nhóm test</span>
       <div class="ms" id="nhomBox"><button type="button" id="nhomBtn" aria-haspopup="true">Tất cả nhóm test ▾</button>
         <div class="dd"><div class="act"><button type="button" data-a="all">Chọn tất cả</button><button type="button" data-a="none">Bỏ chọn</button></div><div id="nhomList"></div></div></div>
-      <select id="tinh" aria-label="Tỉnh/TP"><option value="">Tất cả tỉnh/TP</option></select>
       <button id="reset" type="button">Bỏ lọc</button>
     </div>
     <div class="active" id="active"></div>
-  </section>
+  </aside>
+  <main class="main">
 
   <div class="kpis" id="kpis"></div>
 
@@ -252,7 +272,8 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
     <div class="scroll"><table class="tbl"><thead><tr><th>Ngày KQ</th><th>Cơ sở y tế</th><th>Mặt hàng</th><th>Hãng / ký mã</th><th>Nhà thầu trúng</th><th class="n">SL</th><th class="n">Đơn giá</th><th class="n">Thành tiền</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="pager"><button id="prev">‹ Trước</button><span id="pg"></span><button id="next">Sau ›</button></div>
   </section>
-</div>
+</main></div></div>
+
 <div class="tip" id="tip" role="tooltip"></div>
 
 <script>
