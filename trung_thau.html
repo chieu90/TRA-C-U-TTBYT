@@ -199,6 +199,12 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .ms .dd .act button { padding: 4px 10px; font-size: 12.5px; }
 @media (max-width: 760px) { .ms, .ms > button { width: 100%; max-width: none; } .ms .dd { width: 100%; } }
 .sl { display: none; }
+.more-link { float: right; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; margin-left: 8px; }
+.more-link:hover { text-decoration: underline; }
+#back { float: none; align-self: center; white-space: nowrap; }
+/* tab xếp hạng đầy đủ: chỉ giữ ô tổng và bảng xếp hạng */
+body.rank-mode main > section:not(#rank), body.rank-mode main > .grid2 { display: none; }
+body.rank-mode #rank { display: block; }
 /* màn hình rộng: bộ lọc nằm ở thanh bên trái, nội dung bên phải */
 @media (min-width: 1000px) {
   .wrap { max-width: 1440px; }
@@ -245,6 +251,11 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
     <div class="active" id="active"></div>
   </aside>
   <main class="main">
+  <section class="card full" id="rank" hidden>
+    <div class="bar" style="margin:0 0 10px"><div><h2 id="rankTitle"></h2><p class="cap" id="rankCap" style="margin:0"></p></div>
+      <div class="row" style="gap:8px"><input type="search" id="rq" placeholder="Tìm trong danh sách…" style="flex:0 1 240px"><button id="rcsv" type="button">Tải Excel (CSV)</button><a class="more-link" id="back" href="/trung-thau">‹ Về Dashboard</a></div></div>
+    <div class="scroll"><table class="tbl"><thead><tr><th class="n">#</th><th id="rankCol">Tên</th><th class="n">Giá trị (đ)</th><th class="n">Số lượng test</th><th class="n">Thị phần</th><th class="n">Số gói</th><th class="n">Số dòng</th></tr></thead><tbody id="rankRows"></tbody></table></div>
+  </section>
 
   <div class="kpis" id="kpis"></div>
 
@@ -255,11 +266,11 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
   </section>
 
   <div class="grid2">
-    <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
-    <section class="card"><h2>Hãng sản xuất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
-    <section class="card"><h2>Nhóm test</h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
-    <section class="card"><h2>Chủ đầu tư</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
-    <section class="card"><h2>Tỉnh/TP</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
+    <section class="card"><h2>Nhà thầu trúng nhiều nhất <a class="more-link" data-xem="nt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
+    <section class="card"><h2>Hãng sản xuất <a class="more-link" data-xem="hang" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
+    <section class="card"><h2>Nhóm test <a class="more-link" data-xem="nh" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
+    <section class="card"><h2>Chủ đầu tư <a class="more-link" data-xem="cdt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
+    <section class="card"><h2>Tỉnh/TP <a class="more-link" data-xem="tp" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
   </div>
 
   <section class="card full">
@@ -317,6 +328,7 @@ function load(d) {
   $('#nhomList').innerHTML = d.nhom.filter(x => nh.has(x)).map(x => `<label><input type="checkbox" value="${esc(x)}"> ${esc(x)}<b>${cnt[x]}</b></label>`).join('');
   $('#tinh').innerHTML += [...new Set(R.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(x => `<option>${esc(x)}</option>`).join('');
   $('#sub').textContent = `Mặt hàng test nhanh trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
+  fromUrl();
   apply();
 }
 
@@ -329,6 +341,7 @@ function apply() {
   $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn], pick.cdt && ['cdt', 'Chủ đầu tư: ' + pick.cdt]].filter(Boolean)
     .map(([k, s]) => `<button data-k="${k}" type="button">${esc(s)} ✕</button>`).join('');
   render();
+  if (XEM) rank();
 }
 
 function group(key, label) {
@@ -427,6 +440,53 @@ function csv() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
   a.download = 'trung-thau-test-nhanh-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
 }
+
+// ===== danh sách đầy đủ ở tab mới (?xem=nt|hang|cdt|tp|nh, kèm bộ lọc hiện tại) =====
+const VIEWS = { nt: ['Nhà thầu trúng', 'Nhà thầu', r => r.nha_thau.split('; ').filter(Boolean)], hang: ['Hãng sản xuất', 'Hãng', r => r.hk, r => r.hn],
+  cdt: ['Chủ đầu tư', 'Cơ sở y tế', r => r.cdt], tp: ['Tỉnh/TP', 'Tỉnh/TP', r => r.tinh || 'Chưa rõ'], nh: ['Nhóm test', 'Nhóm test', r => r.nhom] };
+const XEM = VIEWS[new URLSearchParams(location.search).get('xem')] ? new URLSearchParams(location.search).get('xem') : '';
+let RANK = [];
+function state() {
+  const p = new URLSearchParams();
+  [['q', $('#q').value], ['from', $('#from').value], ['to', $('#to').value], ['metric', M()], ['tinh', $('#tinh').value],
+   ['nhom', [...document.querySelectorAll('#nhomList input:checked')].map(i => i.value).join('|')],
+   ['nt', pick.nt], ['hk', pick.hk], ['hn', pick.hn], ['cdt', pick.cdt]].forEach(([k, v]) => { if (v) p.set(k, v); });
+  return p;
+}
+function fromUrl() {
+  const p = new URLSearchParams(location.search), set = (id, v) => { if (v && [...$(id).options].some(o => o.value === v)) $(id).value = v; };
+  $('#q').value = p.get('q') || ''; set('#from', p.get('from')); set('#to', p.get('to')); set('#metric', p.get('metric')); set('#tinh', p.get('tinh'));
+  const nh = new Set((p.get('nhom') || '').split('|').filter(Boolean)); document.querySelectorAll('#nhomList input').forEach(i => i.checked = nh.has(i.value));
+  ['nt', 'hk', 'hn', 'cdt'].forEach(k => { if (p.get(k)) pick[k] = p.get(k); });
+  if (XEM) { document.body.classList.add('rank-mode'); $('#rank').hidden = false; document.title = VIEWS[XEM][0] + ' – trúng thầu'; }
+}
+function rank() {
+  const [title, col, key, label] = VIEWS[XEM], m = new Map();
+  view.forEach(r => [].concat(key(r)).forEach(k => { if (!k) return; const g = m.get(k) || { k, tien: 0, sl: 0, n: 0, goi: new Set(), names: new Map() };
+    g.tien += r.tien; g.sl += r.sl_test || 0; g.n++; g.goi.add(r.ma); const nm = label ? label(r) : k; g.names.set(nm, (g.names.get(nm) || 0) + 1); m.set(k, g); }));
+  const by = M() === 'sl' ? 'sl' : 'tien';
+  RANK = [...m.values()].map(g => ({ ...g, label: [...g.names].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => b[by] - a[by]);
+  const tot = RANK.reduce((s, g) => s + g[by], 0) || 1;
+  RANK.forEach((g, i) => { g.i = i + 1; g.pct = g[by] / tot * 100; });
+  $('#rankTitle').textContent = `${title} – danh sách đầy đủ`;
+  $('#rankCol').textContent = col;
+  $('#rankCap').textContent = `${num(RANK.length)} ${col.toLowerCase()} · xếp theo ${by === 'sl' ? 'số lượng test' : 'giá trị'} · theo bộ lọc bên trái`;
+  rankRows();
+}
+function rankRows() {
+  const q = fold($('#rq').value.trim());
+  $('#rankRows').innerHTML = RANK.filter(g => !q || fold(g.label).includes(q)).map(g => `<tr><td class="n sub2">${g.i}</td><td>${esc(g.label)}</td>
+    <td class="n">${num(g.tien)}</td><td class="n">${g.sl ? num(g.sl) : '–'}</td><td class="n">${g.pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</td>
+    <td class="n">${num(g.goi.size)}</td><td class="n">${num(g.n)}</td></tr>`).join('') || '<tr><td colspan="7" class="sub2">Không có dữ liệu.</td></tr>';
+}
+document.addEventListener('click', e => { const a = e.target.closest('a[data-xem]'); if (!a) return; e.preventDefault();
+  const p = state(); p.set('xem', a.dataset.xem); window.open('/trung-thau?' + p.toString(), '_blank', 'noopener'); });
+$('#rq').addEventListener('input', rankRows);
+$('#back').addEventListener('click', e => { e.preventDefault(); location.href = '/trung-thau?' + state().toString(); });
+$('#rcsv').addEventListener('click', () => {
+  const [title, col] = VIEWS[XEM], rows = [['#', col, 'Giá trị (đ)', 'Số lượng test', 'Thị phần (%)', 'Số gói', 'Số dòng'], ...RANK.map(g => [g.i, g.label, Math.round(g.tien), g.sl, g.pct.toFixed(2), g.goi.size, g.n])];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'xep-hang-' + XEM + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); });
 
 fetch('/api/trung-thau').then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
