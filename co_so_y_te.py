@@ -24,6 +24,8 @@ TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng m
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
 DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
+DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # mặt hàng không đưa vào Dashboard
+DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết"}  # tên nhóm hiển thị trên Dashboard
 # dấu hiệu test nhanh trong mô tả / nhãn hiệu, dùng khi tên hàng không có chữ test/que thử/khay thử
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
@@ -146,8 +148,9 @@ def results(kw):
         if not nhom or not r.get("maTbmt"):
             continue
         tinh = g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), ""))
-        if nhom not in DASH_BO:
-            items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], nhom,
+        # Dashboard: bỏ HbA1c (theo yêu cầu người dùng), nhóm còn lại chỉ là đường huyết
+        if nhom not in DASH_BO and not DASH_BO_RE.search(g.norm(ten(r) + " " + g.clean(r.get("nhanHieu")))):
+            items.append([r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], DASH_TEN.get(nhom, nhom),
                           ten(r), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
                           g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), don_gia(r),
                           "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or "", sl_test(r)])
@@ -240,7 +243,7 @@ def build():
     items.sort(key=lambda r: r[3], reverse=True)
     for r, h in zip(items, canon_brands(items, 6)):
         r.append(h)
-    json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"] if x["ten"] not in DASH_BO],
+    json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [DASH_TEN.get(x["ten"], x["ten"]) for x in kw["nhom"] if x["ten"] not in DASH_BO],
                "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan"],
                "rows": items}, open(TT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
