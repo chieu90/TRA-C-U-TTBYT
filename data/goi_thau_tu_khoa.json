@@ -82,11 +82,13 @@
         "RSV",
         "adeno",
         "hợp bào hô hấp",
-        "hô hấp",
         "andeno",
         "flu a",
         "flu b",
-        "sars cov"
+        "sars cov",
+        "bệnh hô hấp",
+        "bệnh đường hô hấp",
+        "tác nhân gây bệnh đường hô hấp"
       ]
     },
     {
@@ -201,16 +203,6 @@
       ]
     },
     {
-      "ten": "Aspergillus / nấm",
-      "tu": [
-        "aspergillus",
-        "galactomannan",
-        "galactomanan",
-        "cryptococ",
-        "candida"
-      ]
-    },
-    {
       "ten": "Vi khuẩn kháng carbapenem",
       "tu": [
         "carbapenem",
@@ -315,6 +307,9 @@
     "sốt rét",
     "malaria",
     "ký sinh trùng",
-    "kí sinh trùng"
+    "kí sinh trùng",
+    "aspergillus",
+    "galactomannan",
+    "galactomanan"
   ]
 }

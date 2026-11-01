@@ -148,6 +148,29 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   .tabbar a svg { width: 22px; height: 22px; }
   .tabbar a.on { color: var(--accent); background: var(--accent-soft); }
 }
+/* màn hình rộng: bộ lọc ở thanh bên trái giống trang KQ, danh sách gói bên phải */
+@media (min-width: 1000px) {
+  .wrap { max-width: 1440px; }
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .side { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: grid; gap: 12px; }
+  .side .stickybar { position: static; margin: 0; }
+  .side .panel { padding: 14px; }
+  .side .row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .side .row > * { width: 100%; flex: none; }
+  .side .opts { flex-direction: column; gap: 10px; margin-top: 10px; }
+  .side .opts label { flex-direction: column; align-items: stretch; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .side .opts label:has(input[type=checkbox]) { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-size: 13.5px; font-weight: 500; }
+  .side .opts select { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font: 14px inherit; text-transform: none; }
+  .side .chips { flex-direction: column; gap: 2px; margin-top: 12px; }
+  .side .chips::before { content: "Nhóm test"; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .side .chips label { display: block; }
+  .side .chips span { display: flex; justify-content: space-between; border: 0; border-radius: 8px; padding: 6px 8px; color: var(--text); background: transparent; }
+  .side .chips span:hover { background: var(--line-2); }
+  .side .chips input:checked + span { background: var(--accent-soft); color: var(--accent); }
+  .side .chips input:checked + span b { color: var(--accent); }
+  .side .chips span b { color: var(--muted); font-weight: 500; }
+  .main .bar { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+}
 </style>
 </head>
 <body>
@@ -159,7 +182,8 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   <p class="sub" id="sub">Dữ liệu từ <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>, cập nhật khi có lệnh (xem thời điểm cập nhật bên dưới).</p>
 </div></header>
 
-<div class="wrap">
+<div class="wrap"><div class="layout">
+  <aside class="side">
   <section class="panel stickybar">
     <div class="row">
       <input type="search" id="q" placeholder="Tìm trong mặt hàng, thông số… (vd: HIV, Dengue NS1)">
@@ -186,10 +210,12 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
     </div>
     <div class="chips" id="groups"></div>
   </section>
-
+  </aside>
+  <main class="main">
   <div class="bar"><div class="status" id="status">Đang tải…</div><div class="upd"><span class="status" id="updMsg"></span><button id="updBtn" class="pri" type="button" hidden>Cập nhật ngay</button></div></div>
   <div class="list" id="list"></div>
-</div>
+  </main>
+</div></div>
 
 <script>
 const $ = s => document.querySelector(s);
