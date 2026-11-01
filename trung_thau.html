@@ -258,13 +258,14 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
     <section class="card"><h2>Nhà thầu trúng nhiều nhất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
     <section class="card"><h2>Hãng sản xuất</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
     <section class="card"><h2>Nhóm test</h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
+    <section class="card"><h2>Chủ đầu tư</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
     <section class="card"><h2>Tỉnh/TP</h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
   </div>
 
   <section class="card full">
     <h2>Dải đơn giá trúng theo nhóm test</h2>
-    <p class="cap">Chỉ tính mặt hàng có đơn vị tính là test / que / khay (giá một lần thử)</p>
-    <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th></tr></thead><tbody id="gia"></tbody></table></div>
+    <p class="cap">Đơn giá: chỉ tính mặt hàng có đơn vị test / que / khay (giá một lần thử, bỏ giá trên 1 triệu đ/test do nhập sai). Số lượng: tổng số test trúng thầu theo hãng.</p>
+    <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th><th class="n">Tổng SL test</th><th class="n">InTec</th><th class="n">Wondfo</th><th class="n">Genesee</th><th class="n">Hãng khác</th></tr></thead><tbody id="gia"></tbody></table></div>
   </section>
 
   <section class="card full">
@@ -303,7 +304,9 @@ const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFracti
 function load(d) {
   const c = d.cot;
   R = d.rows.map(a => { const o = {}; c.forEach((k, i) => o[k] = a[i]); o.tien = (o.sl || 0) * (o.don_gia || 0);
-    o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi'; o.hk = brandKey(o.hang) || 'khong ghi';
+    o.hang = (o.hang || '').replace(/^[\s"',.;-]+|[\s"',.;-]+$/g, '') || 'Không ghi';
+    // hãng đã chuẩn hóa sẵn ở bước dựng dữ liệu (gộp tên ghi nhiều kiểu, sửa lỗi chính tả)
+    o.hk = o.hang_chuan || brandKey(o.hang) || 'Không ghi rõ'; o.hn = o.hang_chuan || o.hang;
     o.s = fold([o.ma, o.cdt, o.ten, o.hang, o.nhan, o.ky_ma, o.nha_thau].join(' ')); return o; });
   const months = [...new Set(R.map(r => r.ngay.slice(0, 7)))].sort();
   const opt = m => `<option value="${m}">Tháng ${+m.slice(5)}/${m.slice(0, 4)}</option>`;
@@ -321,9 +324,9 @@ function apply() {
   const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
   $('#nhomBtn').textContent = (!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : `${nhom.size} nhóm test`) + ' ▾';
   view = R.filter(r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom.size || nhom.has(r.nhom)) && (!tinh || r.tinh === tinh)
-    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk));
+    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk) && (!pick.cdt || r.cdt === pick.cdt));
   page = 0;
-  $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn]].filter(Boolean)
+  $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn], pick.cdt && ['cdt', 'Chủ đầu tư: ' + pick.cdt]].filter(Boolean)
     .map(([k, s]) => `<button data-k="${k}" type="button">${esc(s)} ✕</button>`).join('');
   render();
 }
@@ -363,7 +366,7 @@ function hover(el, lines) {
 
 function render() {
   const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.sl_test || 0), 0);
-  const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk));
+  const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk).filter(k => k !== 'Không ghi rõ'));
   $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
       : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu test nhanh</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
     <div class="kpi"><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
@@ -384,13 +387,22 @@ function render() {
   document.querySelectorAll('.by').forEach(e => e.textContent = sl ? 'Top 10 theo số lượng test' : 'Top 10 theo giá trị');
   document.querySelector('.by2').textContent = sl ? 'Số lượng test theo nhóm' : 'Giá trị trúng theo nhóm';
   hbar($('#nt'), group(r => r.nha_thau.split('; ').filter(Boolean)).slice(0, 10), d => { pick.nt = d.k; apply(); });
-  hbar($('#hang'), group(r => r.hk, r => r.hang).slice(0, 10), d => { pick.hk = d.k; pick.hn = d.label; apply(); });
+  hbar($('#hang'), group(r => r.hk, r => r.hn).filter(d => d.k !== 'Không ghi rõ').slice(0, 10), d => { pick.hk = d.k; pick.hn = d.label; apply(); });
+  hbar($('#cdt'), group(r => r.cdt).slice(0, 10), d => { pick.cdt = d.k; apply(); });
   hbar($('#nh'), group(r => r.nhom), d => { const i = [...document.querySelectorAll('#nhomList input')].find(x => x.value === d.k); if (i) { i.checked = !i.checked; apply(); } });
   hbar($('#tp'), group(r => r.tinh || 'Chưa rõ').slice(0, 10), d => { if (d.k !== 'Chưa rõ') { $('#tinh').value = d.k; apply(); } });
   // dải giá
-  const gp = new Map(); view.filter(r => UNIT1.test((r.dvt || '').trim()) && r.don_gia > 0).forEach(r => (gp.get(r.nhom) || gp.set(r.nhom, []).get(r.nhom)).push(r.don_gia));
-  $('#gia').innerHTML = [...gp].sort((a, b) => b[1].length - a[1].length).map(([k, v]) => { v.sort((a, b) => a - b); const md = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
-    return `<tr><td>${esc(k)}</td><td class="n">${num(v.length)}</td><td class="n">${num(v[0])}</td><td class="n"><b>${num(md)}</b></td><td class="n">${num(v[v.length - 1])}</td></tr>`; }).join('') || '<tr><td colspan="5" class="sub2">Không có dữ liệu.</td></tr>';
+  // số lượng test theo hãng (InTec, Wondfo, Genesee, còn lại) cho từng nhóm
+  const FOCUS = ['intec', 'wondfo', 'genesee'], brandOf = r => FOCUS.find(b => fold(r.hn).includes(b)) || 'khac';
+  const gp = new Map(), q = new Map(), qt = { tong: 0, intec: 0, wondfo: 0, genesee: 0, khac: 0 };
+  view.forEach(r => { const o = q.get(r.nhom) || q.set(r.nhom, { tong: 0, intec: 0, wondfo: 0, genesee: 0, khac: 0 }).get(r.nhom); const n = r.sl_test || 0;
+    o.tong += n; o[brandOf(r)] += n; qt.tong += n; qt[brandOf(r)] += n;
+    if (UNIT1.test((r.dvt || '').trim()) && r.don_gia > 0 && r.don_gia <= 1e6) (gp.get(r.nhom) || gp.set(r.nhom, []).get(r.nhom)).push(r.don_gia); });
+  const qc = o => `<td class="n"><b>${num(o.tong)}</b></td>` + FOCUS.concat('khac').map(b => `<td class="n">${o[b] ? num(o[b]) : '–'}</td>`).join('');
+  $('#gia').innerHTML = [...q.keys()].sort((a, b) => q.get(b).tong - q.get(a).tong).map(k => { const v = (gp.get(k) || []).sort((a, b) => a - b);
+    const md = !v.length ? null : v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+    return `<tr><td>${esc(k)}</td><td class="n">${num(v.length)}</td><td class="n">${num(v[0])}</td><td class="n"><b>${num(md)}</b></td><td class="n">${num(v[v.length - 1])}</td>${qc(q.get(k))}</tr>`; }).join('')
+    + (q.size ? `<tr><td><b>Tổng</b></td><td colspan="4"></td>${qc(qt)}</tr>` : '') || '<tr><td colspan="10" class="sub2">Không có dữ liệu.</td></tr>';
   rows();
 }
 

@@ -27,7 +27,10 @@ DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trú
 # dấu hiệu test nhanh trong mô tả / nhãn hiệu, dùng khi tên hàng không có chữ test/que thử/khay thử
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
-                         r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch")
+                         r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch|"
+                         r"chất thử|assay|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
+# hãng chỉ làm hóa chất chạy máy / ELISA / PCR / vi sinh: không phải test nhanh
+NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun")
 
 ACCESSORY_RE = re.compile(r"^(pin|kim|bút|lancet|dung dịch|vỏ|hộp đựng|giá đỡ|máy|thiết bị|hệ thống)\b|\bpin\b|\bcột\b|hóa chất|hoá chất")
 PER_TEST = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
@@ -86,7 +89,7 @@ def classify(r, kw):
     # ELISA, CLIA, PCR, hóa chất chạy máy, pin/phụ kiện máy: xét trong tên + nhãn hiệu
     # (mô tả test nhanh hay ghi "độ nhạy so với PCR/ELISA" nên không xét mô tả)
     short = g.norm(name + " " + g.clean(r.get("nhanHieu")))
-    if NOT_RAPID_RE.search(short) or ACCESSORY_RE.search(g.norm(name)) or any(b and b in " " + g.norm(name) + " " for b in kw["_bo"]):
+    if NOT_RAPID_RE.search(short) or NOT_RAPID_MAKER.search(g.norm(r.get("hangSanXuat") or "")) or ACCESSORY_RE.search(g.norm(name)) or any(b and b in " " + g.norm(name) + " " for b in kw["_bo"]):
         return None
     if any(c in g.norm(name) for c in kw["_can"]):  # tên đã ghi rõ test/que thử/khay thử...
         return g.group_of(name, kw, uom)
@@ -158,13 +161,87 @@ def results(kw):
     return pk, items
 
 
+import difflib, unicodedata
+
+BRAND_STOP = set("cong ty tnhh co phan cty ct ctcp tap doan san xuat hang thuong hieu nha may hangzhou hang zhou zhejiang beijing shanghai guangzhou "
+                 "shenzhen xiamen jiangsu nanjing wuhan tianjin changchun qingdao jiangxi shandong hunan suzhou anhui dai loan taiwan trung quoc "
+                 "china han quoc korea republic viet nam vietnam my usa duc germany nhat ban japan an do india anh uk phap italy y canada "
+                 "province of the and inc ltd co corp corporation gmbh llc limited company sa ag srl".split())
+GENERIC = {"khac", "ap ung", "dap ung", "theo", "dengue", "thc", "drug", "drugs", "panel", "test", "khong", "khong co", "n a", "na", "g",
+           "a", "hop", "pl", "que", "phat", "thanh"}
+# thương hiệu sản phẩm ghi vào cột hãng -> hãng sản xuất
+BRAND_ALIAS = {"uright": "taidoc", "u right": "taidoc", "fora": "taidoc", "oncallplus": "acon", "on call": "acon", "oncall": "acon",
+               "bioline": "sd biosensor", "sd bioline": "sd biosensor", "sd": "sd biosensor", "standard": "sd biosensor",
+               "oriengene": "orient", "accu": "roche", "onetouch": "lifescan", "determine": "abbott", "mp biomedicals": "mp biomedical", "sd bionline": "sd biosensor", "ctk": "ctk biotech"}
+
+
+def _fold(t):
+    return unicodedata.normalize("NFD", (t or "").replace("đ", "d").replace("Đ", "D")).encode("ascii", "ignore").decode().lower()
+
+
+def maker_text(h):
+    """Phần ghi hãng của que thử khi cột hãng ghi cả que lẫn kim: 'Que: Roche...; Kim: Asahi...' -> 'Roche...'."""
+    t = h or ""
+    m = re.search(r"(?:que(?:\s*sx\s*tại)?|hãng sản xuất test)\s*:\s*([^;]+?)(?:[;,]?\s*-?\s*kim\b|;|$)", t, re.I)
+    return m.group(1) if m else t
+
+
+def brand_key(h):
+    w = [x for x in re.sub(r"[^a-z0-9]+", " ", re.sub(r"\(.*?\)", " ", _fold(maker_text(h)))).split() if x not in BRAND_STOP]
+    if not w:
+        return ""
+    return w[0] + " " + w[1] if len(w[0]) <= 3 and len(w) > 1 else w[0]
+
+
+def brand_label(h):
+    """Tên hiển thị: bỏ quốc gia / ghi chú sau dấu / hoặc ' - '."""
+    t = re.split(r"\s*/\s*|\s+-\s+|;", maker_text(h).strip(" \"',.;-"))[0]
+    return t.strip(" \"',.;-") or h
+
+
+def canon_brands(items, idx_hang):
+    """Gộp tên hãng ghi nhiều kiểu về một tên chuẩn: khóa theo từ chính, tên chứa sẵn khóa của hãng lớn, sửa lỗi chính tả gần giống."""
+    from collections import Counter
+    keys = [brand_key(r[idx_hang]) for r in items]
+    cnt = Counter(k for k in keys if k)
+    majors = sorted([k for k, n in cnt.items() if n >= 5 and len(k.replace(" ", "")) >= 4], key=lambda k: -len(k))
+    out = []
+    for r, k in zip(items, keys):
+        compact = re.sub(r"[^a-z0-9]", "", _fold(maker_text(r[idx_hang])))
+        # hãng lớn được nhắc tới sớm nhất trong chuỗi (vd "Genesee ... (chủ sở hữu: CTK)" -> Genesee)
+        pos = [(compact.find(m.replace(" ", "")), -len(m), m) for m in majors if m.replace(" ", "") in compact]
+        hit = min(pos)[2] if pos else None
+        if not hit and k and cnt[k] < 20:
+            close = difflib.get_close_matches(k, majors, n=1, cutoff=0.8)
+            hit = close[0] if close and close[0][0] == k[0] else None
+        k = BRAND_ALIAS.get(hit or k, hit or k)
+        out.append("" if (not k or k in GENERIC or len(r[idx_hang]) > 90) else k)
+    # gộp các khóa gần giống nhau (lỗi chính tả: "sd biosenso" -> "sd biosensor") về khóa nhiều dòng hơn
+    c2 = Counter(k for k in out if k)
+    order = sorted(c2, key=lambda k: -c2[k])
+    merge = {}
+    for i, k in enumerate(order):
+        for big in order[:i]:
+            if big not in merge and big[0] == k[0] and difflib.SequenceMatcher(None, k, big).ratio() >= 0.88:
+                merge[k] = big
+                break
+    out = [merge.get(k, k) for k in out]
+    labels = {}
+    for r, k in zip(items, out):
+        if k:
+            labels.setdefault(k, Counter())[brand_label(r[idx_hang])] += 1
+    return [labels[k].most_common(1)[0][0] if k else "Không ghi rõ" for k in out]
+
+
 def build():
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items = results(kw)
     items.sort(key=lambda r: r[3], reverse=True)
+    for r, h in zip(items, canon_brands(items, 6)):
+        r.append(h)
     json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": [x["ten"] for x in kw["nhom"] if x["ten"] not in DASH_BO],
-               "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test"],
+               "cot": ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan"],
                "rows": items}, open(TT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
     for p in goi:
