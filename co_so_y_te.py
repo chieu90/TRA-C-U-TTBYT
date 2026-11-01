@@ -24,8 +24,8 @@ TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng m
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
 YEAR = "2026"
 DASH_BO = {"Que thử nước tiểu"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
-DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # mặt hàng không đưa vào Dashboard
-DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết"}  # tên nhóm hiển thị trên Dashboard
+DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c|\bcrp\b|c-reactive|protein phản ứng c")  # mặt hàng không đưa vào Dashboard
+DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết", "Troponin / CRP": "Troponin"}  # tên nhóm hiển thị trên Dashboard
 # dấu hiệu test nhanh trong mô tả / nhãn hiệu, dùng khi tên hàng không có chữ test/que thử/khay thử
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
