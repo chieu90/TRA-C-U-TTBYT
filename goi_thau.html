@@ -198,7 +198,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
       <input type="search" id="q" placeholder="Tìm trong mặt hàng, thông số… (vd: HIV, Dengue NS1)">
       <input type="search" id="cdt" list="cdtList" placeholder="Chủ đầu tư / tỉnh (vd: Bệnh viện Nhi đồng, Đồng Nai)">
       <datalist id="cdtList"></datalist>
-      <button id="fbtn" class="fbtn" type="button">Bộ lọc ▾</button><button id="csv">Tải Excel (CSV)</button>
+      <button id="fbtn" class="fbtn" type="button">Bộ lọc ▾</button><button id="csv">Tải Excel</button>
     </div>
   </section>
   <section class="panel filters">
@@ -342,12 +342,25 @@ function groups() {
 function csv() {
   const rows = [['Mã TBMT','Hình thức','Tên gói','Chủ đầu tư','Tỉnh/TP','Hạn','Trạng thái','Nhóm','Mặt hàng','Mã lô','ĐVT','Số lượng','Giá trần lô','Đơn giá ước tính','Giá gói','Ký mã hiệu','Hãng','Xuất xứ','Thông số kỹ thuật','Giấy phép bán hàng (ủy quyền)','Nguồn / trích dẫn','Thời gian thực hiện HĐ','Số ngày thực hiện HĐ','Link']];
   (window._view || []).forEach(p => p.items.forEach(h => rows.push([p.ma, p.hinh_thuc, p.ten, p.cdt, p.tinh || '', p.han, daysLeft(p.han) > 0 ? 'Đang mở thầu' : 'Đã đóng thầu', h.nhom, h.ten, h.lo, h.dvt, h.sl, h.gia_lo, h.don_gia, p.gia_goi, h.ky_ma, h.hang, h.xuat_xu, h.tskt, (h.uy_quyen || p.uy_quyen || {}).muc || '', [((h.uy_quyen || p.uy_quyen || {}).nguon || ''), ((h.uy_quyen || p.uy_quyen || {}).trich || '')].filter(Boolean).join(': '), (p.tg_hd || {}).text || '', (p.tg_hd || {}).ngay || '', p.link])));
-  const text = '﻿' + rows.map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'goi-thau-' + new Date().toISOString().slice(0, 10) + '.csv';
-  a.click();
+  saveXlsx(rows, 'goi-thau');
 }
+// Xuất file Excel (.xlsx) thật; thư viện SheetJS chỉ tải khi bấm nút
+function saveXlsx(rows, name) {
+  const go = () => {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = rows[0].map((_, i) => ({ wch: Math.min(60, Math.max(8, ...rows.slice(0, 300).map(r => String(r[i] ?? '').length + 2))) }));
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: rows[0].length - 1 } }) };
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Du lieu');
+    XLSX.writeFile(wb, name + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  };
+  if (window.XLSX) return go();
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = go; s.onerror = () => alert('Không tải được thư viện Excel, vui lòng thử lại.');
+  document.head.appendChild(s);
+}
+
 
 $('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });

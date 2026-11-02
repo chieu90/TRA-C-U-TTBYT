@@ -323,7 +323,7 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
   <button type="button" class="side-btn" id="sideBtn" aria-controls="side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Ẩn bộ lọc</span></button>
   <section class="card full" id="rank" hidden>
     <div class="bar" style="margin:0 0 10px"><div><h2 id="rankTitle"></h2><p class="cap" id="rankCap" style="margin:0"></p></div>
-      <div class="row" style="gap:8px"><input type="search" id="rq" placeholder="Tìm trong danh sách…" style="flex:0 1 240px"><button id="rcsv" type="button">Tải Excel (CSV)</button><a class="more-link" id="back" href="/trung-thau">‹ Về Dashboard</a></div></div>
+      <div class="row" style="gap:8px"><input type="search" id="rq" placeholder="Tìm trong danh sách…" style="flex:0 1 240px"><button id="rcsv" type="button">Tải Excel</button><a class="more-link" id="back" href="/trung-thau">‹ Về Dashboard</a></div></div>
     <div class="scroll"><table class="tbl"><thead><tr><th class="n">#</th><th id="rankCol">Tên</th><th class="n">Giá trị (đ)</th><th class="n">Số lượng test</th><th class="n">Thị phần</th><th class="n">Số gói</th><th class="n">Số dòng</th></tr></thead><tbody id="rankRows"></tbody></table></div>
   </section>
 
@@ -352,7 +352,7 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
   </section>
 
   <section class="card full">
-    <div class="bar" style="margin:0 0 10px"><div><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>Chi tiết mặt hàng trúng thầu</h2><p class="cap" id="cnt" style="margin:0"></p></div><button id="csv">Tải Excel (CSV)</button></div>
+    <div class="bar" style="margin:0 0 10px"><div><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>Chi tiết mặt hàng trúng thầu</h2><p class="cap" id="cnt" style="margin:0"></p></div><button id="csv">Tải Excel</button></div>
     <div class="scroll"><table class="tbl"><thead><tr><th>Ngày KQ</th><th>Cơ sở y tế</th><th>Mặt hàng</th><th>Hãng / ký mã</th><th>Nhà thầu trúng</th><th class="n">SL</th><th class="n">Đơn giá</th><th class="n">Thành tiền</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="pager"><button id="prev">‹ Trước</button><span id="pg"></span><button id="next">Sau ›</button></div>
   </section>
@@ -520,11 +520,26 @@ const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1
 
 function csv() {
   const head = ['Ngày KQ', 'Mã gói', 'Cơ sở y tế', 'Tỉnh/TP', 'Nhóm test', 'Mặt hàng', 'Hãng sản xuất', 'Nhãn hiệu', 'Ký mã hiệu', 'Xuất xứ', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền', 'Nhà thầu trúng'];
-  const text = '﻿' + [head, ...view.map(r => [day(r.ngay), r.ma, r.cdt, r.tinh, r.nhom, r.ten, r.hang, r.nhan, r.ky_ma, r.xuat_xu, r.dvt, r.sl, r.don_gia, r.tien, r.nha_thau])]
-    .map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'trung-thau-test-nhanh-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+  saveXlsx([head, ...view.map(r => [day(r.ngay), r.ma, r.cdt, r.tinh, r.nhom, r.ten, r.hang, r.nhan, r.ky_ma, r.xuat_xu, r.dvt, r.sl, r.don_gia, r.tien, r.nha_thau])],
+    PG.path === '/duong-huyet' ? 'trung-thau-duong-huyet' : 'trung-thau-test-nhanh');
 }
+// Xuất file Excel (.xlsx) thật; thư viện SheetJS chỉ tải khi bấm nút
+function saveXlsx(rows, name) {
+  const go = () => {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = rows[0].map((_, i) => ({ wch: Math.min(60, Math.max(8, ...rows.slice(0, 300).map(r => String(r[i] ?? '').length + 2))) }));
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: rows[0].length - 1 } }) };
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Du lieu');
+    XLSX.writeFile(wb, name + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  };
+  if (window.XLSX) return go();
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = go; s.onerror = () => alert('Không tải được thư viện Excel, vui lòng thử lại.');
+  document.head.appendChild(s);
+}
+
 
 // ===== danh sách đầy đủ ở tab mới (?xem=nt|hang|cdt|tp|nh, kèm bộ lọc hiện tại) =====
 const VIEWS = { nt: ['Nhà thầu trúng', 'Nhà thầu', r => r.nha_thau.split('; ').filter(Boolean)], hang: ['Hãng sản xuất', 'Hãng', r => r.hk, r => r.hn],
@@ -569,9 +584,8 @@ document.addEventListener('click', e => { const a = e.target.closest('a[data-xem
 $('#rq').addEventListener('input', rankRows);
 $('#back').addEventListener('click', e => { e.preventDefault(); location.href = PG.path + '?' + state().toString(); });
 $('#rcsv').addEventListener('click', () => {
-  const [title, col] = VIEWS[XEM], rows = [['#', col, 'Giá trị (đ)', 'Số lượng test', 'Thị phần (%)', 'Số gói', 'Số dòng'], ...RANK.map(g => [g.i, g.label, Math.round(g.tien), g.sl, g.pct.toFixed(2), g.goi.size, g.n])];
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'xep-hang-' + XEM + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); });
+  const [title, col] = VIEWS[XEM], rows = [['#', col, 'Giá trị (đ)', 'Số lượng test', 'Thị phần (%)', 'Số gói', 'Số dòng'], ...RANK.map(g => [g.i, g.label, Math.round(g.tien), g.sl, +g.pct.toFixed(2), g.goi.size, g.n])];
+  saveXlsx(rows, 'xep-hang-' + XEM); });
 
 // ===== bản đồ: tô đậm nhạt theo tổng giá trị / số lượng của từng tỉnh (34 tỉnh/thành từ 01/7/2025) =====
 const OLD2NEW = { 'Hà Giang': 'Tuyên Quang', 'Yên Bái': 'Lào Cai', 'Bắc Kạn': 'Thái Nguyên', 'Vĩnh Phúc': 'Phú Thọ', 'Hòa Bình': 'Phú Thọ', 'Bắc Giang': 'Bắc Ninh',

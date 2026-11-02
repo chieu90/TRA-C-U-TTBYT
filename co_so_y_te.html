@@ -171,7 +171,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   <section class="panel stickybar">
     <div class="row">
       <input type="search" id="q" placeholder="Tên cơ sở, tỉnh hoặc mã gói (vd: Chợ Rẫy, Nghệ An, IB2600…)">
-      <button id="fbtn" class="fbtn" type="button">Bộ lọc ▾</button><button id="csv">Tải Excel (CSV)</button>
+      <button id="fbtn" class="fbtn" type="button">Bộ lọc ▾</button><button id="csv">Tải Excel</button>
     </div>
   </section>
   <section class="panel filters">
@@ -256,12 +256,25 @@ function counts() {
 function csv() {
   const rows = [['Cơ sở y tế', 'Tỉnh/TP', 'Mã gói', 'Tên gói', 'Hình thức', 'Tình trạng', 'Ngày đăng', 'Hạn đóng thầu', 'Ngày có KQ', 'Nhóm test', 'Số mặt hàng test', 'Giá gói', 'Giá trúng test nhanh', 'Link']];
   VIEW.forEach(c => c.goi.forEach(p => rows.push([c.ten, c.tinh, p.ma, p.ten, p.hinh_thuc, TT[tt(p)][0], p.dang, p.han, p.kq || '', p.nhom.join(', '), p.so_mh ?? '', p.gia_tri ?? '', p.gia_trung ?? '', p.link])));
-  const text = '﻿' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  a.download = 'co-so-y-te-goi-thau-test-nhanh-' + new Date().toISOString().slice(0, 10) + '.csv';
-  a.click();
+  saveXlsx(rows, 'co-so-y-te-goi-thau-test-nhanh');
 }
+// Xuất file Excel (.xlsx) thật; thư viện SheetJS chỉ tải khi bấm nút
+function saveXlsx(rows, name) {
+  const go = () => {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = rows[0].map((_, i) => ({ wch: Math.min(60, Math.max(8, ...rows.slice(0, 300).map(r => String(r[i] ?? '').length + 2))) }));
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: rows[0].length - 1 } }) };
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Du lieu');
+    XLSX.writeFile(wb, name + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  };
+  if (window.XLSX) return go();
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = go; s.onerror = () => alert('Không tải được thư viện Excel, vui lòng thử lại.');
+  document.head.appendChild(s);
+}
+
 
 fetch('/api/co-so-y-te').then(r => r.json()).then(d => {
   DATA = d;
