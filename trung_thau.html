@@ -220,6 +220,52 @@ body.rank-mode #rank { display: block; }
 }
 select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font-family: inherit; font-size: 14px; }
 @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } .kpi.big { grid-column: 1 / -1; } .grid2 { grid-template-columns: 1fr; } }
+/* ===== giao diện màu sắc cho trang KQ ===== */
+:root { --c-blue: #2a78d6; --c-orange: #eb6834; --c-aqua: #1baf7a; --c-violet: #6250d6; --c-magenta: #d55181; --bg2: #eef3fb; }
+@media (prefers-color-scheme: dark) { :root { --c-blue: #3987e5; --c-orange: #d95926; --c-aqua: #199e70; --c-violet: #9085e9; --c-magenta: #d55181; --bg2: #101a2a; } }
+[data-c="blue"] { --c: var(--c-blue); } [data-c="orange"] { --c: var(--c-orange); } [data-c="aqua"] { --c: var(--c-aqua); }
+[data-c="violet"] { --c: var(--c-violet); } [data-c="magenta"] { --c: var(--c-magenta); }
+body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10), transparent 60%), var(--bg); }
+.card { border-radius: 18px; box-shadow: var(--shadow); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.card[data-c]::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 30%, transparent)); }
+.card h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.card h2 .more-link { margin-left: auto; }
+.hi { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; flex: none;
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.hi svg { width: 16px; height: 16px; }
+/* ô số liệu */
+.kpi { position: relative; border-radius: 18px; box-shadow: var(--shadow); padding: 16px 18px 14px; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c, var(--c-blue)) 9%, var(--surface)) 0%, var(--surface) 60%); }
+.kpi .ki { position: absolute; right: 14px; top: 14px; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
+  color: var(--c, #fff); background: color-mix(in srgb, var(--c, #fff) 15%, transparent); }
+.kpi .ki svg { width: 19px; height: 19px; }
+.kpi .val { font-size: 30px; letter-spacing: -.01em; }
+.kpi.big { color: #fff; border: 0; background: linear-gradient(135deg, #0b5cad 0%, #1270c9 45%, #0e9f9a 100%); }
+.kpi.big .lbl, .kpi.big .note { color: rgba(255,255,255,.85); }
+.kpi.big .ki { color: #fff; background: rgba(255,255,255,.18); }
+.kpi.big .val { font-size: 42px; }
+/* biểu đồ cột theo tháng */
+.cols .c i { max-width: 34px; border-radius: 8px 8px 2px 2px; background: linear-gradient(180deg, var(--c-blue), color-mix(in srgb, var(--c-blue) 45%, var(--surface))); }
+.cols .c:hover i { filter: brightness(1.12) saturate(1.1); }
+/* thanh ngang xếp hạng */
+.hb .r { padding: 5px 6px; }
+.hb .n { display: flex; align-items: center; gap: 8px; }
+.hb .rk { flex: none; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
+  color: var(--c, var(--c-blue)); background: color-mix(in srgb, var(--c, var(--c-blue)) 13%, transparent); }
+.hb .r:nth-child(-n+3) .rk { color: #fff; background: var(--c, var(--c-blue)); }
+.hb .t i { height: 12px; border-radius: 0 6px 6px 0; background: linear-gradient(90deg, color-mix(in srgb, var(--c, var(--c-blue)) 55%, var(--surface)), var(--c, var(--c-blue))); }
+.hb .r:hover { background: color-mix(in srgb, var(--c, var(--c-blue)) 8%, transparent); }
+/* bảng */
+.tbl th { background: color-mix(in srgb, var(--c-blue) 8%, var(--surface)); color: var(--muted); }
+.tbl tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--c-blue) 3%, transparent); }
+.tbl tbody tr:hover td { background: color-mix(in srgb, var(--c-blue) 7%, transparent); }
+.tbl .grp { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; color: var(--c-aqua); background: color-mix(in srgb, var(--c-aqua) 12%, transparent); margin-bottom: 3px; }
+/* thanh lọc bên trái */
+.side { border-radius: 18px; }
+@media (min-width: 1000px) { .side .sl { display: flex; align-items: center; gap: 6px; } }
+@media (max-width: 760px) { .kpi:not(.big) .ki { display: none; } .kpi .val { font-size: 24px; } .kpi.big .val { font-size: 34px; } }
+.side .sl::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, var(--c-blue), #0e9f9a); }
+#reset { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; border: 0; }
 </style>
 </head>
 <body>
@@ -259,28 +305,28 @@ select { padding: 9px 10px; border-radius: 10px; border: 1.5px solid var(--line)
 
   <div class="kpis" id="kpis"></div>
 
-  <section class="card full">
-    <h2 id="mTitle">Giá trị trúng thầu theo tháng</h2>
+  <section class="card full" data-c="blue">
+    <h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span id="mTitle">Giá trị trúng thầu theo tháng</span></h2>
     <p class="cap" id="mCap"></p>
     <div class="cols" id="month"></div><div class="xl" id="monthX"></div>
   </section>
 
   <div class="grid2">
-    <section class="card"><h2>Nhà thầu trúng nhiều nhất <a class="more-link" data-xem="nt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
-    <section class="card"><h2>Hãng sản xuất <a class="more-link" data-xem="hang" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
-    <section class="card"><h2>Nhóm test <a class="more-link" data-xem="nh" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
-    <section class="card"><h2>Chủ đầu tư <a class="more-link" data-xem="cdt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
-    <section class="card"><h2>Tỉnh/TP <a class="more-link" data-xem="tp" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
+    <section class="card" data-c="blue"><h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>Nhà thầu trúng nhiều nhất <a class="more-link" data-xem="nt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="nt"></div></section>
+    <section class="card" data-c="violet"><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20V8l6 4V8l6 4V4h4l2 16z"/></svg></span>Hãng sản xuất <a class="more-link" data-xem="hang" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="hang"></div></section>
+    <section class="card" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg></span>Nhóm test <a class="more-link" data-xem="nh" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
+    <section class="card" data-c="orange"><h2><span class="hi" data-c="orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg></span>Chủ đầu tư <a class="more-link" data-xem="cdt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
+    <section class="card" data-c="magenta"><h2><span class="hi" data-c="magenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Tỉnh/TP <a class="more-link" data-xem="tp" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
   </div>
 
-  <section class="card full">
-    <h2>Dải đơn giá trúng theo nhóm test</h2>
+  <section class="card full" data-c="aqua">
+    <h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>Dải đơn giá trúng theo nhóm test</h2>
     <p class="cap">Đơn giá: chỉ tính mặt hàng có đơn vị test / que / khay (giá một lần thử, bỏ giá trên 1 triệu đ/test do nhập sai). Số lượng: tổng số test trúng thầu theo hãng.</p>
     <div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng</th><th class="n">Thấp nhất</th><th class="n">Trung vị</th><th class="n">Cao nhất</th><th class="n">Tổng SL test</th><th class="n" id="f1">InTec</th><th class="n" id="f2">Wondfo</th><th class="n" id="f3">Genesee</th><th class="n">Hãng khác</th></tr></thead><tbody id="gia"></tbody></table></div>
   </section>
 
   <section class="card full">
-    <div class="bar" style="margin:0 0 10px"><div><h2>Chi tiết mặt hàng trúng thầu</h2><p class="cap" id="cnt" style="margin:0"></p></div><button id="csv">Tải Excel (CSV)</button></div>
+    <div class="bar" style="margin:0 0 10px"><div><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>Chi tiết mặt hàng trúng thầu</h2><p class="cap" id="cnt" style="margin:0"></p></div><button id="csv">Tải Excel (CSV)</button></div>
     <div class="scroll"><table class="tbl"><thead><tr><th>Ngày KQ</th><th>Cơ sở y tế</th><th>Mặt hàng</th><th>Hãng / ký mã</th><th>Nhà thầu trúng</th><th class="n">SL</th><th class="n">Đơn giá</th><th class="n">Thành tiền</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="pager"><button id="prev">‹ Trước</button><span id="pg"></span><button id="next">Sau ›</button></div>
   </section>
@@ -366,7 +412,8 @@ function hbar(el, data, onPick) {
   if (!data.length) { el.innerHTML = '<p class="cap">Không có dữ liệu.</p>'; return; }
   data.forEach(d => {
     const row = document.createElement('div'); row.className = 'r'; row.tabIndex = 0;
-    const n = document.createElement('div'); n.className = 'n'; n.textContent = d.label;
+    const n = document.createElement('div'); n.className = 'n'; const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = data.indexOf(d) + 1;
+    n.append(rk, document.createTextNode(d.label));
     const tr = document.createElement('div'); tr.className = 't';
     const bar = document.createElement('i'); bar.style.width = Math.max(1, d.v / max * 78) + '%';
     const v = document.createElement('b'); v.textContent = show(d.v);
@@ -389,12 +436,12 @@ function hover(el, lines) {
 function render() {
   const tot = view.reduce((s, r) => s + r.tien, 0), qty = view.reduce((s, r) => s + (r.sl_test || 0), 0);
   const pk = new Set(view.map(r => r.ma)), cs = new Set(view.map(r => r.cdt)), nt = new Set(view.flatMap(r => r.nha_thau.split('; ').filter(Boolean))), hg = new Set(view.map(r => r.hk).filter(k => k !== 'Không ghi rõ'));
-  $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
-      : `<div class="kpi big"><div class="lbl">Tổng giá trị trúng thầu ${PG.what}</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
-    <div class="kpi"><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
-    <div class="kpi"><div class="lbl">Cơ sở y tế mua</div><div class="val">${num(cs.size)}</div></div>
-    <div class="kpi"><div class="lbl">Nhà thầu trúng</div><div class="val">${num(nt.size)}</div></div>
-    <div class="kpi"><div class="lbl">Hãng sản xuất</div><div class="val">${num(hg.size)}</div></div>`;
+  $('#kpis').innerHTML = `${M() === 'sl' ? `<div class="kpi big"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div class="lbl">Tổng số lượng test trúng thầu</div><div class="val">${fmtQty(qty)} test</div><div class="note">${num(qty)} test · giá trị ${money(tot)} đ · ${num(view.length)} dòng mặt hàng</div></div>`
+      : `<div class="kpi big"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><div class="lbl">Tổng giá trị trúng thầu ${PG.what}</div><div class="val">${money(tot)} đ</div><div class="note">${num(qty)} test · ${num(view.length)} dòng mặt hàng</div></div>`}
+    <div class="kpi" data-c="blue"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg></span><div class="lbl">Gói thầu có kết quả</div><div class="val">${num(pk.size)}</div></div>
+    <div class="kpi" data-c="orange"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg></span><div class="lbl">Cơ sở y tế mua</div><div class="val">${num(cs.size)}</div></div>
+    <div class="kpi" data-c="aqua"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span><div class="lbl">Nhà thầu trúng</div><div class="val">${num(nt.size)}</div></div>
+    <div class="kpi" data-c="violet"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20V8l6 4V8l6 4V4h4l2 16z"/></svg></span><div class="lbl">Hãng sản xuất</div><div class="val">${num(hg.size)}</div></div>`;
   // theo tháng
   const ms = []; for (let m = $('#from').value; m <= $('#to').value; m = next(m)) ms.push(m);
   const mv = ms.map(m => ({ m, v: 0, n: 0 })); view.forEach(r => { const o = mv.find(x => x.m === r.ngay.slice(0, 7)); if (o) { o.v += val(r); o.n++; } });

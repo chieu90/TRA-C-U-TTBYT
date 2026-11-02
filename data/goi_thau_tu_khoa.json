@@ -73,7 +73,7 @@
       ]
     },
     {
-      "ten": "Cúm / COVID / RSV / Adeno",
+      "ten": "Cúm A/B",
       "tu": [
         "cúm",
         "influenza",
@@ -90,6 +90,16 @@
         "bệnh đường hô hấp",
         "tác nhân gây bệnh đường hô hấp"
       ]
+    },
+    {
+      "ten": "Cúm AB/RSV/COV/Adeno",
+      "tu": [],
+      "_ghi_chu": "tách tự động từ nhóm hô hấp: có cúm + tác nhân khác hoặc test n trong 1"
+    },
+    {
+      "ten": "Hô hấp khác (COVID/RSV/Adeno)",
+      "tu": [],
+      "_ghi_chu": "tách tự động: COVID, RSV, Adeno... không có cúm"
     },
     {
       "ten": "H. pylori",

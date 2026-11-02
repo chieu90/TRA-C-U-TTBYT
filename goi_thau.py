@@ -147,8 +147,29 @@ def group_of(name, kw, uom=None):
         return None
     for ten, tus in kw["_nhom"]:
         if any((" " + t + " ") in n if len(t) <= 4 else t in n for t in tus):
-            return ten
+            return split_resp(n) if ten == RESP else ten
     return None
+
+
+# nhóm hô hấp tách 3: chỉ cúm A/B | cúm kèm RSV/COVID/Adeno (test n trong 1) | COVID/RSV/Adeno không có cúm
+RESP, RESP_COMBO, RESP_KHAC, ROTA = "Cúm A/B", "Cúm AB/RSV/COV/Adeno", "Hô hấp khác (COVID/RSV/Adeno)", "Rota / Noro / máu ẩn trong phân"
+FLU_RE = re.compile(r"cúm|influenza|\bflu\b|\bflua\b|\bflub\b")
+OTHER_RESP_RE = re.compile(r"covid|sars|\bcov\b|rsv|hợp bào|adeno|andeno|hmpv|metapneumo|mycoplasma")
+MULTI_RE = re.compile(r"\b[3-9] trong 1\b|\b[3-9] in 1\b|đa tác nhân|nhiều tác nhân|\b[3-9] tác nhân|\b[3-9] loại|\b[3-9] kháng nguyên")
+
+
+def split_resp(n):
+    flu, other = FLU_RE.search(n), OTHER_RESP_RE.search(n)
+    # Rota/Adeno trong phân là test tiêu hóa, không phải hô hấp
+    if re.search(r"rota|rôta|noro", n) and not flu and not re.search(r"covid|sars|rsv|hợp bào", n):
+        return ROTA
+    if flu and (other or MULTI_RE.search(n)):
+        return RESP_COMBO
+    if flu:
+        return RESP
+    if MULTI_RE.search(n) and not other:
+        return RESP_COMBO
+    return RESP_KHAC
 
 
 # ---------- thông số Chương V ----------
