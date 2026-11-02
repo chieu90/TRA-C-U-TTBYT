@@ -252,6 +252,19 @@ def canon_brands(items, idx_hang):
         if k == "abbott":  # Abbott Hàn Quốc (Bioline, Abbott Diagnostics Korea) khác Abbott Nhật Bản (Determine, Chiba)
             k = abbott_site(r)
         out.append("" if (not k or k in GENERIC or len(r[idx_hang]) > 90) else k)
+    # dòng chưa xác định được hãng: tìm hãng trong xuất xứ, nhãn hiệu, ký mã (vd xuất xứ "Intec - Trung Quốc", nhãn "Ezitell")
+    for i, r in enumerate(items):
+        if out[i]:
+            continue
+        txt = " ".join(str(r[x] or "") for x in (6, 9, 7, 8) if len(r) > x)
+        compact = re.sub(r"[^a-z0-9]", "", _fold(txt))
+        hit = next((BRAND_HINT[w] for w in BRAND_HINT if w in compact), None)
+        if not hit:
+            pos = [(compact.find(m.replace(" ", "")), -len(m), m) for m in majors if m.replace(" ", "") in compact]
+            hit = min(pos)[2] if pos else None
+        if hit == "abbott":
+            hit = abbott_site(r)
+        out[i] = hit or ""
     # gộp các khóa gần giống nhau (lỗi chính tả: "sd biosenso" -> "sd biosensor") về khóa nhiều dòng hơn
     c2 = Counter(k for k in out if k)
     order = sorted(c2, key=lambda k: -c2[k])
@@ -270,16 +283,24 @@ def canon_brands(items, idx_hang):
             km.setdefault(code, Counter())[k] += 1
     fix = {code: cn.most_common(1)[0][0] for code, cn in km.items() if sum(cn.values()) >= 3 and cn.most_common(1)[0][1] / sum(cn.values()) >= 0.6}
     out = [fix.get(re.sub(r"[^a-z0-9]", "", _fold(r[8] if len(r) > 8 else "")), k) for r, k in zip(items, out)]
-    labels = {}
+    labels, own = {}, {}
     for r, k in zip(items, out):
         if k:
-            labels.setdefault(k, Counter())[brand_label(r[idx_hang])] += 1
+            lb = brand_label(r[idx_hang])
+            labels.setdefault(k, Counter())[lb] += 1
+            if brand_key(r[idx_hang]):  # tên lấy từ chính cột hãng (không lấy "Trung Quốc" của dòng được suy ra từ xuất xứ)
+                own.setdefault(k, Counter())[lb] += 1
+    labels.update(own)
     fixed = {"abbott han quoc": "Abbott Diagnostics Korea (Hàn Quốc)", "abbott nhat ban": "Abbott Diagnostics Medical (Nhật Bản)",
              "abbott khac": "Abbott (Mỹ / khác)"}
     return [fixed.get(k) or labels[k].most_common(1)[0][0] if k else "Không ghi rõ" for k in out]
 
 
 CHON_PATH = os.path.join(g.HERE, "data", "hang_chon.json")
+# thương hiệu sản phẩm -> hãng sản xuất, dùng khi cột hãng không ghi rõ (so khớp trên chuỗi đã bỏ dấu, bỏ khoảng trắng)
+BRAND_HINT = {"trueline": "medicon", "fastep": "assure", "bioline": "abbott han quoc", "determine": "abbott nhat ban", "onsite": "genesee",
+              "ctkbiotech": "genesee", "amvi": "viet my", "vietmy": "viet my", "ezitell": "alltest", "novatrend": "alltest", "flowflex": "acon",
+              "sdbiosensor": "sd biosensor", "standardq": "sd biosensor", "intec": "intec", "wondfo": "wondfo", "assuretech": "assure"}
 
 
 def apply_choice(rows, j, i_nhan):
@@ -294,6 +315,8 @@ def apply_choice(rows, j, i_nhan):
     exact = set(cfg.get("giu", []))
     out = []
     for r in rows:
+        if not brand_key(r[j]) and r[j] not in exact:
+            r[j] = "Không ghi rõ"
         if r[j] in exact or r[j] == "Không ghi rõ":  # đúng tên đã duyệt (vd 2 hãng Abbott cùng khóa "abbott")
             out.append(r)
             continue
