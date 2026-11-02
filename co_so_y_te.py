@@ -15,6 +15,7 @@ Tình trạng: "Đã có kết quả" (có trong dữ liệu KQLCNT) > "Đã h�
 Đầu ra: data/co_so_y_te.json (trang /co-so-y-te) và data/trung_thau.json (trang /trung-thau, Dashboard kết quả trúng thầu).
 """
 import glob, json, os, re, sys
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import goi_thau as g
@@ -209,6 +210,8 @@ def maker_text(h):
 
 
 def brand_key(h):
+    if re.search(r"viet my|amvi", _fold(maker_text(h))):  # Việt Mỹ (thương hiệu Amvi): tên toàn từ chỉ quốc gia nên xử lý riêng
+        return "viet my"
     w = [x for x in re.sub(r"[^a-z0-9]+", " ", re.sub(r"\(.*?\)", " ", _fold(maker_text(h)))).split() if x not in BRAND_STOP]
     if not w:
         return ""
@@ -276,6 +279,38 @@ def canon_brands(items, idx_hang):
     return [fixed.get(k) or labels[k].most_common(1)[0][0] if k else "Không ghi rõ" for k in out]
 
 
+CHON_PATH = os.path.join(g.HERE, "data", "hang_chon.json")
+
+
+def apply_choice(rows, j, i_nhan):
+    """KQ Test: chỉ giữ các hãng người dùng đã duyệt (data/hang_chon.json), gộp tên theo ghi chú; dòng không ghi rõ hãng vẫn giữ."""
+    if not os.path.exists(CHON_PATH):
+        return rows
+    cfg = json.load(open(CHON_PATH, encoding="utf-8"))
+    gop = {brand_key(k): v for k, v in cfg.get("gop", {}).items()}
+    theo = {brand_key(k): v for k, v in cfg.get("theo_nhan", {}).items()}
+    kc = Counter(brand_key(x) for x in cfg.get("giu", []))
+    keep = {brand_key(x): x for x in cfg.get("giu", []) if kc[brand_key(x)] == 1}  # bỏ khóa trùng (2 hãng Abbott)
+    exact = set(cfg.get("giu", []))
+    out = []
+    for r in rows:
+        if r[j] in exact or r[j] == "Không ghi rõ":  # đúng tên đã duyệt (vd 2 hãng Abbott cùng khóa "abbott")
+            out.append(r)
+            continue
+        k = brand_key(r[j])
+        if k in theo:
+            nh = _fold(r[i_nhan])
+            r[j] = next((t for w, t in theo[k] if w in nh), "Không ghi rõ")
+        elif k in gop:
+            r[j] = gop[k]
+        elif k in keep:
+            r[j] = keep[k]
+        elif k:
+            continue  # hãng không nằm trong danh sách đã duyệt
+        out.append(r)
+    return out
+
+
 def build():
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
@@ -286,6 +321,8 @@ def build():
         rows.sort(key=lambda r: r[3], reverse=True)
         for r, h in zip(rows, canon_brands(rows, 6)):
             r.append(h)
+        if path == TT_PATH:
+            rows[:] = apply_choice(rows, 16, 7)
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     pk = {}
