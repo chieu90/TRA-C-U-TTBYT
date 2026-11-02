@@ -51,7 +51,7 @@
       ]
     },
     {
-      "ten": "Dengue / sốt xuất huyết",
+      "ten": "Dengue NS1",
       "tu": [
         "dengue",
         "sốt xuất huyết",
@@ -60,6 +60,21 @@
         "ns1 ag",
         "dengue ns1"
       ]
+    },
+    {
+      "ten": "Dengue IgG/IgM",
+      "tu": [],
+      "_ghi_chu": "tách tự động: chỉ kháng thể IgG/IgM"
+    },
+    {
+      "ten": "Dengue Duo (NS1 + IgG/IgM)",
+      "tu": [],
+      "_ghi_chu": "tách tự động: kháng nguyên NS1 + kháng thể trong một test"
+    },
+    {
+      "ten": "Dengue khác",
+      "tu": [],
+      "_ghi_chu": "không ghi rõ NS1 hay IgG/IgM"
     },
     {
       "ten": "Giang mai",
@@ -88,18 +103,54 @@
         "sars cov",
         "bệnh hô hấp",
         "bệnh đường hô hấp",
-        "tác nhân gây bệnh đường hô hấp"
+        "tác nhân gây bệnh đường hô hấp",
+        "adv"
       ]
+    },
+    {
+      "ten": "Cúm AB/COVID",
+      "tu": [],
+      "_ghi_chu": "tách tự động: test kết hợp cúm A/B + COVID, không có RSV/Adeno"
+    },
+    {
+      "ten": "Cúm AB/COVID/RSV (4 in 1)",
+      "tu": [],
+      "_ghi_chu": "tách tự động: cúm A/B + COVID + RSV"
     },
     {
       "ten": "Cúm AB/RSV/COV/Adeno",
       "tu": [],
-      "_ghi_chu": "tách tự động từ nhóm hô hấp: có cúm + tác nhân khác hoặc test n trong 1"
+      "_ghi_chu": "chỉ test 5 trong 1: cúm A, cúm B, RSV, COVID, Adeno"
     },
     {
-      "ten": "Hô hấp khác (COVID/RSV/Adeno)",
+      "ten": "Hô hấp 6 in 1 trở lên",
       "tu": [],
-      "_ghi_chu": "tách tự động: COVID, RSV, Adeno... không có cúm"
+      "_ghi_chu": "tách tự động: test từ 6 tác nhân trở lên"
+    },
+    {
+      "ten": "Cúm kết hợp khác",
+      "tu": [],
+      "_ghi_chu": "cúm kèm tác nhân khác không thuộc các nhóm trên"
+    },
+    {
+      "ten": "COVID-19",
+      "tu": [],
+      "_ghi_chu": "tách tự động từ nhóm hô hấp"
+    },
+    {
+      "ten": "RSV",
+      "tu": [],
+      "_ghi_chu": "tách tự động từ nhóm hô hấp"
+    },
+    {
+      "ten": "Adeno hô hấp",
+      "tu": [],
+      "_ghi_chu": "tách tự động từ nhóm hô hấp"
+    },
+    {
+      "ten": "Hô hấp khác (kết hợp không có cúm)",
+      "tu": [],
+      "_ghi_chu": "COVID+RSV, Mycoplasma, hMPV..."
     },
     {
       "ten": "H. pylori",

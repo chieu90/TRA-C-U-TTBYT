@@ -104,8 +104,12 @@ def classify(r, kw):
         return None
     if any(c in g.norm(name) for c in kw["_can"]):  # tên đã ghi rõ test/que thử/khay thử...
         # tên chung chung ("Test nhanh", "Que thử xét nghiệm định tính"): xác định nhóm theo nhãn hiệu / ký mã, rồi mô tả
-        return (g.group_of(name, kw, uom) or g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom)
-                or g.group_of(name + " " + g.clean(r.get("cauHinh"))[:150], kw, uom))
+        nh = (g.group_of(name, kw, uom) or g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom)
+              or g.group_of(name + " " + g.clean(r.get("cauHinh"))[:150], kw, uom))
+        if nh == "Dengue khác":  # tên không ghi NS1 hay IgG/IgM: xem nhãn hiệu, ký mã, mô tả
+            nh = next((x for x in (g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom),
+                                   g.group_of(name + " " + g.clean(r.get("cauHinh"))[:200], kw, uom)) if x and x != "Dengue khác"), nh)
+        return nh
     # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu, mô tả,
     # hoặc tính theo đơn vị test/que/khay mà không phải hóa chất chạy máy
     if RAPID_RE.search(txt) or (g.norm(uom or "") in PER_TEST and not g.REAGENT_RE.search(short)):

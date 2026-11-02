@@ -266,6 +266,17 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
 @media (max-width: 760px) { .kpi:not(.big) .ki { display: none; } .kpi .val { font-size: 24px; } .kpi.big .val { font-size: 34px; } }
 .side .sl::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(135deg, var(--c-blue), #0e9f9a); }
 #reset { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; border: 0; }
+/* bản đồ Việt Nam */
+.vnmap svg { width: 100%; height: auto; max-height: 640px; display: block; }
+.vnmap path { stroke: var(--surface); stroke-width: 1.2; cursor: pointer; transition: filter .15s; }
+.vnmap path:hover, .vnmap path:focus { filter: brightness(1.1) drop-shadow(0 0 2px rgba(0,0,0,.25)); outline: none; }
+.vnmap path.sel { stroke: var(--text); stroke-width: 2; }
+.vnmap .dao circle { stroke: var(--surface); stroke-width: 1.5; }
+.vnmap .dao text { font-size: 15px; fill: var(--muted); }
+.vnmap .lbl { font-size: 13px; fill: var(--text); font-weight: 600; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
 </style>
 </head>
 <body>
@@ -317,6 +328,8 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
     <section class="card" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg></span>Nhóm test <a class="more-link" data-xem="nh" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by2">Giá trị trúng theo nhóm</span> · bấm để chọn/bỏ nhóm</p><div class="hb" id="nh"></div></section>
     <section class="card" data-c="orange"><h2><span class="hi" data-c="orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg></span>Chủ đầu tư <a class="more-link" data-xem="cdt" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="cdt"></div></section>
     <section class="card" data-c="magenta"><h2><span class="hi" data-c="magenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Tỉnh/TP <a class="more-link" data-xem="tp" href="#" title="Mở danh sách đầy đủ ở tab mới">Xem tất cả ›</a></h2><p class="cap"><span class="by">Top 10 theo giá trị</span> · bấm để lọc</p><div class="hb" id="tp"></div></section>
+    <section class="card" data-c="blue"><h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg></span>Bản đồ theo tỉnh/TP</h2><p class="cap"><span class="by3">Giá trị trúng thầu</span> · màu càng đậm càng cao · bấm tỉnh để lọc</p>
+      <div class="vnmap" id="vnmap"></div><div class="legend" id="vnleg"></div><p class="cap" id="vnsrc" style="margin:6px 0 0;font-size:11px"></p></section>
   </div>
 
   <section class="card full" data-c="aqua">
@@ -359,7 +372,7 @@ const UNIT1 = /^(test|que|khay|thanh|test\/khay|test\/que|kit)$/i;
 const BRAND_STOP = new Set('cong ty tnhh co phan cty ctcp tap doan san xuat hang thuong hieu hangzhou zhejiang beijing shanghai guangzhou shenzhen xiamen jiangsu nanjing wuhan tianjin changchun qingdao jiangxi shandong hunan suzhou dai loan taiwan trung quoc china han quoc korea viet nam vietnam my usa duc germany nhat japan an do india anh uk phap italy y province of the and'.split(' '));
 const brandKey = s => { const w = fold(s).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(x => x && !BRAND_STOP.has(x));
   if (!w.length) return ''; return w[0].length <= 3 && w[1] ? w[0] + ' ' + w[1] : w[0]; };
-let R = [], view = [], page = 0, pick = {};
+let R = [], view = [], mapView = [], page = 0, pick = {};
 // chỉ số đang xem: giá trị (đ) hoặc số lượng test (chỉ tính dòng có ĐVT là test/que/khay; dòng tính theo hộp/bộ không quy đổi được)
 const M = () => $('#metric').value;
 const val = r => M() === 'sl' ? r.sl_test || 0 : r.tien;
@@ -390,12 +403,15 @@ function load(d) {
 function apply() {
   const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
   $('#nhomBtn').textContent = (!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : `${nhom.size} nhóm test`) + ' ▾';
-  view = R.filter(r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom.size || nhom.has(r.nhom)) && (!tinh || r.tinh === tinh)
-    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk) && (!pick.cdt || r.cdt === pick.cdt));
+  const base = r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom.size || nhom.has(r.nhom))
+    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk) && (!pick.cdt || r.cdt === pick.cdt);
+  mapView = R.filter(base);  // bản đồ luôn hiện đủ các tỉnh, tỉnh đang lọc được viền đậm
+  view = mapView.filter(r => !tinh || r.tinh === tinh);
   page = 0;
   $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn], pick.cdt && ['cdt', 'Chủ đầu tư: ' + pick.cdt]].filter(Boolean)
     .map(([k, s]) => `<button data-k="${k}" type="button">${esc(s)} ✕</button>`).join('');
   render();
+  drawMap();
   if (XEM) rank();
 }
 
@@ -543,6 +559,50 @@ $('#rcsv').addEventListener('click', () => {
   const [title, col] = VIEWS[XEM], rows = [['#', col, 'Giá trị (đ)', 'Số lượng test', 'Thị phần (%)', 'Số gói', 'Số dòng'], ...RANK.map(g => [g.i, g.label, Math.round(g.tien), g.sl, g.pct.toFixed(2), g.goi.size, g.n])];
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
   a.download = 'xep-hang-' + XEM + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); });
+
+// ===== bản đồ: tô đậm nhạt theo tổng giá trị / số lượng của từng tỉnh (34 tỉnh/thành từ 01/7/2025) =====
+const OLD2NEW = { 'Hà Giang': 'Tuyên Quang', 'Yên Bái': 'Lào Cai', 'Bắc Kạn': 'Thái Nguyên', 'Vĩnh Phúc': 'Phú Thọ', 'Hòa Bình': 'Phú Thọ', 'Bắc Giang': 'Bắc Ninh',
+  'Thái Bình': 'Hưng Yên', 'Hải Dương': 'Hải Phòng', 'Hà Nam': 'Ninh Bình', 'Nam Định': 'Ninh Bình', 'Quảng Bình': 'Quảng Trị', 'Quảng Nam': 'Đà Nẵng',
+  'Kon Tum': 'Quảng Ngãi', 'Bình Định': 'Gia Lai', 'Ninh Thuận': 'Khánh Hòa', 'Đắk Nông': 'Lâm Đồng', 'Bình Thuận': 'Lâm Đồng', 'Phú Yên': 'Đắk Lắk',
+  'Bình Dương': 'TP Hồ Chí Minh', 'Bà Rịa - Vũng Tàu': 'TP Hồ Chí Minh', 'Bà Rịa-Vũng Tàu': 'TP Hồ Chí Minh', 'Hồ Chí Minh': 'TP Hồ Chí Minh', 'Bình Phước': 'Đồng Nai',
+  'Long An': 'Tây Ninh', 'Sóc Trăng': 'Cần Thơ', 'Hậu Giang': 'Cần Thơ', 'Bến Tre': 'Vĩnh Long', 'Trà Vinh': 'Vĩnh Long', 'Tiền Giang': 'Đồng Tháp',
+  'Bạc Liêu': 'Cà Mau', 'Kiên Giang': 'An Giang', 'Thừa Thiên Huế': 'Huế' };
+const RAMP = matchMedia('(prefers-color-scheme: dark)').matches
+  ? ['#16304d', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#b7d3f6'] : ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95'];
+let MAP = null;
+fetch('/static/vn_map.json').then(r => r.json()).then(m => { MAP = m; if (R.length) drawMap(); }).catch(() => {});
+function drawMap() {
+  if (!MAP) return;
+  const agg = {};
+  mapView.forEach(r => { const t = OLD2NEW[r.tinh] || r.tinh; if (!t) return; const a = agg[t] || (agg[t] = { v: 0, n: 0, goi: new Set() }); a.v += val(r); a.n++; a.goi.add(r.ma); });
+  const vals = Object.values(agg).map(a => a.v).filter(v => v > 0).sort((a, b) => a - b);
+  // 6 bậc màu chia theo phân vị để tỉnh nhỏ vẫn thấy khác biệt
+  const cuts = RAMP.map((_, i) => vals[Math.min(vals.length - 1, Math.floor(vals.length * (i + 1) / RAMP.length))] ?? 0);
+  const col = v => !v ? 'var(--line-2)' : RAMP[cuts.findIndex(c => v <= c) < 0 ? RAMP.length - 1 : cuts.findIndex(c => v <= c)];
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 840 ${MAP.h}`); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Bản đồ Việt Nam theo tỉnh/thành');
+  const sel = $('#tinh').value;
+  MAP.tinh.forEach(t => {
+    const a = agg[t.tinh], p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', t.d); p.setAttribute('fill', col(a?.v)); p.setAttribute('tabindex', '0');
+    if (sel === t.tinh) p.classList.add('sel');
+    hover(p, [a ? num(a.v) + unit() : 'Chưa có kết quả', t.tinh, a ? `${num(a.goi.size)} gói · ${num(a.n)} dòng mặt hàng` : '']);
+    p.onclick = () => { if ([...$('#tinh').options].some(o => o.value === t.tinh)) { $('#tinh').value = sel === t.tinh ? '' : t.tinh; apply(); } };
+    svg.append(p);
+  });
+  MAP.dao.forEach(d => { const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'dao');
+    [[-14, -10], [0, 0], [14, 8], [-6, 14], [10, -12]].forEach(([dx, dy]) => { const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', d.x + dx); c.setAttribute('cy', d.y + dy); c.setAttribute('r', 4.5); c.setAttribute('fill', col(agg[d.tinh]?.v)); g.append(c); });
+    const tx = document.createElementNS(NS, 'text'); tx.setAttribute('x', d.x); tx.setAttribute('y', d.y + 36); tx.setAttribute('text-anchor', d.x > 700 ? 'end' : 'middle'); tx.textContent = d.ten; g.append(tx); svg.append(g); });
+  // nhãn 5 tỉnh cao nhất
+  Object.entries(agg).sort((a, b) => b[1].v - a[1].v).slice(0, 5).forEach(([t]) => { const m = MAP.tinh.find(x => x.tinh === t); if (!m) return;
+    const tx = document.createElementNS(NS, 'text'); tx.setAttribute('class', 'lbl'); tx.setAttribute('x', m.cx + 8); tx.setAttribute('y', m.cy); tx.textContent = t; svg.append(tx); });
+  $('#vnmap').replaceChildren(svg);
+  const lo = [0, ...cuts.slice(0, -1)];
+  $('#vnleg').innerHTML = RAMP.map((c, i) => (i && cuts[i] === cuts[i - 1]) ? '' : `<span><i style="background:${c}"></i>${show(lo[i])}–${show(cuts[i])}</span>`).join('') + '<span><i style="background:var(--line-2)"></i>Chưa có</span>';
+  $('#vnsrc').textContent = MAP.nguon;
+  document.querySelector('.by3').textContent = M() === 'sl' ? 'Số lượng test' : 'Giá trị trúng thầu';
+}
 
 fetch(PG.api).then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;

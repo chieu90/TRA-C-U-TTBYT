@@ -8,7 +8,7 @@ cp data/bao_gia.json public/bao_gia.json
 cp data/co_so_y_te.json public/co_so_y_te.json
 cp data/trung_thau.json public/trung_thau.json
 cp data/duong_huyet.json public/duong_huyet.json
-cp static/*.png public/static/
+cp static/*.png static/*.json public/static/
 cp pwa/manifest.webmanifest pwa/sw.js public/
 # CSV báo giá cho Google Sheet (=IMPORTDATA) tự cập nhật theo web
 node vercel_csv.js

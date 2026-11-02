@@ -147,15 +147,49 @@ def group_of(name, kw, uom=None):
         return None
     for ten, tus in kw["_nhom"]:
         if any((" " + t + " ") in n if len(t) <= 4 else t in n for t in tus):
-            return split_resp(n) if ten == RESP else ten
+            return split_resp(n) if ten == RESP else split_dengue(n) if ten == "Dengue NS1" else ten
     return None
 
 
 # nhóm hô hấp tách 3: chỉ cúm A/B | cúm kèm RSV/COVID/Adeno (test n trong 1) | COVID/RSV/Adeno không có cúm
-RESP, RESP_COMBO, RESP_KHAC, ROTA = "Cúm A/B", "Cúm AB/RSV/COV/Adeno", "Hô hấp khác (COVID/RSV/Adeno)", "Rota / Noro / máu ẩn trong phân"
+RESP, RESP_COMBO, RESP_KHAC, ROTA = "Cúm A/B", "Cúm AB/RSV/COV/Adeno", "Hô hấp khác (kết hợp không có cúm)", "Rota / Noro / máu ẩn trong phân"
+# hô hấp không có cúm: tách riêng từng tác nhân khi test chỉ phát hiện một loại
+ONE_RESP = [("COVID-19", re.compile(r"covid|sars|\bcov\b")), ("RSV", re.compile(r"rsv|hợp bào")), ("Adeno hô hấp", re.compile(r"adeno|andeno|\badv\b"))]
 FLU_RE = re.compile(r"cúm|influenza|\bflu\b|\bflua\b|\bflub\b")
-OTHER_RESP_RE = re.compile(r"covid|sars|\bcov\b|rsv|hợp bào|adeno|andeno|hmpv|metapneumo|mycoplasma")
+OTHER_RESP_RE = re.compile(r"covid|sars|\bcov\b|rsv|hợp bào|adeno|andeno|\badv\b|hmpv|metapneumo|mycoplasma")
 MULTI_RE = re.compile(r"\b[3-9] trong 1\b|\b[3-9] in 1\b|đa tác nhân|nhiều tác nhân|\b[3-9] tác nhân|\b[3-9] loại|\b[3-9] kháng nguyên")
+
+
+def split_dengue(n):
+    """Dengue: NS1 (kháng nguyên) | IgG/IgM (kháng thể) | Duo (cả hai trong một test) | khác (không ghi rõ)."""
+    ns1 = re.search(r"ns1|ns 1|kháng nguyên|antigen|\bag\b", n)
+    ab = re.search(r"igg|igm|kháng thể|antibod|\bab\b", n)
+    if re.search(r"\bduo\b|combo", n) or (ns1 and ab):
+        return "Dengue Duo (NS1 + IgG/IgM)"
+    if ns1:
+        return "Dengue NS1"
+    if ab:
+        return "Dengue IgG/IgM"
+    return "Dengue khác"
+
+
+def flu_combo(n):
+    """Test cúm kết hợp, chia theo số tác nhân: 3 in 1 (cúm A/B + COVID), 4 in 1 (+ RSV), 5 in 1 (+ RSV + Adeno), 6 in 1 trở lên."""
+    m = re.search(r"\b(\d{1,2})\s*(?:trong|in)\s*1\b|\b(\d{1,2})\s*(?:tác nhân|loại|kháng nguyên)", n)
+    so = int(m.group(1) or m.group(2)) if m else 0
+    covid, rsv = re.search(r"covid|sars|\bcov\b", n), re.search(r"rsv|hợp bào", n)
+    adeno, khac = re.search(r"adeno|andeno|\badv\b", n), re.search(r"hmpv|metapneumo|mycoplasma|strep|legionella|parainfluenza|á cúm", n)
+    if not so:  # không ghi số: đếm theo tác nhân liệt kê (cúm A và B tính 2)
+        so = 2 + sum(bool(x) for x in (covid, rsv, adeno)) + (2 if khac else 0)
+    if so >= 6:
+        return "Hô hấp 6 in 1 trở lên"
+    if so == 5 and not khac:
+        return RESP_COMBO  # cúm A, cúm B, RSV, COVID, Adeno
+    if so == 4 and not adeno and not khac:
+        return "Cúm AB/COVID/RSV (4 in 1)"
+    if so == 3 and not rsv and not adeno and not khac:
+        return "Cúm AB/COVID"
+    return "Cúm kết hợp khác"
 
 
 def split_resp(n):
@@ -164,11 +198,16 @@ def split_resp(n):
     if re.search(r"rota|rôta|noro", n) and not flu and not re.search(r"covid|sars|rsv|hợp bào", n):
         return ROTA
     if flu and (other or MULTI_RE.search(n)):
-        return RESP_COMBO
+        return flu_combo(n)
     if flu:
         return RESP
     if MULTI_RE.search(n) and not other:
         return RESP_COMBO
+    hits = [ten for ten, rx in ONE_RESP if rx.search(n)]
+    if len(hits) == 1 and not MULTI_RE.search(n):
+        if hits[0] == "Adeno hô hấp" and re.search(r"phân|feces|stool", n):
+            return ROTA  # adeno trong phân là test tiêu hóa
+        return hits[0]
     return RESP_KHAC
 
 
