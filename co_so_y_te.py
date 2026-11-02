@@ -33,7 +33,7 @@ HBA1C_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # tên nhóm hiển thị
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
                          r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch|"
-                         r"chất thử|\\brgt\\b|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
+                         r"chất thử|\brgt\b|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
 # hãng chỉ làm hóa chất chạy máy / ELISA / PCR / vi sinh: không phải test nhanh
 NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun|abbott gmbh|abbott ireland")
 
