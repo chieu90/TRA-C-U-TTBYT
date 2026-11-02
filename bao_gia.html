@@ -180,6 +180,15 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   .main .bar { margin: 0 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
 }
 @media (min-width: 1000px) { .main .tabs { margin: 0 0 12px; } }
+/* nút ẩn / hiện thanh bộ lọc bên trái (màn hình rộng) */
+.side-btn { display: none; }
+@media (min-width: 1000px) {
+  .side-btn { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 6px 12px; font-size: 13px; border-radius: 999px;
+    background: var(--surface); box-shadow: var(--shadow); }
+  .side-btn svg { width: 16px; height: 16px; }
+  body.side-off .layout { grid-template-columns: minmax(0, 1fr); }
+  body.side-off .side { display: none; }
+}
 </style>
 </head>
 <body>
@@ -213,6 +222,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   </section>
   </aside>
   <main class="main">
+  <button type="button" class="side-btn" id="sideBtn" aria-controls="side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Ẩn bộ lọc</span></button>
   <div class="tabs" id="tabs"><button data-t="mo" class="on">Đang nhận báo giá<b id="nMo"></b></button><button data-t="gia">Giá đã báo<b id="nGia"></b></button></div>
   <div class="bar"><div class="status" id="status">Đang tải…</div><div class="upd"><span class="status" id="updMsg"></span><button id="updBtn" class="pri" type="button" hidden>Cập nhật ngay</button></div></div>
   <div class="list" id="list"></div>
@@ -403,5 +413,13 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
 })();
 </script>
 <nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>KQ Test</span></a><a href="/duong-huyet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg><span>Đường huyết</span></a></nav>
+<script>
+// ẩn / hiện thanh bộ lọc bên trái, nhớ lựa chọn
+(() => { const b = document.getElementById('sideBtn'); if (!b) return;
+  const set = off => { document.body.classList.toggle('side-off', off); b.querySelector('span').textContent = off ? 'Hiện bộ lọc' : 'Ẩn bộ lọc'; };
+  let off = false; try { off = localStorage.getItem('side_off') === '1'; } catch (e) {} set(off);
+  b.addEventListener('click', () => { off = !off; set(off); try { localStorage.setItem('side_off', off ? '1' : '0'); } catch (e) {} });
+})();
+</script>
 </body>
 </html>
