@@ -115,7 +115,7 @@ def build_open(kw, old_open):
         for t in rows:
             name, desc = g.clean(t.get("category")), g.clean(t.get("description")).strip(" ;")
             nhom = g.group_of(name, kw, t.get("unit")) or g.group_of(name + " " + desc[:120], kw, t.get("unit"))
-            if nhom == "Dengue khác":
+            if nhom in g.KHAC:
                 nhom = g.group_of(name + " " + desc[:200], kw, t.get("unit")) or nhom
             if nhom:
                 items.append({"nhom": nhom, "ten": name, "mo_ta": desc, "dvt": g.clean(t.get("unit")),
@@ -167,7 +167,7 @@ def build():
         name = g.clean(r.get("itemName"))
         desc = g.clean(r.get("description"))
         nhom = g.group_of(name, kw, r.get("unit")) or g.group_of(name + " " + desc[:120], kw, r.get("unit"))
-        if nhom == "Dengue khác":
+        if nhom in g.KHAC:
             nhom = g.group_of(name + " " + desc[:200], kw, r.get("unit")) or nhom
         if not nhom:
             continue

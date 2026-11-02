@@ -107,9 +107,13 @@ def classify(r, kw):
         # tên chung chung ("Test nhanh", "Que thử xét nghiệm định tính"): xác định nhóm theo nhãn hiệu / ký mã, rồi mô tả
         nh = (g.group_of(name, kw, uom) or g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom)
               or g.group_of(name + " " + g.clean(r.get("cauHinh"))[:150], kw, uom))
-        if nh == "Dengue khác":  # tên không ghi NS1 hay IgG/IgM: xem nhãn hiệu, ký mã, mô tả
+        if nh in g.KHAC:  # tên không ghi NS1 hay IgG/IgM, chân ma túy...: xem nhãn hiệu, ký mã, mô tả
             nh = next((x for x in (g.group_of(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")), kw, uom),
-                                   g.group_of(name + " " + g.clean(r.get("cauHinh"))[:200], kw, uom)) if x and x != "Dengue khác"), nh)
+                                   g.group_of(name + " " + g.clean(r.get("cauHinh"))[:200], kw, uom)) if x and x not in g.KHAC), nh)
+        if nh in g.DRUGS:  # bộ chân ma túy: xét cả nhãn hiệu / ký mã (vd tên "4 chân" nhưng nhãn ghi MDMA/MET/OPI/THC)
+            nh = g.split_drug(" " + g.norm(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu"))) + " ")
+            if nh == g.DRUG_KHAC and not g.DRUG_OTHER_RE.search(g.norm(name + " " + g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")))):
+                nh = g.split_drug(" " + g.norm(name + " " + g.clean(r.get("cauHinh"))[:200]) + " ")
         return nh
     # tên chỉ ghi chỉ số / thương hiệu: cần dấu hiệu test nhanh trong nhãn hiệu, mô tả,
     # hoặc tính theo đơn vị test/que/khay mà không phải hóa chất chạy máy

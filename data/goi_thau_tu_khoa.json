@@ -165,7 +165,7 @@
       ]
     },
     {
-      "ten": "Ma túy",
+      "ten": "Ma túy 4in1 (AMP/MOP/MET/THC)",
       "tu": [
         "ma túy",
         "ma tuý",
@@ -190,6 +190,14 @@
         "morphine",
         "amp/"
       ]
+    },
+    {
+      "ten": "Ma túy 5in1 (AMP/MOP/THC/COD/HER)",
+      "tu": []
+    },
+    {
+      "ten": "Ma túy khác",
+      "tu": []
     },
     {
       "ten": "Thử thai hCG",

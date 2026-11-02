@@ -147,7 +147,7 @@ def group_of(name, kw, uom=None):
         return None
     for ten, tus in kw["_nhom"]:
         if any((" " + t + " ") in n if len(t) <= 4 else t in n for t in tus):
-            return split_resp(n) if ten == RESP else split_dengue(n) if ten == "Dengue NS1" else ten
+            return split_resp(n) if ten == RESP else split_dengue(n) if ten == "Dengue NS1" else split_drug(n) if ten == DRUG4 else ten
     return None
 
 
@@ -171,6 +171,43 @@ def split_dengue(n):
     if ab:
         return "Dengue IgG/IgM"
     return "Dengue khác"
+
+
+# ma túy: tách theo bộ chân (chất phát hiện) ghi trong tên / nhãn hiệu / ký mã
+DRUG4, DRUG5, DRUG_KHAC = "Ma túy 4in1 (AMP/MOP/MET/THC)", "Ma túy 5in1 (AMP/MOP/THC/COD/HER)", "Ma túy khác"
+DRUG_RE = {
+    "AMP": re.compile(r"\bamp\b|(?<!meth)(?<!meth )(?<!met)(?<!d-meth)amph?e?t?h?amin|ampthetamin"),
+    "MET": re.compile(r"\bmet\b|\bmamp\b|methamphetamin|metamphetamin|methaphetamin|ma túy đá|ma tuý đá"),
+    "MOP": re.compile(r"\bmop\b|morphin|\bopi\b|opiat|thuốc phiện"),
+    "THC": re.compile(r"\bthc\b|marijuan|marijiuan|marijuna|cần sa|bồ đà|cannabi"),
+    "COD": re.compile(r"\bcod\b|codein"),
+    "HER": re.compile(r"\bher\b|heroin|\b6 ?mam\b"),
+}
+DRUG_OTHER_RE = re.compile(r"mdma|\bket\b|ketamin|\bbzo\b|benzodiaz|\bcoc\b|cocain|\bbar\b|barbitur|\bmtd\b|methadon|\bbup\b|buprenorph|\bk2\b|\bfyl\b|fentanyl|\btra\b|tramadol|\bpcp\b|\bmdpv\b|\boxy\b|\bedd?p\b")
+
+
+# nhóm "khác" do tên ghi chung chung: xem thêm nhãn hiệu / ký mã / mô tả để xác định rõ hơn
+KHAC = {"Dengue khác", DRUG_KHAC}
+DRUGS = {DRUG4, DRUG5, DRUG_KHAC}
+
+
+def split_drug(n):
+    """Ma túy combo: 4in1 AMP/MOP/MET/THC | 5in1 AMP/MOP/THC/COD/HER | còn lại (đơn chất, combo chân khác).
+    Tên chỉ ghi "4 chân / 4 in 1" hoặc "5 chân / 5 in 1" mà không liệt kê đủ chất thì xếp theo số chân."""
+    co = {k for k, rx in DRUG_RE.items() if rx.search(n)}
+    if DRUG_OTHER_RE.search(n):
+        return DRUG_KHAC
+    if co == {"AMP", "MOP", "MET", "THC"}:
+        return DRUG4
+    # 5 chân có Codein + Heroin: một số hồ sơ ghi MET thay cho AMP
+    if {"MOP", "THC", "COD", "HER"} <= co and co & {"AMP", "MET"}:
+        return DRUG5
+    m = re.search(r"\b0?([2-9])\s*(?:chân|trong 1|in 1|in1|loại|chất|thông số|chỉ số|drug)", n)
+    if m and m.group(1) == "4" and co <= {"AMP", "MOP", "MET", "THC"}:
+        return DRUG4
+    if m and m.group(1) == "5" and co <= {"AMP", "MOP", "MET", "THC", "COD", "HER"}:
+        return DRUG5
+    return DRUG_KHAC
 
 
 def flu_combo(n):
