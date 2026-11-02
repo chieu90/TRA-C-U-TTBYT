@@ -33,9 +33,9 @@ HBA1C_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c")  # tên nhóm hiển thị
 RAPID_RE = re.compile(r"nhanh|sắc ký|immunochromatograph|lateral flow|rapid|cassette|khay thử|que thử|test strip|quick test")
 NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilumin|điện hóa phát quang|miễn dịch huỳnh quang|realtime|real-time|pcr|"
                          r"tải lượng|hplc|cột sắc ký|sắc ký lỏng|reagent kit|kháng thể đa dòng|kháng thể đơn dòng|máy xét nghiệm miễn dịch|"
-                         r"chất thử|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
+                         r"chất thử|\\brgt\\b|hiscl|eiagen|allplex|real-tm|tách chiết|bactec|mgit|độ nhạy cảm|hơi thở|breath|license|bản quyền|windows")
 # hãng chỉ làm hóa chất chạy máy / ELISA / PCR / vi sinh: không phải test nhanh
-NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun")
+NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun|abbott gmbh|abbott ireland")
 
 ACCESSORY_RE = re.compile(r"^(pin|kim|bút|lancet|dung dịch|vỏ|hộp đựng|giá đỡ|máy|thiết bị|hệ thống)\b|\bpin\b|\bcột\b|hóa chất|hoá chất")
 PER_TEST = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
@@ -190,7 +190,7 @@ GENERIC = {"khac", "ap ung", "dap ung", "theo", "dengue", "thc", "drug", "drugs"
 # thương hiệu sản phẩm ghi vào cột hãng -> hãng sản xuất
 BRAND_ALIAS = {"uright": "taidoc", "u right": "taidoc", "fora": "taidoc", "oncallplus": "acon", "on call": "acon", "oncall": "acon",
                "bioline": "sd biosensor", "sd bioline": "sd biosensor", "sd": "sd biosensor", "standard": "sd biosensor",
-               "oriengene": "orient", "accu": "roche", "onetouch": "lifescan", "determine": "abbott", "mp biomedicals": "mp biomedical", "sd bionline": "sd biosensor", "ctk": "ctk biotech"}
+               "oriengene": "orient", "accu": "roche", "onetouch": "lifescan", "determine": "abbott nhat ban", "mp biomedicals": "mp biomedical", "sd bionline": "sd biosensor", "ctk": "ctk biotech"}
 
 
 def _fold(t):
@@ -217,6 +217,15 @@ def brand_label(h):
     return t.strip(" \"',.;-") or h
 
 
+def abbott_site(r):
+    t = _fold(" ".join(str(x or "") for x in (r[6], r[9] if len(r) > 9 else "", r[7], r[5])))
+    if re.search(r"korea|han quoc|bioline", t):
+        return "abbott han quoc"
+    if re.search(r"medical|chiba|nhat|japan|determine", t):
+        return "abbott nhat ban"
+    return "abbott khac"
+
+
 def canon_brands(items, idx_hang):
     """Gộp tên hãng ghi nhiều kiểu về một tên chuẩn: khóa theo từ chính, tên chứa sẵn khóa của hãng lớn, sửa lỗi chính tả gần giống."""
     from collections import Counter
@@ -233,6 +242,8 @@ def canon_brands(items, idx_hang):
             close = difflib.get_close_matches(k, majors, n=1, cutoff=0.8)
             hit = close[0] if close and close[0][0] == k[0] else None
         k = BRAND_ALIAS.get(hit or k, hit or k)
+        if k == "abbott":  # Abbott Hàn Quốc (Bioline, Abbott Diagnostics Korea) khác Abbott Nhật Bản (Determine, Chiba)
+            k = abbott_site(r)
         out.append("" if (not k or k in GENERIC or len(r[idx_hang]) > 90) else k)
     # gộp các khóa gần giống nhau (lỗi chính tả: "sd biosenso" -> "sd biosensor") về khóa nhiều dòng hơn
     c2 = Counter(k for k in out if k)
@@ -256,7 +267,9 @@ def canon_brands(items, idx_hang):
     for r, k in zip(items, out):
         if k:
             labels.setdefault(k, Counter())[brand_label(r[idx_hang])] += 1
-    return [labels[k].most_common(1)[0][0] if k else "Không ghi rõ" for k in out]
+    fixed = {"abbott han quoc": "Abbott Diagnostics Korea (Hàn Quốc)", "abbott nhat ban": "Abbott Diagnostics Medical (Nhật Bản)",
+             "abbott khac": "Abbott (Mỹ / khác)"}
+    return [fixed.get(k) or labels[k].most_common(1)[0][0] if k else "Không ghi rõ" for k in out]
 
 
 def build():
