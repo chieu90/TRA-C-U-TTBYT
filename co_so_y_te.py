@@ -136,6 +136,34 @@ def classify(r, kw):
     return None
 
 
+# HIV trên KQ Test tách theo thế hệ: chỉ phát hiện kháng thể (thế hệ 3) / kháng nguyên p24 + kháng thể (thế hệ 4)
+HIV, HIV_AB, HIV_AGAB = "HIV", "HIV Ab", "HIV Ag/Ab"
+# sản phẩm (nhãn hiệu / ký mã) phát hiện kháng nguyên p24 + kháng thể: Determine Early Detect, Genesee R0018C, Biotest IHIV-C4x...
+# (g.norm đổi dấu câu thành khoảng trắng: "7D28-43" -> "7d28 43", "3.0" -> "3 0")
+HIV_AGAB_SP = re.compile(r"early detect|7d ?28 ?4|r0018c|ihiv ?c4|\bag\s*[/&+-]?\s*ab\b|4th gen|p24")
+# sản phẩm chỉ phát hiện kháng thể (Determine HIV-1/2, Bioline 3.0, OnSite Ab Plus Combo, InTec Anti-HIV, HIV/Syphilis Duo...)
+HIV_AB_SP = re.compile(r"7d ?23 ?43|03fk1|r0011c|ihib ?402|ab plus|anti ?hiv|itp02006|aib ?7030|am4361|\b3 0\b|duo|syphilis")
+HIV_AGAB_RE = re.compile(r"early detect|p24|\bag\s*[/&+-]?\s*ab\b|kháng nguyên và kháng thể|kháng nguyên/kháng thể|"
+                         r"thế hệ 4|thế hệ thứ 4|thế hệ iv|4th gen|fourth gen")
+HIV_AB_RE = re.compile(r"thế hệ 3|thế hệ thứ 3|3rd gen|\b3 0\b|duo|syphilis|giang mai|kháng thể")
+
+
+def split_hiv(r):
+    """HIV Ab hay HIV Ag/Ab: theo sản phẩm trúng (nhãn hiệu, ký mã) trước, rồi tên hàng; mô tả chỉ xét chữ p24
+    (mô tả test kháng thể hay ghi "cộng hợp kháng nguyên tái tổ hợp" nên không dựa vào chữ "kháng nguyên")."""
+    sp = g.norm(g.clean(r.get("nhanHieu")) + " " + g.clean(r.get("kyMaHieu")))
+    name = g.norm(ten(r))
+    if HIV_AGAB_SP.search(sp):
+        return HIV_AGAB
+    if HIV_AB_SP.search(sp):
+        return HIV_AB
+    if HIV_AGAB_RE.search(name):
+        return HIV_AGAB
+    if HIV_AB_RE.search(name) or HIV_AB_SP.search(name):
+        return HIV_AB
+    return HIV_AGAB if re.search(r"p24", g.norm(g.clean(r.get("cauHinh")))) else HIV_AB
+
+
 def now_vn():
     return datetime.now(timezone(timedelta(hours=7))).replace(tzinfo=None)
 
@@ -182,6 +210,8 @@ def results(kw):
     pk, items, dh_items = {}, [], []
     for r in uniq.values():
         nhom = classify(r, kw)
+        if nhom == HIV:
+            nhom = split_hiv(r)
         if not nhom or not r.get("maTbmt"):
             continue
         if bat_thuong(r):
@@ -371,7 +401,8 @@ def build(paths=(TT_PATH, DH_PATH)):
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items, dh_items = results(kw)
     cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan", "ma_cdt"]
-    for path, rows, nhom in [(paths[0], items, [DASH_TEN.get(x["ten"], x["ten"]) for x in kw["nhom"] if x["ten"] not in DASH_BO]),
+    tt_nhom = [y for x in kw["nhom"] if x["ten"] not in DASH_BO for y in ([HIV_AB, HIV_AGAB] if x["ten"] == HIV else [DASH_TEN.get(x["ten"], x["ten"])])]
+    for path, rows, nhom in [(paths[0], items, tt_nhom),
                              (paths[1], dh_items, ["Đường huyết"])]:
         rows.sort(key=lambda r: r[3], reverse=True)
         for r, h in zip(rows, canon_brands(rows, 6)):
