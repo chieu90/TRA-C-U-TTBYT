@@ -475,7 +475,7 @@ const M = () => $('#metric').value;
 const val = r => M() === 'sl' ? r.sl_test || 0 : r.tien;
 const show = v => M() === 'sl' ? fmtQty(v) : money(v);
 const unit = () => M() === 'sl' ? ' test' : ' đ';
-const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu' : v >= 1e4 ? Math.round(v / 1e3).toLocaleString('vi-VN') + ' nghìn' : num(v);
+const fmtQty = v => v >= 1e6 ? (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu' : num(v);
 
 function load(d) {
   const c = d.cot;
@@ -637,7 +637,8 @@ const fmtPct = p => (p > 0 ? '+' : '') + p.toLocaleString('vi-VN', { maximumFrac
 // nhãn tăng/giảm có mũi tên (không chỉ dựa vào màu)
 const delta = (a, b) => !a && !b ? '<span class="dl eq">–</span>' : !a ? '<span class="dl nw">Mới</span>' : !b ? '<span class="dl dn">▼ Không còn</span>'
   : (p => Math.abs(p) < 0.5 ? '<span class="dl eq">≈ 0%</span>' : `<span class="dl ${p > 0 ? 'up' : 'dn'}">${p > 0 ? '▲' : '▼'} ${fmtPct(p)}</span>`)(pctOf(a, b));
-const showS = v => (v < 0 ? '−' : v > 0 ? '+' : '') + show(Math.abs(v));
+const cell = v => M() === 'sl' ? num(v) : show(v);  // bảng so sánh: số test ghi đủ
+const showS = v => (v < 0 ? '−' : v > 0 ? '+' : '') + cell(Math.abs(v));
 let CT = {};  // dữ liệu từng bảng so sánh (để mở rộng / tải Excel)
 
 function cgroup(key, label) {
@@ -656,8 +657,8 @@ function ctable(id, title, col, data, n = 15) {
   const open = $('#' + id).dataset.open === '1', rows = open ? data : data.slice(0, n);
   const share = (v, s) => (v / s * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%';
   $('#' + id).innerHTML = `<div class="scroll"><table class="tbl ctbl"><thead><tr><th class="n">#</th><th>${col}</th><th class="n">${NAM_CU}</th><th class="n">${NAM_MOI}</th><th class="n">Chênh lệch</th><th class="n">Tăng/giảm</th><th class="n">Thị phần ${NAM_CU} → ${NAM_MOI}</th><th></th></tr></thead><tbody>`
-    + (rows.map((g, i) => `<tr><td class="n sub2">${i + 1}</td><td class="nm" data-l="${col}">${esc(g.label)}</td><td class="n" data-l="${NAM_CU}">${g.a ? show(g.a) : '–'}</td>
-      <td class="n" data-l="${NAM_MOI}"><b>${g.b ? show(g.b) : '–'}</b></td><td class="n" data-l="Chênh lệch">${showS(g.b - g.a)}</td><td class="n" data-l="Tăng/giảm">${delta(g.a, g.b)}</td>
+    + (rows.map((g, i) => `<tr><td class="n sub2">${i + 1}</td><td class="nm" data-l="${col}">${esc(g.label)}</td><td class="n" data-l="${NAM_CU}">${g.a ? cell(g.a) : '–'}</td>
+      <td class="n" data-l="${NAM_MOI}"><b>${g.b ? cell(g.b) : '–'}</b></td><td class="n" data-l="Chênh lệch">${showS(g.b - g.a)}</td><td class="n" data-l="Tăng/giảm">${delta(g.a, g.b)}</td>
       <td class="n sub2" data-l="Thị phần">${share(g.a, sa)} → <b>${share(g.b, sb)}</b></td>
       <td><div class="bar2"><i class="a" style="width:${g.a / mx * 100}%"></i><i class="b" style="width:${g.b / mx * 100}%"></i></div></td></tr>`).join('')
       || '<tr><td colspan="8" class="sub2">Không có dữ liệu.</td></tr>') + '</tbody></table></div>'
