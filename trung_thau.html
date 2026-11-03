@@ -289,13 +289,20 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
   body.side-off .layout { grid-template-columns: minmax(0, 1fr); }
   body.side-off .side { display: none; }
 }
+/* nút dịch (Google Dịch) */
+.lang { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 10px;
+  padding: 7px 10px; font: inherit; font-size: 14px; cursor: pointer; }
+.lang option { color: #111; }
+body { top: 0 !important; }
+.skiptranslate > iframe, .goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
+font[style] { background: none !important; box-shadow: none !important; }
 </style>
 </head>
 <body>
 <header class="hero"><div class="hero-in">
   <div class="top">
     <h1 id="h1">Kết quả trúng thầu test nhanh</h1>
-    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/">Tra cứu TBYT</a></nav>
+    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/">Tra cứu TBYT</a></nav><select id="lang" class="lang notranslate" translate="no" aria-label="Ngôn ngữ"><option value="vi">🌐 Tiếng Việt</option><option value="en">English</option><option value="zh-CN">中文</option><option value="ko">한국어</option><option value="ja">日本語</option><option value="th">ไทย</option><option value="fr">Français</option></select>
   </div>
   <p class="sub" id="sub">Mặt hàng test nhanh trong các kết quả lựa chọn nhà thầu đăng trên <a href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a>.</p>
 </div></header>
@@ -334,7 +341,7 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
   <section class="card full" data-c="blue">
     <h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span id="mTitle">Giá trị trúng thầu theo tháng</span></h2>
     <p class="cap" id="mCap"></p>
-    <div class="cols" id="month"></div><div class="xl" id="monthX"></div>
+    <div class="cols" id="month"></div><div class="xl notranslate" id="monthX" translate="no"></div>
   </section>
 
   <div class="grid2">
@@ -668,6 +675,19 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
   const set = off => { document.body.classList.toggle('side-off', off); b.querySelector('span').textContent = off ? 'Hiện bộ lọc' : 'Ẩn bộ lọc'; };
   let off = false; try { off = localStorage.getItem('side_off') === '1'; } catch (e) {} set(off);
   b.addEventListener('click', () => { off = !off; set(off); try { localStorage.setItem('side_off', off ? '1' : '0'); } catch (e) {} });
+})();
+</script>
+<div id="gt" style="display:none"></div>
+<script>
+// nút dịch: lưu ngôn ngữ vào cookie googtrans rồi để Google Dịch dịch cả trang (kể cả dữ liệu tải sau)
+(() => { const s = document.getElementById('lang'); if (!s) return;
+  const cur = (document.cookie.match(/googtrans=\/vi\/([^;]+)/) || [])[1] || 'vi'; s.value = cur;
+  const set = v => { const d = location.hostname, c = v === 'vi' ? '=;expires=Thu, 01 Jan 1970 00:00:00 GMT' : '=/vi/' + v;
+    document.cookie = 'googtrans' + c + ';path=/'; document.cookie = 'googtrans' + c + ';path=/;domain=.' + d; };
+  s.addEventListener('change', () => { set(s.value); location.reload(); });
+  if (cur === 'vi') return;
+  window.gtInit = () => new google.translate.TranslateElement({ pageLanguage: 'vi', autoDisplay: false }, 'gt');
+  const t = document.createElement('script'); t.src = 'https://translate.google.com/translate_a/element.js?cb=gtInit'; document.body.appendChild(t);
 })();
 </script>
 </body>

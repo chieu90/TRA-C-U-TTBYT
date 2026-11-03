@@ -189,13 +189,20 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
   body.side-off .layout { grid-template-columns: minmax(0, 1fr); }
   body.side-off .side { display: none; }
 }
+/* nút dịch (Google Dịch) */
+.lang { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 10px;
+  padding: 7px 10px; font: inherit; font-size: 14px; cursor: pointer; }
+.lang option { color: #111; }
+body { top: 0 !important; }
+.skiptranslate > iframe, .goog-te-banner-frame, #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
+font[style] { background: none !important; box-shadow: none !important; }
 </style>
 </head>
 <body>
 <header class="hero"><div class="hero-in">
   <div class="top">
     <h1>Báo giá – sản phẩm quan tâm</h1>
-    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/">Tra cứu TBYT</a></nav>
+    <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/">Tra cứu TBYT</a></nav><select id="lang" class="lang notranslate" translate="no" aria-label="Ngôn ngữ"><option value="vi">🌐 Tiếng Việt</option><option value="en">English</option><option value="zh-CN">中文</option><option value="ko">한국어</option><option value="ja">日本語</option><option value="th">ไทย</option><option value="fr">Français</option></select>
   </div>
   <p class="sub" id="sub">Yêu cầu báo giá (YCBG) trên <a href="https://muasamcong.mof.gov.vn/web/guest/smart-price" target="_blank" rel="noopener">muasamcong.mof.gov.vn</a> (mục Hóa chất/vật tư xét nghiệm, thiết bị y tế). Giá đã báo và YCBG đã có tự cập nhật mỗi 4 giờ; YCBG mới được bổ sung khi có lệnh quét (xem thời điểm cập nhật bên dưới). "Đang nhận báo giá": yêu cầu báo giá còn hạn có mặt hàng quan tâm. "Giá đã báo": các mức giá nhà cung cấp đã gửi (mỗi mặt hàng có thể có nhiều báo giá).</p>
 </div></header>
@@ -432,6 +439,19 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
   const set = off => { document.body.classList.toggle('side-off', off); b.querySelector('span').textContent = off ? 'Hiện bộ lọc' : 'Ẩn bộ lọc'; };
   let off = false; try { off = localStorage.getItem('side_off') === '1'; } catch (e) {} set(off);
   b.addEventListener('click', () => { off = !off; set(off); try { localStorage.setItem('side_off', off ? '1' : '0'); } catch (e) {} });
+})();
+</script>
+<div id="gt" style="display:none"></div>
+<script>
+// nút dịch: lưu ngôn ngữ vào cookie googtrans rồi để Google Dịch dịch cả trang (kể cả dữ liệu tải sau)
+(() => { const s = document.getElementById('lang'); if (!s) return;
+  const cur = (document.cookie.match(/googtrans=\/vi\/([^;]+)/) || [])[1] || 'vi'; s.value = cur;
+  const set = v => { const d = location.hostname, c = v === 'vi' ? '=;expires=Thu, 01 Jan 1970 00:00:00 GMT' : '=/vi/' + v;
+    document.cookie = 'googtrans' + c + ';path=/'; document.cookie = 'googtrans' + c + ';path=/;domain=.' + d; };
+  s.addEventListener('change', () => { set(s.value); location.reload(); });
+  if (cur === 'vi') return;
+  window.gtInit = () => new google.translate.TranslateElement({ pageLanguage: 'vi', autoDisplay: false }, 'gt');
+  const t = document.createElement('script'); t.src = 'https://translate.google.com/translate_a/element.js?cb=gtInit'; document.body.appendChild(t);
 })();
 </script>
 </body>
