@@ -289,6 +289,40 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
   body.side-off .layout { grid-template-columns: minmax(0, 1fr); }
   body.side-off .side { display: none; }
 }
+/* ===== chế độ So sánh 2025–2026 ===== */
+:root { --y1: color-mix(in srgb, var(--c-blue) 38%, var(--surface)); --y2: var(--c-blue); }
+body:not(.cmp-mode) .cmpo { display: none !important; }
+body.cmp-mode main > :not(#cmp):not(.topbtns) { display: none !important; }
+.topbtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 10px; }
+.topbtns .side-btn { margin: 0; }
+.cmp-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 13.5px; font-weight: 600; border-radius: 999px; text-decoration: none;
+  color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); box-shadow: var(--shadow); }
+.cmp-btn svg { width: 16px; height: 16px; }
+.cmp-btn:hover { filter: brightness(1.08); }
+body.cmp-mode .noc { display: none !important; }
+#cmp .kpis { grid-template-columns: repeat(3, 1fr); }
+#cmp .kpi .val { font-size: 28px; }
+#cmp .kpi .old { color: var(--muted); font-size: 13px; margin-top: 2px; }
+#cmp .kpi.big .old { color: rgba(255,255,255,.85); }
+.dl { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.dl.up { color: var(--ok); background: var(--ok-bg); } .dl.dn { color: var(--bad); background: var(--bad-bg); } .dl.eq { color: var(--muted); background: var(--line-2); }
+.dl.nw { color: var(--accent); background: var(--accent-soft); }
+.lg { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+.lg span { display: inline-flex; align-items: center; gap: 6px; } .lg i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.cols .c.pair { gap: 2px; align-items: flex-end; }
+.cols .c.pair i { max-width: 18px; flex: 1; }
+.cols .c.pair i.a { background: var(--y1); } .cols .c.pair i.b { background: var(--y2); }
+#cum svg { width: 100%; height: auto; max-height: 260px; display: block; }
+#cum .ln { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+#cum .gd { stroke: var(--grid); } #cum text { font-size: 11px; fill: var(--muted); }
+#cum circle { stroke: var(--surface); stroke-width: 2; }
+#cum .hit { fill: transparent; cursor: default; }
+.ctbl td.nm { max-width: 340px; }
+.ctbl .bar2 { display: grid; gap: 2px; width: 90px; } .ctbl .bar2 i { display: block; height: 6px; border-radius: 0 3px 3px 0; min-width: 1px; }
+.ctbl .bar2 i.a { background: var(--y1); } .ctbl .bar2 i.b { background: var(--y2); }
+.cmore { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 900px) { #cmp .kpis { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) { .ctbl .bar2 { display: none; } }
 /* nút dịch (Google Dịch) */
 .lang { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 10px;
   padding: 7px 10px; font: inherit; font-size: 14px; cursor: pointer; }
@@ -312,8 +346,12 @@ font[style] { background: none !important; box-shadow: none !important; }
     <div class="row">
       <span class="sl">Tìm kiếm</span>
       <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
-      <span class="sl">Năm</span>
-      <select id="nam" aria-label="Năm"><option value="2026">Năm 2026</option><option value="2025">Năm 2025</option></select>
+      <span class="sl noc">Năm</span>
+      <select class="noc" id="nam" aria-label="Năm"><option value="2026">Năm 2026</option><option value="2025">Năm 2025</option></select>
+      <span class="sl cmpo">Kỳ so sánh</span>
+      <select id="ky" class="cmpo" aria-label="Kỳ so sánh"><option value="ck">Cùng kỳ</option><option value="full">2026 với cả năm 2025</option></select>
+      <span class="sl cmpo">Sắp xếp bảng</span>
+      <select id="sx" class="cmpo" aria-label="Sắp xếp bảng"><option value="abs">Chênh lệch lớn nhất</option><option value="up">Tăng nhiều nhất</option><option value="dn">Giảm nhiều nhất</option><option value="b">Giá trị 2026</option></select>
       <span class="sl">Thời gian</span>
       <select id="from" aria-label="Từ tháng"></select>
       <select id="to" aria-label="Đến tháng"></select>
@@ -329,7 +367,8 @@ font[style] { background: none !important; box-shadow: none !important; }
     <div class="active" id="active"></div>
   </aside>
   <main class="main">
-  <button type="button" class="side-btn" id="sideBtn" aria-controls="side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Ẩn bộ lọc</span></button>
+  <div class="topbtns"><button type="button" class="side-btn" id="sideBtn" aria-controls="side"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Ẩn bộ lọc</span></button>
+    <a class="cmp-btn" id="cmpBtn" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>So sánh 2025–2026</span></a></div>
   <section class="card full" id="rank" hidden>
     <div class="bar" style="margin:0 0 10px"><div><h2 id="rankTitle"></h2><p class="cap" id="rankCap" style="margin:0"></p></div>
       <div class="row" style="gap:8px"><input type="search" id="rq" placeholder="Tìm trong danh sách…" style="flex:0 1 240px"><button id="rcsv" type="button">Tải Excel</button><a class="more-link" id="back" href="/trung-thau">‹ Về Dashboard</a></div></div>
@@ -337,6 +376,30 @@ font[style] { background: none !important; box-shadow: none !important; }
   </section>
 
   <div class="kpis" id="kpis"></div>
+
+  <div id="cmp" hidden>
+    <div class="kpis" id="ck"></div>
+    <section class="card full" data-c="blue">
+      <h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span id="cmT">Theo tháng</span></h2>
+      <p class="cap" id="cmC"></p>
+      <div class="lg"><span><i style="background:var(--y1)"></i>2025</span><span><i style="background:var(--y2)"></i>2026</span></div>
+      <div class="cols" id="cm"></div><div class="xl notranslate" id="cmX" translate="no"></div>
+    </section>
+    <section class="card full" data-c="blue">
+      <h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span>Cộng dồn từ đầu năm</h2>
+      <p class="cap" id="cuC"></p>
+      <div class="lg"><span><i style="background:var(--y1)"></i>2025</span><span><i style="background:var(--y2)"></i>2026</span></div>
+      <div id="cum"></div>
+    </section>
+    <section class="card full" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg></span>Nhóm test</h2><p class="cap cby"></p><div id="t_nh"></div></section>
+    <section class="card full" data-c="violet"><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20V8l6 4V8l6 4V4h4l2 16z"/></svg></span>Hãng sản xuất</h2><p class="cap cby"></p><div id="t_hang"></div></section>
+    <section class="card full" data-c="blue"><h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>Nhà thầu trúng</h2><p class="cap cby"></p><div id="t_nt"></div></section>
+    <section class="card full" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>Đơn giá trúng bình quân theo nhóm</h2>
+      <p class="cap">Trung vị đơn giá một test (chỉ dòng có đơn vị test / que / khay). Giá giảm là dấu hiệu bị ép giá.</p><div id="t_gia"></div></section>
+    <section class="card full" data-c="magenta"><h2><span class="hi" data-c="magenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Tỉnh/TP</h2><p class="cap cby"></p><div id="t_tp"></div></section>
+    <section class="card full" data-c="orange"><h2><span class="hi" data-c="orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg></span>Cơ sở y tế mua năm 2025, chưa mua năm 2026</h2>
+      <p class="cap" id="mkC"></p><div id="t_mk"></div></section>
+  </div>
 
   <section class="card full" data-c="blue">
     <h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span><span id="mTitle">Giá trị trúng thầu theo tháng</span></h2>
@@ -372,16 +435,26 @@ font[style] { background: none !important; box-shadow: none !important; }
 <script>
 const $ = s => document.querySelector(s);
 // cùng một giao diện cho 2 trang: /trung-thau (KQ Test) và /duong-huyet (KQ Đường Huyết)
-const PG = location.pathname.startsWith('/duong-huyet')
+// trang so sánh riêng: /so-sanh (KQ Test), /so-sanh-duong-huyet (KQ Đường Huyết)
+const DH = /^\/(so-sanh-)?duong-huyet/.test(location.pathname);
+const PG = DH
   ? { api: '/api/duong-huyet', path: '/duong-huyet', doc: 'KQ Đường Huyết', title: 'Kết quả trúng thầu que thử đường huyết', what: 'que thử đường huyết',
       focus: [['taidoc', 'TaiDoc'], ['acon', 'ACON'], ['roche', 'Roche']] }
   : { api: '/api/trung-thau', path: '/trung-thau', doc: 'KQ Test', title: 'Kết quả trúng thầu test nhanh', what: 'test nhanh',
       focus: [['intec', 'InTec'], ['wondfo', 'Wondfo'], ['genesee', 'Genesee']] };
 const NAM_MOI = '2026', NAM = new URLSearchParams(location.search).get('nam') || NAM_MOI;
-const SRC = NAM === NAM_MOI ? PG.api : PG.api.replace('/api/', '/').replace('-', '_') + '_' + NAM + '.json';
-document.title = PG.doc; $('#h1').textContent = PG.title;
+const CMP = location.pathname.startsWith('/so-sanh'), NAM_CU = '2025';  // so sánh năm trước với năm nay
+PG.cmp = DH ? '/so-sanh-duong-huyet' : '/so-sanh';
+const FILE = y => PG.api.replace('/api/', '/').replace('-', '_') + '_' + y + '.json';
+const SRC = NAM === NAM_MOI || CMP ? PG.api : FILE(NAM);
+// nút So sánh: sang trang so sánh (giữ bộ lọc đang chọn); ở trang so sánh thì là nút quay về dashboard
+if (CMP) { $('#cmpBtn').href = PG.path; $('#cmpBtn').querySelector('span').textContent = '‹ Về Dashboard ' + PG.doc; }
+$('#cmpBtn').addEventListener('click', e => { e.preventDefault(); const p = state(); p.delete('nam'); p.delete('from'); p.delete('to');
+  location.href = (CMP ? PG.path : PG.cmp) + (p.toString() ? '?' + p : ''); });
+let CUT = '';  // ngày (MM-DD) mới nhất của năm nay -> mốc "cùng kỳ" cho năm trước
+document.title = CMP ? 'So sánh 2025–2026 – ' + PG.doc : PG.doc; $('#h1').textContent = CMP ? PG.title.replace('Kết quả trúng thầu', 'So sánh trúng thầu') + ' 2025–2026' : PG.title;
 PG.focus.forEach((f, i) => $('#f' + (i + 1)).textContent = f[1]);
-document.querySelectorAll('.nav a').forEach(a => { if (a.getAttribute('href') === PG.path) a.remove(); });
+document.querySelectorAll('.nav a').forEach(a => { if (a.getAttribute('href') === PG.path && !CMP) a.remove(); });
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const num = n => n == null ? '' : Math.round(n).toLocaleString('vi-VN');
@@ -411,15 +484,18 @@ function load(d) {
     // hãng đã chuẩn hóa sẵn ở bước dựng dữ liệu (gộp tên ghi nhiều kiểu, sửa lỗi chính tả)
     o.hk = o.hang_chuan || brandKey(o.hang) || 'Không ghi rõ'; o.hn = o.hang_chuan || o.hang;
     o.s = fold([o.ma, o.cdt, o.ten, o.hang, o.nhan, o.ky_ma, o.nha_thau].join(' ')); return o; });
-  const months = [...new Set(R.map(r => r.ngay.slice(0, 7)))].sort();
-  const opt = m => `<option value="${m}">Tháng ${+m.slice(5)}/${m.slice(0, 4)}</option>`;
+  // chế độ so sánh: chọn tháng trong năm (01–12), áp cho cả hai năm
+  const months = [...new Set(R.map(r => CMP ? r.ngay.slice(5, 7) : r.ngay.slice(0, 7)))].sort();
+  const opt = m => `<option value="${m}">Tháng ${CMP ? +m : +m.slice(5) + '/' + m.slice(0, 4)}</option>`;
   $('#from').innerHTML = months.map(opt).join(''); $('#to').innerHTML = months.map(opt).join('');
   $('#from').value = months[0]; $('#to').value = months[months.length - 1];
+  if (CMP) { CUT = R.filter(r => r.y === NAM_MOI).reduce((m, r) => r.ngay.slice(5) > m ? r.ngay.slice(5) : m, ''); $('#to').value = CUT.slice(0, 2); }
   const nh = new Set(R.map(r => r.nhom));
   const cnt = {}; R.forEach(r => cnt[r.nhom] = (cnt[r.nhom] || 0) + 1);
   $('#nhomList').innerHTML = d.nhom.filter(x => nh.has(x)).map(x => `<label><input type="checkbox" value="${esc(x)}"> ${esc(x)}<b>${cnt[x]}</b></label>`).join('');
   $('#tinh').innerHTML += [...new Set(R.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(x => `<option>${esc(x)}</option>`).join('');
-  $('#sub').textContent = `Mặt hàng ${PG.what} trong kết quả lựa chọn nhà thầu năm ${d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
+  $('#sub').textContent = `Mặt hàng ${PG.what} trong kết quả lựa chọn nhà thầu ${CMP ? `năm ${NAM_CU} và ${NAM_MOI}` : 'năm ' + d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
+  if (CMP) $('#ky').options[0].textContent = `Cùng kỳ (01/01 – ${CUT.split('-').reverse().join('/')})`;
   fromUrl();
   apply();
 }
@@ -427,13 +503,15 @@ function load(d) {
 function apply() {
   const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
   $('#nhomBtn').innerHTML = `<span>${esc(!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : nhom.size + ' nhóm test')}</span><span class="car">▼</span>`;
-  const base = r => r.ngay.slice(0, 7) >= f && r.ngay.slice(0, 7) <= t && (!nhom.size || nhom.has(r.nhom))
+  const ck = CMP && $('#ky').value === 'ck', mo = r => CMP ? r.ngay.slice(5, 7) : r.ngay.slice(0, 7);
+  const base = r => mo(r) >= f && mo(r) <= t && (!ck || r.y === NAM_MOI || r.ngay.slice(5) <= CUT) && (!nhom.size || nhom.has(r.nhom))
     && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!pick.hk || r.hk === pick.hk) && (!pick.cdt || r.cdt === pick.cdt);
   mapView = R.filter(base);  // bản đồ luôn hiện đủ các tỉnh, tỉnh đang lọc được viền đậm
   view = mapView.filter(r => !tinh || r.tinh === tinh);
   page = 0;
   $('#active').innerHTML = [pick.nt && ['nt', 'Nhà thầu: ' + pick.nt], pick.hk && ['hk', 'Hãng: ' + pick.hn], pick.cdt && ['cdt', 'Chủ đầu tư: ' + pick.cdt]].filter(Boolean)
     .map(([k, s]) => `<button data-k="${k}" type="button">${esc(s)} ✕</button>`).join('');
+  if (CMP) return renderCmp();
   render();
   drawMap();
   if (XEM) rank();
@@ -551,6 +629,119 @@ function saveXlsx(rows, name) {
   document.head.appendChild(s);
 }
 
+// ===== chế độ So sánh 2025–2026 =====
+const A = r => r.y === NAM_CU;  // dòng năm trước
+const CS = r => r.ma_cdt || r.cdt;  // cơ sở: ghép theo mã định danh (tên đổi sau sáp nhập)
+const pctOf = (a, b) => a ? (b - a) / a * 100 : null;
+const fmtPct = p => (p > 0 ? '+' : '') + p.toLocaleString('vi-VN', { maximumFractionDigits: Math.abs(p) < 10 ? 1 : 0 }) + '%';
+// nhãn tăng/giảm có mũi tên (không chỉ dựa vào màu)
+const delta = (a, b) => !a && !b ? '<span class="dl eq">–</span>' : !a ? '<span class="dl nw">Mới</span>' : !b ? '<span class="dl dn">▼ Không còn</span>'
+  : (p => Math.abs(p) < 0.5 ? '<span class="dl eq">≈ 0%</span>' : `<span class="dl ${p > 0 ? 'up' : 'dn'}">${p > 0 ? '▲' : '▼'} ${fmtPct(p)}</span>`)(pctOf(a, b));
+const showS = v => (v < 0 ? '−' : v > 0 ? '+' : '') + show(Math.abs(v));
+let CT = {};  // dữ liệu từng bảng so sánh (để mở rộng / tải Excel)
+
+function cgroup(key, label) {
+  const m = new Map();
+  view.forEach(r => [].concat(key(r)).forEach(k => { if (!k) return; const g = m.get(k) || { k, a: 0, b: 0, ta: 0, tb: 0, na: 0, nb: 0, names: new Map() };
+    if (A(r)) { g.a += val(r); g.ta += r.tien; g.na++; } else { g.b += val(r); g.tb += r.tien; g.nb++; }
+    const nm = label ? label(r) : k; g.names.set(nm, (g.names.get(nm) || 0) + 1); m.set(k, g); }));
+  const sx = $('#sx').value, d = g => g.b - g.a;
+  const sorter = { abs: (x, y) => Math.abs(d(y)) - Math.abs(d(x)), up: (x, y) => d(y) - d(x), dn: (x, y) => d(x) - d(y), b: (x, y) => y.b - x.b }[sx];
+  return [...m.values()].filter(g => g.a > 0 || g.b > 0).map(g => ({ ...g, label: [...g.names].sort((x, y) => y[1] - x[1])[0][0] })).sort(sorter);
+}
+
+function ctable(id, title, col, data, n = 15) {
+  const sa = data.reduce((s, g) => s + g.a, 0) || 1, sb = data.reduce((s, g) => s + g.b, 0) || 1, mx = Math.max(...data.map(g => Math.max(g.a, g.b)), 1);
+  CT[id] = { title, col, data, sa, sb };
+  const open = $('#' + id).dataset.open === '1', rows = open ? data : data.slice(0, n);
+  const share = (v, s) => (v / s * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%';
+  $('#' + id).innerHTML = `<div class="scroll"><table class="tbl ctbl"><thead><tr><th class="n">#</th><th>${col}</th><th class="n">${NAM_CU}</th><th class="n">${NAM_MOI}</th><th class="n">Chênh lệch</th><th class="n">Tăng/giảm</th><th class="n">Thị phần ${NAM_CU} → ${NAM_MOI}</th><th></th></tr></thead><tbody>`
+    + (rows.map((g, i) => `<tr><td class="n sub2">${i + 1}</td><td class="nm" data-l="${col}">${esc(g.label)}</td><td class="n" data-l="${NAM_CU}">${g.a ? show(g.a) : '–'}</td>
+      <td class="n" data-l="${NAM_MOI}"><b>${g.b ? show(g.b) : '–'}</b></td><td class="n" data-l="Chênh lệch">${showS(g.b - g.a)}</td><td class="n" data-l="Tăng/giảm">${delta(g.a, g.b)}</td>
+      <td class="n sub2" data-l="Thị phần">${share(g.a, sa)} → <b>${share(g.b, sb)}</b></td>
+      <td><div class="bar2"><i class="a" style="width:${g.a / mx * 100}%"></i><i class="b" style="width:${g.b / mx * 100}%"></i></div></td></tr>`).join('')
+      || '<tr><td colspan="8" class="sub2">Không có dữ liệu.</td></tr>') + '</tbody></table></div>'
+    + `<div class="cmore">${data.length > n ? `<button type="button" data-more="${id}">${open ? 'Thu gọn' : `Xem tất cả ${num(data.length)}`}</button>` : ''}<button type="button" data-xl="${id}">Tải Excel</button></div>`;
+}
+
+function renderCmp() {
+  const a = view.filter(A), b = view.filter(r => !A(r)), sl = M() === 'sl';
+  const st = rs => ({ tien: rs.reduce((s, r) => s + r.tien, 0), qty: rs.reduce((s, r) => s + (r.sl_test || 0), 0), goi: new Set(rs.map(r => r.ma)).size,
+    cs: new Set(rs.map(CS)).size, nt: new Set(rs.flatMap(r => r.nha_thau.split('; ').filter(Boolean))).size, hg: new Set(rs.map(r => r.hk).filter(k => k !== 'Không ghi rõ')).size });
+  const x = st(a), y = st(b), ky = $('#ky').value === 'ck' ? `cùng kỳ 01/01–${CUT.split('-').reverse().join('/')}` : `cả năm ${NAM_CU}`;
+  const card = (c, lbl, k, f, big) => `<div class="kpi${big ? ' big' : ''}" data-c="${c}"><div class="lbl">${lbl}</div><div class="val">${f(y[k])}</div>
+    <div class="old">${NAM_CU}: ${f(x[k])}</div><div style="margin-top:6px">${delta(x[k], y[k])}</div></div>`;
+  $('#ck').innerHTML = card('blue', `Giá trị trúng thầu ${NAM_MOI}`, 'tien', v => money(v) + ' đ', 1) + card('aqua', 'Số lượng test', 'qty', v => fmtQty(v))
+    + card('blue', 'Gói thầu có kết quả', 'goi', num) + card('orange', 'Cơ sở y tế mua', 'cs', num) + card('aqua', 'Nhà thầu trúng', 'nt', num) + card('violet', 'Hãng sản xuất', 'hg', num);
+  // theo tháng: cột đôi
+  const ms = []; for (let m = +$('#from').value; m <= +$('#to').value; m++) ms.push(String(m).padStart(2, '0'));
+  const mv = ms.map(m => ({ m, a: 0, b: 0 })); view.forEach(r => { const o = mv.find(z => z.m === r.ngay.slice(5, 7)); if (o) o[A(r) ? 'a' : 'b'] += val(r); });
+  const top = nice(Math.max(...mv.flatMap(z => [z.a, z.b]), 1)), box = $('#cm');
+  box.innerHTML = [1, .5, 0].map(f => `<div class="gl" style="top:${(1 - f) * 100}%"><span>${f ? show(top * f) : '0'}</span></div>`).join('') + '<div class="bars"></div>';
+  mv.forEach(z => { const c = document.createElement('div'); c.className = 'c pair'; c.tabIndex = 0;
+    c.innerHTML = `<i class="a" style="height:${z.a / top * 100}%"></i><i class="b" style="height:${z.b / top * 100}%"></i>`; box.lastChild.append(c);
+    hover(c, [`Tháng ${+z.m}`, `${NAM_MOI}: ${num(z.b)}${unit()}`, `${NAM_CU}: ${num(z.a)}${unit()}`, z.a ? 'Tăng/giảm: ' + fmtPct(pctOf(z.a, z.b)) : '']); });
+  $('#cmX').innerHTML = mv.map(z => `<span>T${+z.m}</span>`).join('');
+  $('#cmT').textContent = sl ? 'Số lượng test theo tháng' : 'Giá trị trúng thầu theo tháng';
+  $('#cmC').textContent = `${NAM_CU} (${ky}) cạnh ${NAM_MOI}, theo ngày đăng kết quả. Tháng ${+CUT.slice(0, 2)}/${NAM_MOI} mới có số liệu đến ngày ${+CUT.slice(3)}.`;
+  // cộng dồn
+  let ca = 0, cb = 0; const cu = mv.map(z => ({ m: z.m, a: ca += z.a, b: cb += z.b }));
+  const lastB = cu.findIndex(z => z.m > CUT.slice(0, 2)), cuB = lastB < 0 ? cu : cu.slice(0, lastB);
+  const W = 640, H = 200, L = 52, T = 10, B = 24, tp = nice(Math.max(ca, cb, 1)), X = i => L + (W - L - 10) * (cu.length < 2 ? .5 : i / (cu.length - 1)), Y = v => T + (H - T - B) * (1 - v / tp);
+  const pts = (arr, k) => arr.map((z, i) => `${X(i)},${Y(z[k])}`).join(' ');
+  $('#cum').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Giá trị cộng dồn 2025 và 2026">`
+    + [0, .5, 1].map(f => `<line class="gd" x1="${L}" x2="${W - 10}" y1="${Y(tp * f)}" y2="${Y(tp * f)}"/><text x="${L - 6}" y="${Y(tp * f) + 4}" text-anchor="end">${f ? show(tp * f) : '0'}</text>`).join('')
+    + cu.map((z, i) => `<text x="${X(i)}" y="${H - 6}" text-anchor="middle">T${+z.m}</text>`).join('')
+    + `<polyline class="ln" stroke="var(--y1)" points="${pts(cu, 'a')}"/><polyline class="ln" stroke="var(--y2)" points="${pts(cuB, 'b')}"/>`
+    + cu.map((z, i) => `<circle r="4" cx="${X(i)}" cy="${Y(z.a)}" fill="var(--y1)"/>`).join('') + cuB.map((z, i) => `<circle r="4" cx="${X(i)}" cy="${Y(z.b)}" fill="var(--y2)"/>`).join('')
+    + cu.map((z, i) => `<rect class="hit" data-i="${i}" x="${X(i) - (W - L) / cu.length / 2}" y="0" width="${(W - L) / cu.length}" height="${H}" tabindex="0"/>`).join('') + '</svg>';
+  $('#cum').querySelectorAll('.hit').forEach(h => { const z = cu[+h.dataset.i], hasB = +h.dataset.i < cuB.length;
+    hover(h, [`Đến hết tháng ${+z.m}`, hasB ? `${NAM_MOI}: ${num(z.b)}${unit()}` : `${NAM_MOI}: chưa có`, `${NAM_CU}: ${num(z.a)}${unit()}`, hasB && z.a ? 'Tăng/giảm: ' + fmtPct(pctOf(z.a, z.b)) : '']); });
+  const ahead = cuB.filter(z => z.b > z.a).length, L2 = cuB[cuB.length - 1];
+  $('#cuC').textContent = L2 ? `Cộng dồn ${NAM_MOI} cao hơn ${NAM_CU} ở ${ahead}/${cuB.length} tháng. Đến hết tháng ${+L2.m}: ${NAM_MOI} ${show(L2.b)}${unit()}, ${NAM_CU} ${show(L2.a)}${unit()}`
+    + (L2.a ? ` (${fmtPct(pctOf(L2.a, L2.b))}).` : '.') : '';
+  // bảng so sánh
+  document.querySelectorAll('.cby').forEach(e => e.textContent = `${sl ? 'Số lượng test' : 'Giá trị trúng thầu'} · ${ky} · bấm "Tải Excel" để lấy đủ danh sách`);
+  ctable('t_nh', 'Nhóm test', 'Nhóm test', cgroup(r => r.nhom), 30);
+  ctable('t_hang', 'Hãng sản xuất', 'Hãng', cgroup(r => r.hk, r => r.hn).filter(g => g.k !== 'Không ghi rõ'));
+  ctable('t_nt', 'Nhà thầu trúng', 'Nhà thầu', cgroup(r => r.nha_thau.split('; ').filter(Boolean)));
+  ctable('t_tp', 'Tỉnh/TP', 'Tỉnh/TP', cgroup(r => OLD2NEW[r.tinh] || r.tinh || 'Chưa rõ'));
+  // đơn giá trung vị / test theo nhóm
+  const med = v => { v.sort((p, q) => p - q); return !v.length ? null : v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2; };
+  const gp = new Map(); view.forEach(r => { if (!UNIT1.test((r.dvt || '').trim()) || !(r.don_gia > 0) || r.don_gia > 1e6) return;
+    const o = gp.get(r.nhom) || gp.set(r.nhom, { a: [], b: [] }).get(r.nhom); o[A(r) ? 'a' : 'b'].push(r.don_gia); });
+  const gr = [...gp].map(([k, o]) => ({ k, na: o.a.length, nb: o.b.length, a: med(o.a), b: med(o.b) })).filter(g => g.na + g.nb >= 5).sort((p, q) => (q.na + q.nb) - (p.na + p.nb));
+  CT.t_gia = { title: 'Đơn giá trung vị', gia: gr };
+  $('#t_gia').innerHTML = `<div class="scroll"><table class="tbl"><thead><tr><th>Nhóm test</th><th class="n">Số dòng ${NAM_CU}</th><th class="n">Đơn giá ${NAM_CU}</th><th class="n">Số dòng ${NAM_MOI}</th><th class="n">Đơn giá ${NAM_MOI}</th><th class="n">Tăng/giảm</th></tr></thead><tbody>`
+    + (gr.map(g => `<tr><td data-l="Nhóm">${esc(g.k)}</td><td class="n sub2" data-l="Số dòng ${NAM_CU}">${num(g.na)}</td><td class="n" data-l="Đơn giá ${NAM_CU}">${g.a ? num(g.a) + ' đ' : '–'}</td>
+      <td class="n sub2" data-l="Số dòng ${NAM_MOI}">${num(g.nb)}</td><td class="n" data-l="Đơn giá ${NAM_MOI}"><b>${g.b ? num(g.b) + ' đ' : '–'}</b></td><td class="n" data-l="Tăng/giảm">${g.a && g.b ? delta(g.a, g.b) : '–'}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="sub2">Không có dữ liệu.</td></tr>') + `</tbody></table></div><div class="cmore"><button type="button" data-xl="t_gia">Tải Excel</button></div>`;
+  // cơ sở mua năm trước, năm nay chưa mua
+  const csB = new Set(b.map(CS)), csA = new Set(a.map(CS)), mk = new Map();
+  a.forEach(r => { if (csB.has(CS(r))) return; const g = mk.get(CS(r)) || { k: r.cdt, tinh: r.tinh, tien: 0, qty: 0, goi: new Set(), nh: new Map(), nt: new Map(), ngay: '' };
+    g.tien += r.tien; g.qty += r.sl_test || 0; g.goi.add(r.ma); g.nh.set(r.nhom, (g.nh.get(r.nhom) || 0) + r.tien);
+    r.nha_thau.split('; ').filter(Boolean).forEach(n => g.nt.set(n, (g.nt.get(n) || 0) + r.tien)); if (r.ngay > g.ngay) g.ngay = r.ngay; mk.set(CS(r), g); });
+  const mx = [...mk.values()].sort((p, q) => q.tien - p.tien), topk = mp => [...mp].sort((p, q) => q[1] - p[1]).slice(0, 2).map(z => z[0]).join(', ');
+  const moi = [...csB].filter(c => !csA.has(c)).length;
+  $('#mkC').textContent = `${num(mx.length)} cơ sở (${money(mx.reduce((s, g) => s + g.tien, 0))} đ năm ${NAM_CU}) chưa có kết quả mua ${PG.what} năm ${NAM_MOI} · ngược lại có ${num(moi)} cơ sở mới mua năm ${NAM_MOI}. Danh sách khách cần chăm sóc.`;
+  CT.t_mk = { title: 'Khách chưa mua lại', mk: mx.map(g => ({ ...g, nhs: topk(g.nh), nts: topk(g.nt) })) };
+  const op = $('#t_mk').dataset.open === '1', show15 = op ? CT.t_mk.mk : CT.t_mk.mk.slice(0, 15);
+  $('#t_mk').innerHTML = `<div class="scroll"><table class="tbl"><thead><tr><th>Cơ sở y tế</th><th class="n">Giá trị ${NAM_CU}</th><th class="n">Số gói</th><th>Nhóm test chính</th><th>Nhà thầu đã trúng</th><th>KQ gần nhất</th></tr></thead><tbody>`
+    + (show15.map(g => `<tr><td data-l="Cơ sở">${esc(g.k)}<div class="sub2">${esc(g.tinh)}</div></td><td class="n" data-l="Giá trị ${NAM_CU}"><b>${money(g.tien)}</b></td><td class="n" data-l="Số gói">${g.goi.size}</td>
+      <td class="sub2" data-l="Nhóm">${esc(g.nhs)}</td><td class="sub2" data-l="Nhà thầu">${esc(g.nts)}</td><td class="sub2" data-l="KQ gần nhất">${day(g.ngay)}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="sub2">Không có.</td></tr>') + `</tbody></table></div><div class="cmore">${mx.length > 15 ? `<button type="button" data-more="t_mk">${op ? 'Thu gọn' : `Xem tất cả ${num(mx.length)}`}</button>` : ''}<button type="button" data-xl="t_mk">Tải Excel</button></div>`;
+}
+$('#cmp').addEventListener('click', e => {
+  const m = e.target.dataset.more; if (m) { const el = $('#' + m); el.dataset.open = el.dataset.open === '1' ? '' : '1'; renderCmp(); return; }
+  const id = e.target.dataset.xl; if (!id) return; const t = CT[id], u = M() === 'sl' ? ' (test)' : ' (đ)';
+  if (id === 't_gia') return saveXlsx([['Nhóm test', 'Số dòng ' + NAM_CU, 'Đơn giá trung vị ' + NAM_CU, 'Số dòng ' + NAM_MOI, 'Đơn giá trung vị ' + NAM_MOI, 'Tăng/giảm (%)'],
+    ...t.gia.map(g => [g.k, g.na, g.a, g.nb, g.b, g.a && g.b ? +pctOf(g.a, g.b).toFixed(1) : ''])], 'so-sanh-don-gia');
+  if (id === 't_mk') return saveXlsx([['Cơ sở y tế', 'Tỉnh/TP', 'Giá trị ' + NAM_CU + ' (đ)', 'Số test', 'Số gói', 'Nhóm test chính', 'Nhà thầu đã trúng', 'KQ gần nhất'],
+    ...t.mk.map(g => [g.k, g.tinh, Math.round(g.tien), g.qty, g.goi.size, g.nhs, g.nts, day(g.ngay)])], 'khach-chua-mua-lai-' + NAM_MOI);
+  saveXlsx([['#', t.col, NAM_CU + u, NAM_MOI + u, 'Chênh lệch' + u, 'Tăng/giảm (%)', 'Thị phần ' + NAM_CU + ' (%)', 'Thị phần ' + NAM_MOI + ' (%)', 'Số dòng ' + NAM_CU, 'Số dòng ' + NAM_MOI],
+    ...t.data.map((g, i) => [i + 1, g.label, Math.round(g.a), Math.round(g.b), Math.round(g.b - g.a), g.a ? +pctOf(g.a, g.b).toFixed(1) : '', +(g.a / t.sa * 100).toFixed(2), +(g.b / t.sb * 100).toFixed(2), g.na, g.nb])],
+    'so-sanh-' + t.title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-'));
+});
 
 // ===== danh sách đầy đủ ở tab mới (?xem=nt|hang|cdt|tp|nh, kèm bộ lọc hiện tại) =====
 const VIEWS = { nt: ['Nhà thầu trúng', 'Nhà thầu', r => r.nha_thau.split('; ').filter(Boolean)], hang: ['Hãng sản xuất', 'Hãng', r => r.hk, r => r.hn],
@@ -562,12 +753,13 @@ function state() {
   if (NAM !== NAM_MOI) p.set('nam', NAM);
   [['q', $('#q').value], ['from', $('#from').value], ['to', $('#to').value], ['metric', M()], ['tinh', $('#tinh').value],
    ['nhom', [...document.querySelectorAll('#nhomList input:checked')].map(i => i.value).join('|')],
-   ['nt', pick.nt], ['hk', pick.hk], ['hn', pick.hn], ['cdt', pick.cdt]].forEach(([k, v]) => { if (v) p.set(k, v); });
+   ['nt', pick.nt], ['hk', pick.hk], ['hn', pick.hn], ['cdt', pick.cdt], ['ky', CMP && $('#ky').value !== 'ck' && $('#ky').value], ['sx', CMP && $('#sx').value !== 'abs' && $('#sx').value]].forEach(([k, v]) => { if (v) p.set(k, v); });
   return p;
 }
 function fromUrl() {
   const p = new URLSearchParams(location.search), set = (id, v) => { if (v && [...$(id).options].some(o => o.value === v)) $(id).value = v; };
-  $('#q').value = p.get('q') || ''; set('#from', p.get('from')); set('#to', p.get('to')); set('#metric', p.get('metric')); set('#tinh', p.get('tinh'));
+  $('#q').value = p.get('q') || ''; set('#from', p.get('from')); set('#to', p.get('to')); set('#metric', p.get('metric')); set('#tinh', p.get('tinh')); set('#ky', p.get('ky')); set('#sx', p.get('sx'));
+  if (CMP) document.body.classList.add('cmp-mode'), $('#cmp').hidden = false;
   const nh = new Set((p.get('nhom') || '').split('|').filter(Boolean)); document.querySelectorAll('#nhomList input').forEach(i => i.checked = nh.has(i.value));
   ['nt', 'hk', 'hn', 'cdt'].forEach(k => { if (p.get(k)) pick[k] = p.get(k); });
   if (XEM) { document.body.classList.add('rank-mode'); $('#rank').hidden = false; document.title = VIEWS[XEM][0] + ' – trúng thầu'; }
@@ -645,10 +837,12 @@ function drawMap() {
 
 $('#nam').value = NAM;
 $('#nam').addEventListener('change', e => { location.href = PG.path + (e.target.value === NAM_MOI ? '' : '?nam=' + e.target.value); });
-fetch(SRC).then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
+(CMP ? Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.json()))).then(([a, b]) =>
+    ({ ...a, cot: [...a.cot, 'y'], rows: [...a.rows.map(r => [...r, NAM_MOI]), ...b.rows.map(r => [...r, NAM_CU])] }))
+  : fetch(SRC).then(r => r.json())).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
-['#from', '#to', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
+['#from', '#to', '#tinh', '#metric', '#ky', '#sx'].forEach(s => $(s).addEventListener('change', apply));
 $('#active').addEventListener('click', e => { const k = e.target.dataset.k; if (k) { delete pick[k]; apply(); } });
 $('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; setNhom(false); $('#tinh').value = '';
   $('#from').selectedIndex = 0; $('#to').selectedIndex = $('#to').options.length - 1; apply(); });

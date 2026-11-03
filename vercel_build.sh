@@ -21,4 +21,7 @@ sed 's#<a href="/">Tra cứu TBYT</a>##' co_so_y_te.html > public/co-so-y-te.htm
 sed 's#<a href="/">Tra cứu TBYT</a>##' trung_thau.html > public/trung-thau.html
 # KQ Đường Huyết dùng chung giao diện với KQ Test (trang tự nhận theo đường dẫn)
 cp public/trung-thau.html public/duong-huyet.html
+# trang So sánh 2025–2026 (nút So sánh trên KQ Test / KQ Đường Huyết)
+cp public/trung-thau.html public/so-sanh.html
+cp public/trung-thau.html public/so-sanh-duong-huyet.html
 echo "Xong: $(ls public | tr '\n' ' ')"

@@ -154,6 +154,9 @@ def prc(kw, mt, frm, to, page):
     return json.loads(g.http(PRC_URL, body))["page"]
 
 
+MA_CDT = {}  # (mã gói, tên CĐT) -> mã định danh CĐT: ghép cơ sở giữa các năm (tên đổi sau sáp nhập, mã giữ nguyên)
+
+
 def results(kw):
     """({mã TBMT: gói đã có kết quả}, [dòng mặt hàng trúng]) từ dữ liệu trúng thầu năm YEAR, chỉ tính mặt hàng test nhanh."""
     rows = {}
@@ -188,6 +191,7 @@ def results(kw):
                ten(r), g.clean(r.get("hangSanXuat")), g.clean(r.get("nhanHieu")), g.clean(r.get("kyMaHieu")),
                g.clean(r.get("xuatXu")), g.clean(r.get("donViTinh")), r.get("khoiLuongDouble"), don_gia(r),
                "; ".join(g.clean(w) for w in r.get("winningName") or []), r.get("bidForm") or "", sl_test(r)]
+        MA_CDT[(row[0], row[1])] = r.get("maCdt") or ""
         hba1c = HBA1C_RE.search(g.norm(ten(r) + " " + g.clean(r.get("nhanHieu"))))
         # KQ Test: bỏ nước tiểu, đường huyết, HbA1c, CRP; KQ Đường Huyết: chỉ que thử đường huyết (không HbA1c)
         if nhom not in DASH_BO and not DASH_BO_RE.search(g.norm(ten(r) + " " + g.clean(r.get("nhanHieu")))):
@@ -366,7 +370,7 @@ def build(paths=(TT_PATH, DH_PATH)):
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items, dh_items = results(kw)
-    cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan"]
+    cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan", "ma_cdt"]
     for path, rows, nhom in [(paths[0], items, [DASH_TEN.get(x["ten"], x["ten"]) for x in kw["nhom"] if x["ten"] not in DASH_BO]),
                              (paths[1], dh_items, ["Đường huyết"])]:
         rows.sort(key=lambda r: r[3], reverse=True)
@@ -374,6 +378,8 @@ def build(paths=(TT_PATH, DH_PATH)):
             r.append(h)
         if path == paths[0]:
             rows[:] = apply_choice(rows, 16, 7)
+        for r in rows:
+            r.append(MA_CDT.get((r[0], r[1]), ""))
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
         print(f"{len(rows)} dòng -> {path}", file=sys.stderr)
