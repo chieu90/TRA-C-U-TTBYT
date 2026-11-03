@@ -35,7 +35,7 @@
   ],
   "headers": [
     {
-      "source": "/(goi_thau.json|bao_gia.json|co_so_y_te.json|trung_thau.json|duong_huyet.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
+      "source": "/(goi_thau.json|bao_gia.json|co_so_y_te.json|trung_thau(_\\d+)?.json|duong_huyet(_\\d+)?.json|bao-gia-dang-nhan.csv|gia-da-bao.csv)",
       "headers": [
         {
           "key": "Cache-Control",

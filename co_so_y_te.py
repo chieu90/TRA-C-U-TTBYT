@@ -338,20 +338,31 @@ def apply_choice(rows, j, i_nhan):
     return out
 
 
-def build():
+def build_year(year):
+    """KQ Test + KQ Đường Huyết của một năm cũ (vd 2025) -> data/trung_thau_<năm>.json, data/duong_huyet_<năm>.json.
+    Trang Cơ sở y tế chỉ tính năm hiện tại nên không dựng lại."""
+    global YEAR
+    YEAR = year
+    build(paths=(TT_PATH.replace(".json", f"_{year}.json"), DH_PATH.replace(".json", f"_{year}.json")))
+
+
+def build(paths=(TT_PATH, DH_PATH)):
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items, dh_items = results(kw)
     cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan"]
-    for path, rows, nhom in [(TT_PATH, items, [DASH_TEN.get(x["ten"], x["ten"]) for x in kw["nhom"] if x["ten"] not in DASH_BO]),
-                             (DH_PATH, dh_items, ["Đường huyết"])]:
+    for path, rows, nhom in [(paths[0], items, [DASH_TEN.get(x["ten"], x["ten"]) for x in kw["nhom"] if x["ten"] not in DASH_BO]),
+                             (paths[1], dh_items, ["Đường huyết"])]:
         rows.sort(key=lambda r: r[3], reverse=True)
         for r, h in zip(rows, canon_brands(rows, 6)):
             r.append(h)
-        if path == TT_PATH:
+        if path == paths[0]:
             rows[:] = apply_choice(rows, 16, 7)
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+        print(f"{len(rows)} dòng -> {path}", file=sys.stderr)
+    if paths[0] != TT_PATH:
+        return
     pk = {}
     for p in goi:
         if (p.get("dang") or p.get("lan_dau") or "")[:4] != YEAR:
@@ -398,4 +409,6 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    # python3 co_so_y_te.py        -> năm hiện tại (Cơ sở y tế, KQ Test, KQ Đường Huyết)
+    # python3 co_so_y_te.py 2025   -> chỉ KQ Test + KQ Đường Huyết năm 2025
+    build_year(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] != YEAR else build()

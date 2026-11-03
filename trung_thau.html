@@ -305,6 +305,8 @@ body { background: radial-gradient(1200px 500px at 85% -10%, rgba(14,159,154,.10
     <div class="row">
       <span class="sl">Tìm kiếm</span>
       <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
+      <span class="sl">Năm</span>
+      <select id="nam" aria-label="Năm"><option value="2026">Năm 2026</option><option value="2025">Năm 2025</option></select>
       <span class="sl">Thời gian</span>
       <select id="from" aria-label="Từ tháng"></select>
       <select id="to" aria-label="Đến tháng"></select>
@@ -368,6 +370,8 @@ const PG = location.pathname.startsWith('/duong-huyet')
       focus: [['taidoc', 'TaiDoc'], ['acon', 'ACON'], ['roche', 'Roche']] }
   : { api: '/api/trung-thau', path: '/trung-thau', doc: 'KQ Test', title: 'Kết quả trúng thầu test nhanh', what: 'test nhanh',
       focus: [['intec', 'InTec'], ['wondfo', 'Wondfo'], ['genesee', 'Genesee']] };
+const NAM_MOI = '2026', NAM = new URLSearchParams(location.search).get('nam') || NAM_MOI;
+const SRC = NAM === NAM_MOI ? PG.api : PG.api.replace('/api/', '/').replace('-', '_') + '_' + NAM + '.json';
 document.title = PG.doc; $('#h1').textContent = PG.title;
 PG.focus.forEach((f, i) => $('#f' + (i + 1)).textContent = f[1]);
 document.querySelectorAll('.nav a').forEach(a => { if (a.getAttribute('href') === PG.path) a.remove(); });
@@ -548,6 +552,7 @@ const XEM = VIEWS[new URLSearchParams(location.search).get('xem')] ? new URLSear
 let RANK = [];
 function state() {
   const p = new URLSearchParams();
+  if (NAM !== NAM_MOI) p.set('nam', NAM);
   [['q', $('#q').value], ['from', $('#from').value], ['to', $('#to').value], ['metric', M()], ['tinh', $('#tinh').value],
    ['nhom', [...document.querySelectorAll('#nhomList input:checked')].map(i => i.value).join('|')],
    ['nt', pick.nt], ['hk', pick.hk], ['hn', pick.hn], ['cdt', pick.cdt]].forEach(([k, v]) => { if (v) p.set(k, v); });
@@ -631,7 +636,9 @@ function drawMap() {
   document.querySelector('.by3').textContent = M() === 'sl' ? 'Số lượng test' : 'Giá trị trúng thầu';
 }
 
-fetch(PG.api).then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
+$('#nam').value = NAM;
+$('#nam').addEventListener('change', e => { location.href = PG.path + (e.target.value === NAM_MOI ? '' : '?nam=' + e.target.value); });
+fetch(SRC).then(r => r.json()).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
 ['#from', '#to', '#tinh', '#metric'].forEach(s => $(s).addEventListener('change', apply));
