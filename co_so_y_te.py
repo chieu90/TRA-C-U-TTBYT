@@ -138,11 +138,11 @@ def classify(r, kw):
 
 # HIV trên KQ Test tách theo thế hệ: chỉ phát hiện kháng thể (thế hệ 3) / kháng nguyên p24 + kháng thể (thế hệ 4)
 HIV, HIV_AB, HIV_AGAB = "HIV", "HIV Ab", "HIV Ag/Ab"
-# sản phẩm (nhãn hiệu / ký mã) phát hiện kháng nguyên p24 + kháng thể: Determine Early Detect, Genesee R0018C, Biotest IHIV-C4x...
+# sản phẩm (nhãn hiệu / ký mã) phát hiện kháng nguyên p24 + kháng thể: Determine Early Detect, Genesee R0018C...
 # (g.norm đổi dấu câu thành khoảng trắng: "7D28-43" -> "7d28 43", "3.0" -> "3 0")
-HIV_AGAB_SP = re.compile(r"early detect|7d ?28 ?4|r0018c|ihiv ?c4|\bag\s*[/&+-]?\s*ab\b|4th gen|p24")
-# sản phẩm chỉ phát hiện kháng thể (Determine HIV-1/2, Bioline 3.0, OnSite Ab Plus Combo, InTec Anti-HIV, HIV/Syphilis Duo...)
-HIV_AB_SP = re.compile(r"7d ?23 ?43|03fk1|r0011c|ihib ?402|ab plus|anti ?hiv|itp02006|aib ?7030|am4361|\b3 0\b|duo|syphilis")
+HIV_AGAB_SP = re.compile(r"early detect|7d ?28 ?4|r0018c|\bag\s*[/&+-]?\s*ab\b|4th gen|p24")
+# sản phẩm chỉ phát hiện kháng thể (Determine HIV-1/2, Bioline 3.0, Biotest IHIV-C/S (C41, C42, C31, S41), OnSite Ab Plus Combo, InTec Anti-HIV, HIV/Syphilis Duo...)
+HIV_AB_SP = re.compile(r"7d ?23 ?43|03fk1|r0011c|ihib ?402|ihiv ?[cs] ?\d|ab plus|anti ?hiv|itp02006|aib ?7030|am4361|\b3 0\b|duo|syphilis")
 HIV_AGAB_RE = re.compile(r"early detect|p24|\bag\s*[/&+-]?\s*ab\b|kháng nguyên và kháng thể|kháng nguyên/kháng thể|"
                          r"thế hệ 4|thế hệ thứ 4|thế hệ iv|4th gen|fourth gen")
 HIV_AB_RE = re.compile(r"thế hệ 3|thế hệ thứ 3|3rd gen|\b3 0\b|duo|syphilis|giang mai|kháng thể")
