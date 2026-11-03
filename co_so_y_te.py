@@ -38,7 +38,7 @@ NOT_RAPID_RE = re.compile(r"elisa|clia|hóa phát quang|hoá phát quang|chemilu
 # hãng chỉ làm hóa chất chạy máy / ELISA / PCR / vi sinh: không phải test nhanh
 NOT_RAPID_MAKER = re.compile(r"sysmex|siemens|dia\.?\s?pro|bio-?rad|adaltis|\bdrg\b|maccura|seegene|sansure|sacace|elitech|becton|\bbd\b|infai|beckman|ortho clinical|mindray|snibe|diasorin|euroimmun|abbott gmbh|abbott ireland")
 
-ACCESSORY_RE = re.compile(r"^(pin|kim|bút|lancet|dung dịch|vỏ|hộp đựng|giá đỡ|máy|thiết bị|hệ thống)\b|\bpin\b|\bcột\b|hóa chất|hoá chất")
+ACCESSORY_RE = re.compile(r"^(pin|kim|bút|lancet|dung dịch|vỏ|hộp đựng|giá đỡ|máy|thiết bị|hệ thống)\b|\bpin\b|\bcột\b|khớp nối|hóa chất|hoá chất")
 PER_TEST = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
 
 def ten(r):
@@ -78,6 +78,20 @@ def don_gia(r):
     if v and sl > 1 and g.norm(r.get("donViTinh") or "") in PER_TEST and v > 1_000_000:
         v = v / sl
     return v
+
+
+def bat_thuong(r):
+    """Dòng bất thường, bỏ khỏi KQ: thiếu số lượng/đơn giá, số lượng trùng đơn giá, hoặc giá vô lý (> 1 triệu đ/test,
+    < 100 đ/test; không quy được ra số test thì đơn giá một đơn vị > 20 triệu)."""
+    sl, dg = r.get("khoiLuongDouble") or 0, don_gia(r) or 0
+    if sl <= 0 or dg <= 0:
+        return True
+    if sl == dg and sl >= 20_000:  # nhập nhầm đơn giá vào ô số lượng (vd TTYT nhỏ 99.792 test x 99.792 đ)
+        return True
+    st = sl_test(r)
+    if st:
+        return not 100 <= sl * dg / st <= 1_000_000
+    return dg > 20_000_000 or dg < 100
 
 
 def keywords(kw):
@@ -166,6 +180,8 @@ def results(kw):
     for r in uniq.values():
         nhom = classify(r, kw)
         if not nhom or not r.get("maTbmt"):
+            continue
+        if bat_thuong(r):
             continue
         tinh = g.short_prov(next((d.get("provName") for d in r.get("diaDiem") or [] if d.get("provName")), ""))
         row = [r["maTbmt"], g.clean(r.get("tenCdtBmt")), tinh, (r.get("ngayDangTaiKqlcnt") or "")[:10], DASH_TEN.get(nhom, nhom),
