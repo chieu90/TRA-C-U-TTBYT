@@ -347,7 +347,7 @@ font[style] { background: none !important; box-shadow: none !important; }
       <span class="sl">Tìm kiếm</span>
       <input type="search" id="q" placeholder="Tìm nhà thầu, hãng, cơ sở, mặt hàng, mã gói…">
       <span class="sl noc">Năm</span>
-      <select class="noc" id="nam" aria-label="Năm"><option value="2026">Năm 2026</option><option value="2025">Năm 2025</option></select>
+      <select class="noc" id="nam" aria-label="Năm"><option value="all">Tất cả năm</option><option value="2026">Năm 2026</option><option value="2025">Năm 2025</option></select>
       <span class="sl cmpo">Kỳ so sánh</span>
       <select id="ky" class="cmpo" aria-label="Kỳ so sánh"><option value="ck">Cùng kỳ</option><option value="full">2026 với cả năm 2025</option></select>
       <span class="sl cmpo">Sắp xếp bảng</span>
@@ -447,6 +447,7 @@ const CMP = location.pathname.startsWith('/so-sanh'), NAM_CU = '2025';  // so s�
 PG.cmp = DH ? '/so-sanh-duong-huyet' : '/so-sanh';
 const FILE = y => PG.api.replace('/api/', '/').replace('-', '_') + '_' + y + '.json';
 const SRC = NAM === NAM_MOI || CMP ? PG.api : FILE(NAM);
+const ALL = !CMP && NAM === 'all';  // tất cả năm: gộp dữ liệu 2025 + 2026
 // nút So sánh: sang trang so sánh (giữ bộ lọc đang chọn); ở trang so sánh thì là nút quay về dashboard
 if (CMP) { $('#cmpBtn').href = PG.path; $('#cmpBtn').querySelector('span').textContent = '‹ Về Dashboard ' + PG.doc; }
 $('#cmpBtn').addEventListener('click', e => { e.preventDefault(); const p = state(); p.delete('nam'); p.delete('from'); p.delete('to');
@@ -567,7 +568,7 @@ function render() {
   const box = $('#month'); box.innerHTML = [1, .5, 0].map(f => `<div class="gl" style="top:${(1 - f) * 100}%"><span>${f ? show(top * f) : '0'}</span></div>`).join('') + '<div class="bars"></div>';
   mv.forEach(x => { const c = document.createElement('div'); c.className = 'c'; c.tabIndex = 0; const i = document.createElement('i'); i.style.height = (x.v / top * 100) + '%'; c.append(i);
     box.lastChild.append(c); hover(c, [num(x.v) + unit(), `Tháng ${+x.m.slice(5)}/${x.m.slice(0, 4)}`, `${num(x.n)} dòng mặt hàng`]); });
-  $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}</span>`).join('');
+  $('#monthX').innerHTML = mv.map(x => `<span>T${+x.m.slice(5)}${ALL ? '/' + x.m.slice(2, 4) : ''}</span>`).join('');
   const sl = M() === 'sl';
   $('#mTitle').textContent = sl ? 'Số lượng test trúng thầu theo tháng' : 'Giá trị trúng thầu theo tháng';
   $('#mCap').textContent = sl ? 'Tổng số test (đơn vị test/que/khay; hộp/lọ quy đổi theo quy cách ghi trong tên hoặc mô tả, vd "hộp 50 que"), theo ngày đăng kết quả' : `Tổng giá trị ${PG.what} (số lượng × đơn giá trúng), theo ngày đăng kết quả`;
@@ -840,6 +841,8 @@ $('#nam').value = NAM;
 $('#nam').addEventListener('change', e => { location.href = PG.path + (e.target.value === NAM_MOI ? '' : '?nam=' + e.target.value); });
 (CMP ? Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.json()))).then(([a, b]) =>
     ({ ...a, cot: [...a.cot, 'y'], rows: [...a.rows.map(r => [...r, NAM_MOI]), ...b.rows.map(r => [...r, NAM_CU])] }))
+  : ALL ? Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.json()))).then(([a, b]) =>
+    ({ ...a, nam: NAM_CU + '–' + NAM_MOI, nhom: [...new Set([...a.nhom, ...b.nhom])], rows: [...a.rows, ...b.rows] }))
   : fetch(SRC).then(r => r.json())).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
