@@ -87,6 +87,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .chip.mid { color: var(--warn); background: var(--warn-bg); }
 .chip.grey { color: var(--muted); background: var(--line-2); }
 .code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); }
+.tghd { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .pk-name { font-size: 16px; font-weight: 700; margin: 0; }
 .pk-meta { color: var(--muted); font-size: 13.5px; margin-top: 4px; display: flex; gap: 6px 18px; flex-wrap: wrap; }
 .pk-meta b { color: var(--text); font-weight: 600; }
@@ -597,7 +598,7 @@ function render() {
 function rows() {
   const per = 50, pages = Math.max(1, Math.ceil(view.length / per));
   $('#cnt').textContent = `${num(view.length)} dòng · mới nhất trước`;
-  $('#rows').innerHTML = view.slice(page * per, page * per + per).map(r => `<tr><td data-l="Ngày KQ" class="sub2">${day(r.ngay)}<div class="code">${esc(r.ma)}</div></td>
+  $('#rows').innerHTML = view.slice(page * per, page * per + per).map(r => `<tr><td data-l="Ngày KQ" class="sub2">${day(r.ngay)}<div class="code">${esc(r.ma)}</div>${r.tg_hd ? `<div class="tghd" title="Thời gian thực hiện hợp đồng">HĐ ${esc(r.tg_hd)}</div>` : ''}</td>
     <td data-l="Cơ sở">${esc(r.cdt)}<div class="sub2">${esc(r.tinh)}</div></td><td data-l="Mặt hàng"><div class="grp">${esc(r.nhom)}</div>${esc(r.ten)}</td>
     <td data-l="Hãng" class="sub2">${esc(r.hang)}${r.ky_ma ? `<div>${esc(r.ky_ma)}</div>` : ''}${r.xuat_xu ? `<div>${esc(r.xuat_xu)}</div>` : ''}</td>
     <td data-l="Nhà thầu" class="sub2">${esc(r.nha_thau)}</td><td data-l="SL" class="n">${num(r.sl)} ${esc(r.dvt)}</td><td data-l="Đơn giá" class="n">${num(r.don_gia)}</td><td data-l="Thành tiền" class="n">${num(r.tien)}</td></tr>`).join('')
@@ -609,8 +610,8 @@ const next = m => { let [y, mo] = m.split('-').map(Number); mo++; if (mo > 12) {
 const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 2.5, 5, 10].map(x => x * p).find(x => x >= v); };
 
 function csv() {
-  const head = ['Ngày KQ', 'Mã gói', 'Cơ sở y tế', 'Tỉnh/TP', 'Nhóm test', 'Mặt hàng', 'Hãng sản xuất', 'Nhãn hiệu', 'Ký mã hiệu', 'Xuất xứ', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền', 'Nhà thầu trúng'];
-  saveXlsx([head, ...view.map(r => [day(r.ngay), r.ma, r.cdt, r.tinh, r.nhom, r.ten, r.hang, r.nhan, r.ky_ma, r.xuat_xu, r.dvt, r.sl, r.don_gia, r.tien, r.nha_thau])],
+  const head = ['Ngày KQ', 'Mã gói', 'Cơ sở y tế', 'Tỉnh/TP', 'Nhóm test', 'Mặt hàng', 'Hãng sản xuất', 'Nhãn hiệu', 'Ký mã hiệu', 'Xuất xứ', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền', 'Nhà thầu trúng', 'Thời gian thực hiện HĐ'];
+  saveXlsx([head, ...view.map(r => [day(r.ngay), r.ma, r.cdt, r.tinh, r.nhom, r.ten, r.hang, r.nhan, r.ky_ma, r.xuat_xu, r.dvt, r.sl, r.don_gia, r.tien, r.nha_thau, r.tg_hd || ''])],
     PG.path === '/duong-huyet' ? 'trung-thau-duong-huyet' : 'trung-thau-test-nhanh');
 }
 // Xuất file Excel (.xlsx) thật; thư viện SheetJS chỉ tải khi bấm nút

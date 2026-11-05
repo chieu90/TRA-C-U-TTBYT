@@ -19,6 +19,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 import goi_thau as g
+import tg_hd
 
 OUT_PATH = os.path.join(g.HERE, "data", "co_so_y_te.json")
 TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng mặt hàng trúng thầu cho trang KQ Test
@@ -400,7 +401,8 @@ def build(paths=(TT_PATH, DH_PATH)):
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items, dh_items = results(kw)
-    cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan", "ma_cdt"]
+    tg = tg_hd.known()  # thời gian thực hiện hợp đồng theo mã TBMT (data/tg_hd.json + meta gói đã quét)
+    cot = ["ma", "cdt", "tinh", "ngay", "nhom", "ten", "hang", "nhan", "ky_ma", "xuat_xu", "dvt", "sl", "don_gia", "nha_thau", "hinh_thuc", "sl_test", "hang_chuan", "ma_cdt", "tg_hd"]
     tt_nhom = [y for x in kw["nhom"] if x["ten"] not in DASH_BO for y in ([HIV_AB, HIV_AGAB] if x["ten"] == HIV else [DASH_TEN.get(x["ten"], x["ten"])])]
     for path, rows, nhom in [(paths[0], items, tt_nhom),
                              (paths[1], dh_items, ["Đường huyết"])]:
@@ -411,6 +413,7 @@ def build(paths=(TT_PATH, DH_PATH)):
             rows[:] = apply_choice(rows, 16, 7)
         for r in rows:
             r.append(MA_CDT.get((r[0], r[1]), ""))
+            r.append(tg.get(r[0], ""))
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
         print(f"{len(rows)} dòng -> {path}", file=sys.stderr)
