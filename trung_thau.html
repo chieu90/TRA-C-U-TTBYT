@@ -100,6 +100,13 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .tbl .grp { font-size: 12px; color: var(--brand-2); font-weight: 600; }
 .tbl .it { font-weight: 600; }
 .tbl .sub2 { color: var(--muted); font-size: 12.5px; }
+/* bảng chi tiết mặt hàng: chừa đủ rộng cho tên cơ sở / nhà thầu, khỏi xuống dòng từng chữ */
+@media (min-width: 761px) {
+  #rows td[data-l="Cơ sở"] { min-width: 210px; }
+  #rows td[data-l="Nhà thầu"] { min-width: 170px; }
+  #rows td[data-l="Hãng"] { min-width: 150px; }
+  #rows td[data-l="Mặt hàng"] { min-width: 200px; }
+}
 .spec { color: var(--muted); font-size: 12.5px; max-width: 440px; }
 .spec.cut { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
 .hl { background: #fff3b0; color: inherit; border-radius: 3px; }
@@ -595,11 +602,14 @@ function render() {
   rows();
 }
 
+// "CHI NHÁNH CÔNG TY ... - BỆNH VIỆN ĐA KHOA CAO SU CHƯ PRÔNG" -> phần tên cơ sở y tế sau dấu gạch (tên đầy đủ ở tooltip)
+const csName = s => { const p = String(s || '').split(/\s+[-–]\s+/); const t = p[p.length - 1];
+  return p.length > 1 && /^(bệnh viện|trung tâm|trạm|phòng khám|bv|ttyt)/i.test(t) ? t : s; };
 function rows() {
   const per = 50, pages = Math.max(1, Math.ceil(view.length / per));
   $('#cnt').textContent = `${num(view.length)} dòng · mới nhất trước`;
   $('#rows').innerHTML = view.slice(page * per, page * per + per).map(r => `<tr><td data-l="Ngày KQ" class="sub2">${day(r.ngay)}<div class="code">${esc(r.ma)}</div>${r.tg_hd ? `<div class="tghd" title="Thời gian thực hiện hợp đồng">HĐ ${esc(r.tg_hd)}</div>` : ''}</td>
-    <td data-l="Cơ sở">${esc(r.cdt)}<div class="sub2">${esc(r.tinh)}</div></td><td data-l="Mặt hàng"><div class="grp">${esc(r.nhom)}</div>${esc(r.ten)}</td>
+    <td data-l="Cơ sở" title="${esc(r.cdt)}">${esc(csName(r.cdt))}<div class="sub2">${esc(r.tinh)}</div></td><td data-l="Mặt hàng"><div class="grp">${esc(r.nhom)}</div>${esc(r.ten)}</td>
     <td data-l="Hãng" class="sub2">${esc(r.hang)}${r.ky_ma ? `<div>${esc(r.ky_ma)}</div>` : ''}${r.xuat_xu ? `<div>${esc(r.xuat_xu)}</div>` : ''}</td>
     <td data-l="Nhà thầu" class="sub2">${esc(r.nha_thau)}</td><td data-l="SL" class="n">${num(r.sl)} ${esc(r.dvt)}</td><td data-l="Đơn giá" class="n">${num(r.don_gia)}</td><td data-l="Thành tiền" class="n">${num(r.tien)}</td></tr>`).join('')
     || '<tr><td colspan="8" class="sub2">Không có mặt hàng nào khớp bộ lọc.</td></tr>';
