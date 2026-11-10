@@ -6,11 +6,12 @@ on:
   push:
     paths:
       - 'goi_thau_moi.py'
+      - '.github/workflows/goi-thau-moi.yml'
 permissions:
   contents: write
 concurrency:
   group: cap-nhat-du-lieu
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   discover:
     runs-on: ubuntu-latest
