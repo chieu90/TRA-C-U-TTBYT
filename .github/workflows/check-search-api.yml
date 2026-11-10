@@ -11,49 +11,18 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Kiểm tra API tìm kiếm
+      - name: Kiểm tra đường dẫn tìm kiếm công khai
         run: |
           python3 - <<'PY'
-          import json, urllib.request, re
+          import re, urllib.request
           import goi_thau as g
-          page_url = g.HOST + "/web/guest/business/ebidding"
-          try:
-              with urllib.request.urlopen(page_url, timeout=30, context=g.SSL_CTX) as page:
-                  html = page.read().decode(errors="replace")
-                  print("PAGE HTTP", page.status, "URL", page.url, "LENGTH", len(html))
-                  for line in html.splitlines():
-                      if any(key in line for key in ("iframe", "egp-portal-contractor", "main.", "runtime.", "polyfills", "captcha", "Captcha")):
-                          print("PAGE LINE", line[:2500])
-                  print("SCRIPTS", re.findall(r'<script[^>]+src=["\']([^"\']+)', html)[-20:])
-                  for match in list(re.finditer(r"(?i)/api/|/services/|axios\\.post|axios\\.get|captcha|smart/search", html))[:35]:
-                      print("PAGE CONTEXT", html[max(0,match.start()-100):match.end()+100])
-          except Exception as e: print("PAGE ERROR", type(e).__name__, str(e))
-          from urllib.parse import urljoin
-          for path in ["/o/egp-portal-theme/js/custom/egp-hero-search.js?v=20260808e"]:
-              try:
-                  with urllib.request.urlopen(urljoin(g.HOST,path), timeout=30, context=g.SSL_CTX) as script:
-                      js = script.read().decode(errors="replace")
-                  for match in list(re.finditer(r"(?i)smart/search|/api/unau|recaptcha|grecaptcha", js))[:30]:
-                      print("JS CONTEXT", js[max(0,match.start()-180):match.end()+250])
-              except Exception as e: print("SCRIPT ERROR", str(e))
-          detail_url = g.HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail"
-          req = urllib.request.Request(detail_url, data=json.dumps({"body":{"id":"ffeadd0e-dc65-47be-af3a-34265ef86c44"}}).encode(), headers={"Content-Type":"application/json"})
-          try:
-              with urllib.request.urlopen(req, timeout=30, context=g.SSL_CTX) as detail:
-                  data = json.load(detail)
-                  print("DETAIL HTTP", detail.status, "KEYS", list(data))
-                  print("DETAIL HAS NOTIFICATION", bool((data.get("body") or {}).get("bidNotification")))
-          except Exception as e: print("DETAIL ERROR", type(e).__name__, str(e))
-          url = "https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search"
-          body = [{"pageSize":1,"pageNumber":0,"query":[{"index":"es-contractor-selection","keyWord":"test nhanh","matchType":"all-1","matchFields":["bidName"],"filters":[{"fieldName":"type","searchType":"in","fieldValues":["es-notify-contractor"]}]}]}]
-          req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
-          try:
-              with urllib.request.urlopen(req, timeout=45, context=g.SSL_CTX) as r:
-                  raw = r.read()
-                  print("HTTP", r.status)
-                  print(raw[:10000].decode(errors="replace"))
-          except Exception as e:
-              print(type(e).__name__, str(e))
-              if hasattr(e, "read"): print(e.read()[:2000].decode(errors="replace"))
-              raise
+          with urllib.request.urlopen(g.HOST + "/web/guest/business/ebidding", timeout=30, context=g.SSL_CTX) as r:
+              html = r.read().decode(errors="replace")
+              print("PAGE HTTP", r.status)
+          paths = set(re.findall(r"""["']((?:/o/|/api/|/content-provider/)[a-zA-Z0-9_./-]+)""", html))
+          for path in sorted(paths):
+              if any(k in path.lower() for k in ("search", "bid", "contract", "smart")):
+                  print("PUBLIC API PATH", path)
+          names = set(re.findall(r"\\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:[Ss]earch|[Rr]esult)[a-zA-Z0-9_$]*)\\s*\\(", html))
+          print("SEARCH FUNCTION NAMES", sorted(names))
           PY
