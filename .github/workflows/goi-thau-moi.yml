@@ -27,15 +27,20 @@ jobs:
       - name: Lưu gói mới đã lấy thành công
         if: always()
         run: |
-          FILES="data/goi_thau.json"
-          if [ -f data/goi_thau_discovery.json ]; then FILES="$FILES data/goi_thau_discovery.json"; fi
-          git add $FILES
-          if git diff --cached --quiet; then exit 0; fi
+          python3 persist_goi_moi.py prepare /tmp/new-tender-additions.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Tự thêm gói thầu mới qua nguồn tìm kiếm tham chiếu [skip render]"
-          git pull --rebase origin main
-          git push
+          # This is an ephemeral runner. The additions are saved outside the checkout.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            python3 persist_goi_moi.py merge /tmp/new-tender-additions.json
+            git add data/goi_thau.json data/goi_thau_discovery.json
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m "Tự thêm gói thầu mới qua nguồn tìm kiếm tham chiếu [skip render]"
+            if git push origin HEAD:main; then exit 0; fi
+          done
+          exit 1
       - name: Báo lỗi để lần sau thử lại
         if: steps.discover.outcome == 'failure'
         run: |
