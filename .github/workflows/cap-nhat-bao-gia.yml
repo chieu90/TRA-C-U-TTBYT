@@ -1,4 +1,5 @@
 # Tự cập nhật mỗi giờ, không cần máy cá nhân hay Claude. Chỉ dùng API công khai của muasamcong (không qua reCAPTCHA):
+# - Gói thầu đã biết: làm mới tên, giá, hạn và trạng thái hủy qua API (goi_thau.py refresh)
 # - Báo giá: tab "Giá đã báo" + làm mới các YCBG đã biết (bao_gia.py)
 # - Kết quả trúng thầu: KQ Test, KQ Đường Huyết, Cơ sở y tế (co_so_y_te.py; trạng thái hủy lấy từ index/goi_thau_cache/meta_*.json)
 # Tìm gói thầu / YCBG MỚI vẫn chạy trên máy (trình duyệt) vì ô tìm kiếm có reCAPTCHA.
@@ -8,6 +9,10 @@ on:
   schedule:
     - cron: "5 * * * *"
   workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/cap-nhat-bao-gia.yml'
+      - 'goi_thau.py'
 
 permissions:
   contents: write
@@ -25,6 +30,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Làm mới gói thầu đã biết từ muasamcong
+        id: goi-thau
+        run: python3 goi_thau.py refresh
+        continue-on-error: true
       - name: Lấy báo giá từ muasamcong
         run: python3 bao_gia.py
         continue-on-error: true
@@ -33,7 +42,7 @@ jobs:
         continue-on-error: true
       - name: Đẩy dữ liệu nếu có thay đổi
         run: |
-          FILES="data/bao_gia.json data/co_so_y_te.json data/trung_thau.json data/duong_huyet.json"
+          FILES="data/goi_thau.json data/bao_gia.json data/co_so_y_te.json data/trung_thau.json data/duong_huyet.json"
           CHANGED=$(python3 - $FILES <<'PY'
           import json, subprocess, sys
           for f in sys.argv[1:]:
@@ -58,4 +67,9 @@ jobs:
             git pull --rebase --autostash -X theirs origin main && git push && exit 0
             sleep 30
           done
+          exit 1
+      - name: Báo lỗi nếu làm mới gói thầu chưa hoàn tất
+        if: steps.goi-thau.outcome == 'failure'
+        run: |
+          echo "::error::Có gói thầu chưa làm mới được qua API. Dữ liệu cũ của các gói này được giữ lại; xem log bước làm mới."
           exit 1
