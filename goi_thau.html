@@ -299,7 +299,7 @@ function render() {
   pkgs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'gia' ? (b.gia_goi || 0) - (a.gia_goi || 0) : byHan(a, b));
   window._view = pkgs;
   const nItems = pkgs.reduce((n, p) => n + p.items.length, 0);
-  $('#status').textContent = `${pkgs.length} gói, ${nItems} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '');
+  $('#status').textContent = `${pkgs.length} gói, ${nItems} mặt hàng` + (DATA.cap_nhat ? ` · cập nhật ${DATA.cap_nhat}` : '') + (DATA.phat_hien_moi ? ` · thêm gói mới ${DATA.phat_hien_moi}` : '');
   const words = [...watch, ...(q ? [q] : []), ...(cdt ? [cdt] : [])];
   $('#list').innerHTML = pkgs.length ? pkgs.map(p => {
     const d = daysLeft(p.han);
@@ -378,14 +378,27 @@ $('#csv').addEventListener('click', csv);
 $('#watch').value = load('gt_watch') || '';
 $('#onlyWatch').checked = load('gt_onlyWatch') === '1';
 
-fetch('/api/goi-thau').then(r => r.json()).then(d => {
-  DATA = d;
-  if (!d.goi) throw new Error(d.error || 'Chưa có dữ liệu');
-  $('#cdtList').innerHTML = [...new Set(d.goi.map(p => p.cdt))].sort().map(c => `<option value="${esc(c)}">`).join('');
-  const cntT = {}; d.goi.forEach(p => { if (p.tinh) cntT[p.tinh] = (cntT[p.tinh] || 0) + 1; });
-  $('#tinh').innerHTML = '<option value="">Tất cả</option>' + Object.keys(cntT).sort((a, b) => a.localeCompare(b, 'vi')).map(t => `<option value="${esc(t)}">${esc(t)} (${cntT[t]})</option>`).join('');
-  groups(); render();
-}).catch(e => { $('#status').textContent = 'Chưa có dữ liệu gói thầu (' + e.message + ').'; });
+async function reloadData(initial = false) {
+  try {
+    const r = await fetch('/api/goi-thau?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!Array.isArray(d.goi)) throw new Error(d.error || 'Chưa có dữ liệu');
+    if (DATA && JSON.stringify(DATA) === JSON.stringify(d)) return;
+    const province = $('#tinh').value;
+    DATA = d;
+    $('#cdtList').innerHTML = [...new Set(d.goi.map(p => p.cdt))].sort().map(c => `<option value="${esc(c)}">`).join('');
+    const cntT = {}; d.goi.forEach(p => { if (p.tinh) cntT[p.tinh] = (cntT[p.tinh] || 0) + 1; });
+    $('#tinh').innerHTML = '<option value="">Tất cả</option>' + Object.keys(cntT).sort((a, b) => a.localeCompare(b, 'vi')).map(t => `<option value="${esc(t)}">${esc(t)} (${cntT[t]})</option>`).join('');
+    $('#tinh').value = province;
+    groups(); render();
+  } catch (e) {
+    if (initial && !DATA) $('#status').textContent = 'Chưa có dữ liệu gói thầu (' + e.message + ').';
+  }
+}
+reloadData(true);
+setInterval(() => { if (!document.hidden) reloadData(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadData(); });
 
 // Nút "Cập nhật ngay" (chỉ hiện trên bản Vercel có /api/cap-nhat): chạy workflow GitHub rồi tự tải dữ liệu mới
 (() => {
