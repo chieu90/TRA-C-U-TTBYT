@@ -1,0 +1,44 @@
+name: Tự tìm gói thầu mới
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+  push:
+    paths:
+      - 'goi_thau_moi.py'
+      - '.github/workflows/goi-thau-moi.yml'
+permissions:
+  contents: write
+concurrency:
+  group: cap-nhat-du-lieu
+  cancel-in-progress: true
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tìm gói mới và lọc mặt hàng
+        id: discover
+        run: python3 -u goi_thau_moi.py --limit 40
+        continue-on-error: true
+      - name: Lưu gói mới đã lấy thành công
+        if: always()
+        run: |
+          FILES="data/goi_thau.json"
+          if [ -f data/goi_thau_discovery.json ]; then FILES="$FILES data/goi_thau_discovery.json"; fi
+          git add $FILES
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Tự thêm gói thầu mới qua nguồn tìm kiếm tham chiếu [skip render]"
+          git pull --rebase origin main
+          git push
+      - name: Báo lỗi để lần sau thử lại
+        if: steps.discover.outcome == 'failure'
+        run: |
+          echo "::error::Chưa xử lý hết nguồn tìm kiếm; dữ liệu đã lấy thành công được lưu, phần lỗi sẽ thử lại."
+          exit 1
