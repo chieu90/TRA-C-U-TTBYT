@@ -1,7 +1,5 @@
 name: Kiểm tra API tìm gói mới
 on:
-  push:
-    paths: ['.github/workflows/check-search-api.yml']
   workflow_dispatch: {}
 permissions:
   contents: read
