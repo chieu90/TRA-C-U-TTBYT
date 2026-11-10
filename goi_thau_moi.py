@@ -92,7 +92,10 @@ def package(row, data):
     unknown = {"muc": "Không ghi rõ", "nguon": "", "trich": ""}
     for item in items:
         name = g.clean(item.get("itemName"))
-        group = g.group_of(name, kw, item.get("unit"))
+        category = g.clean(item.get("categoryName") or item.get("lotName"))
+        if not name or g.norm(name) in ("không yêu cầu", "không áp dụng", "không", "-"):
+            name = category
+        group = g.group_of(name, kw, item.get("unit")) or g.group_of(category, kw, item.get("unit"))
         if not group:
             continue
         quantity = g.num(item.get("quantity"))
@@ -141,7 +144,7 @@ def sync(candidates, limit=40):
     now = datetime.now(timezone.utc).timestamp()
     pending = []
     for code, row in candidates.items():
-        key = code + ":" + str(row.get("notifyId") or row.get("id")) + ":" + str(row.get("notifyVersion", ""))
+        key = code + ":" + str(row.get("notifyId") or row.get("id")) + ":" + str(row.get("notifyVersion", "")) + ":parser-v2"
         if code not in known and now - state.get(key, 0) >= 86400:
             pending.append((key, row))
     medical = re.compile(r"test|que thử|xét nghiệm|sinh phẩm|hóa chất|hoá chất|y tế|bệnh viện|truyền máu|huyết học|sản nhi", re.I)
