@@ -23,6 +23,8 @@ jobs:
           for path in sorted(paths):
               if any(k in path.lower() for k in ("search", "bid", "contract", "smart")):
                   print("PUBLIC API PATH", path)
-          names = set(re.findall(r"\\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:[Ss]earch|[Rr]esult)[a-zA-Z0-9_$]*)\\s*\\(", html))
+          names = set(re.findall(r"\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:[Ss]earch|[Rr]esult)[a-zA-Z0-9_$]*)\s*\(", html))
           print("SEARCH FUNCTION NAMES", sorted(names))
+          ids = set(re.findall(r"p_p_resource_id=([a-zA-Z0-9_%/-]+)", html))
+          print("PUBLIC RESOURCE NAMES", sorted(ids))
           PY
