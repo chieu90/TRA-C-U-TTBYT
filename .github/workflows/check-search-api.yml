@@ -25,6 +25,14 @@ jobs:
                   for match in list(re.finditer(r"(?i)captcha|smart/search", html))[:10]:
                       print("PAGE CONTEXT", html[max(0,match.start()-100):match.end()+100])
           except Exception as e: print("PAGE ERROR", type(e).__name__, str(e))
+          from urllib.parse import urljoin
+          for path in ["/o/egp-portal-theme/js/custom/egp-hero-search.js?v=20260808e"]:
+              try:
+                  with urllib.request.urlopen(urljoin(g.HOST,path), timeout=30, context=g.SSL_CTX) as script:
+                      js = script.read().decode(errors="replace")
+                  for match in list(re.finditer(r"(?i)smart/search|/api/unau|recaptcha|grecaptcha", js))[:30]:
+                      print("JS CONTEXT", js[max(0,match.start()-180):match.end()+250])
+              except Exception as e: print("SCRIPT ERROR", str(e))
           detail_url = g.HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail"
           req = urllib.request.Request(detail_url, data=json.dumps({"body":{"id":"ffeadd0e-dc65-47be-af3a-34265ef86c44"}}).encode(), headers={"Content-Type":"application/json"})
           try:
