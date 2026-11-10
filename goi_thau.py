@@ -581,11 +581,14 @@ def refresh():
     (GitHub Actions) — việc tìm gói MỚI vẫn cần trình duyệt (reCAPTCHA) và lệnh build."""
     res = json.load(open(OUT_PATH, encoding="utf-8"))
     changed = 0
+    failed = 0
     keep = []
     for p in res.get("goi", []):
         keep.append(p)
         nid = (re.search(r"notifyId=([0-9a-f-]{36})", p.get("link") or "") or [None, None])[1]
         if not nid:
+            failed += 1
+            print(p.get("ma", "?"), "thiếu notifyId, giữ dữ liệu cũ", file=sys.stderr)
             continue
         cached = os.path.join(CACHE, "meta_" + nid + ".json")
         if os.path.exists(cached):
@@ -593,6 +596,7 @@ def refresh():
         try:
             m = meta_of(nid)
         except Exception as e:
+            failed += 1
             print(p["ma"], "lỗi lấy thông tin chung:", e, file=sys.stderr)
             continue
         if m.get("status") == HUY:
@@ -610,9 +614,12 @@ def refresh():
             changed += 1
             p.update(new)
     res["goi"] = keep
-    res["cap_nhat"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")
+    if not failed:
+        res["cap_nhat"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")
     json.dump(res, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
-    print(f"Làm mới {len(res.get('goi', []))} gói, {changed} gói có thay đổi -> {OUT_PATH}", file=sys.stderr)
+    print(f"Làm mới {len(res.get('goi', []))} gói, {changed} gói có thay đổi, {failed} gói lỗi -> {OUT_PATH}", file=sys.stderr)
+    if failed:
+        raise RuntimeError(f"{failed} gói chưa làm mới được; đã giữ dữ liệu cũ và thời điểm cập nhật trước đó")
 
 
 if __name__ == "__main__":
