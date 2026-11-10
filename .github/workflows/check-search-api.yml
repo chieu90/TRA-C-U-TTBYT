@@ -8,34 +8,30 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-      - name: Kiểm tra đường dẫn tìm kiếm công khai
+      - name: Xác định đường dẫn API trong ứng dụng đấu thầu hiện tại
         run: |
           python3 - <<'PY'
           import re, urllib.request
-          from urllib.parse import urlsplit
+          from urllib.parse import urlsplit, urljoin
           import goi_thau as g
-          with urllib.request.urlopen(g.HOST + "/web/guest/business/ebidding", timeout=30, context=g.SSL_CTX) as r:
+          app = g.HOST + "/egp/ebidfe/"
+          with urllib.request.urlopen(app, timeout=30, context=g.SSL_CTX) as r:
               html = r.read().decode(errors="replace")
-              print("PAGE HTTP", r.status)
-          paths = set(re.findall(r"""["']((?:/o/|/api/|/content-provider/)[a-zA-Z0-9_./-]+)""", html))
-          for path in sorted(paths):
-              if any(k in path.lower() for k in ("search", "bid", "contract", "smart")):
-                  print("PUBLIC API PATH", path)
-          names = set(re.findall(r"\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:[Ss]earch|[Rr]esult)[a-zA-Z0-9_$]*)\s*\(", html))
-          print("SEARCH FUNCTION NAMES", sorted(names))
-          ids = set(re.findall(r"p_p_resource_id=([a-zA-Z0-9_%/-]+)", html))
-          print("PUBLIC RESOURCE NAMES", sorted(ids))
-          for match in re.finditer(r"openUrlEbidSearch\s*\(", html):
-              fragment = html[max(0,match.start()-500):match.start()+2500]
-              literals = re.findall(r"""["']([^"'\n]{1,500})["']""", fragment)
-              for value in literals:
-                  if value.startswith(("/", "https://", "http://")):
-                      print("SEARCH TARGET PATH", urlsplit(value).path)
-          for value in re.findall(r"""["'](https?://[^"'\s]+)["']""", html):
-              parsed = urlsplit(value)
-              if "muasamcong" in parsed.netloc and any(k in parsed.path.lower() for k in ("search", "egp", "ebid")):
-                  print("PUBLIC URL PATH", parsed.path)
-          PY
+              print("APP HTTP", r.status)
+          scripts = re.findall(r'<script[^>]+src=["\']([^"\']+)', html)
+          for src in scripts:
+              path = urlsplit(src).path
+              print("SCRIPT PATH", path)
+              if not any(k in path for k in ("main", "runtime", "config")): continue
+              target = urljoin(app,src)
+              if urlsplit(target).netloc != urlsplit(g.HOST).netloc: continue
+              with urllib.request.urlopen(target, timeout=30, context=g.SSL_CTX) as r:
+                  js = r.read().decode(errors="replace")
+              values = set(re.findall(r"""["'\x60]([a-zA-Z0-9_./:-]{3,240})["'\x60]""", js))
+              for value in sorted(values):
+                  if any(k in value.lower() for k in ("search", "captcha", "recaptcha")) and ("/" in value or "captcha" in value.lower()):
+                      print("PUBLIC SEARCH PATH", urlsplit(value).path)
+                    PY
