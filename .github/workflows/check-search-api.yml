@@ -16,13 +16,13 @@ jobs:
           python3 - <<'PY'
           import json, urllib.request, re
           import goi_thau as g
-          page_url = g.HOST + "/web/guest/contractor-selection"
+          page_url = g.HOST + "/web/guest/business/ebidding"
           try:
               with urllib.request.urlopen(page_url, timeout=30, context=g.SSL_CTX) as page:
                   html = page.read().decode(errors="replace")
                   print("PAGE HTTP", page.status, "URL", page.url, "LENGTH", len(html))
                   for line in html.splitlines():
-                      if any(key in line for key in ("contractor-selection-v2", "main.", "runtime.", "polyfills", "captcha", "Captcha", "token", "Token")):
+                      if any(key in line for key in ("iframe", "egp-portal-contractor", "main.", "runtime.", "polyfills", "captcha", "Captcha")):
                           print("PAGE LINE", line[:2500])
                   print("SCRIPTS", re.findall(r'<script[^>]+src=["\']([^"\']+)', html)[-20:])
                   for match in list(re.finditer(r"(?i)captcha|smart/search", html))[:10]:
