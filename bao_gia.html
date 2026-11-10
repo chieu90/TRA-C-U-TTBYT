@@ -364,6 +364,11 @@ $('#csv').addEventListener('click', csv);
 fetch('/api/bao-gia').then(r => r.json()).then(d => {
   if (!d.items) throw new Error(d.error || 'Chưa có dữ liệu');
   d.ycbg = d.ycbg || [];
+  // không hiển thị que thử nước tiểu (chạy máy)
+  const BO_NHOM = new Set(['Que thử nước tiểu']);
+  d.items = d.items.filter(h => !BO_NHOM.has(h.nhom));
+  d.ycbg = d.ycbg.map(r => ({ ...r, items: r.items.filter(h => !BO_NHOM.has(h.nhom)) })).filter(r => r.items.length);
+  d.nhom = (d.nhom || []).filter(x => !BO_NHOM.has(x));
   DATA = d;
   const acc = {};
   d.items.forEach(h => { if (h.tv) (acc[h.nhom + '|' + unitKey(h.dvt)] ||= []).push(h.tv); });
