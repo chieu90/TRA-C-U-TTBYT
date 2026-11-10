@@ -129,6 +129,10 @@ def load_kw():
     return kw
 
 
+# nhóm không hiển thị trên trang Báo giá / Gói thầu (theo yêu cầu người dùng 10/11/2026): que tổng phân tích nước tiểu chạy máy
+BO_NHOM_BG = {"Que thử nước tiểu"}
+
+
 TEST_UOM = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
 REAGENT_RE = re.compile(r"chủng|atcc|cấy|kiểm soát|\bdna\b|\brna\b|môi trường|chất xét nghiệm|hóa chất|hoá chất|thuốc thử|chất chuẩn|chất hiệu chuẩn|hiệu chuẩn|calibrat|control|chứng|elecsys|architect|alinity|cobas|access|advia|vidas|liaison|maglumi|atellica|dxi|immulite")
 
@@ -515,7 +519,7 @@ def build(ids_path):
         hit = []
         for t in items:
             g = group_of(t["name"], kw, t.get("uom"))
-            if not g:
+            if not g or g in BO_NHOM_BG:
                 continue
             lot = lots.get(str(t.get("parent")), {})
             qty = num(t.get("qty"))
@@ -570,7 +574,7 @@ def build(ids_path):
                     "lan_dau": first, "link": detail_link(code, m), "uy_quyen": pkg_auth, "tg_hd": tg_hd, "hang_hoa": hit})
         print(code, len(hit), "mặt hàng", file=sys.stderr)
     out.sort(key=lambda p: p["han"])
-    res = {"cap_nhat": now.strftime("%Y-%m-%d %H:%M"), "nhom": [g["ten"] for g in kw["nhom"]], "goi": out}
+    res = {"cap_nhat": now.strftime("%Y-%m-%d %H:%M"), "nhom": [g["ten"] for g in kw["nhom"] if g["ten"] not in BO_NHOM_BG], "goi": out}
     json.dump(res, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     print(f"Xong: {len(out)} gói, {sum(len(p['hang_hoa']) for p in out)} mặt hàng -> {OUT_PATH}", file=sys.stderr)
 
@@ -583,7 +587,14 @@ def refresh():
     changed = 0
     failed = 0
     keep = []
+    res["nhom"] = [x for x in res.get("nhom", []) if x not in BO_NHOM_BG]
     for p in res.get("goi", []):
+        hh = [h for h in p.get("hang_hoa", []) if h.get("nhom") not in BO_NHOM_BG]
+        if len(hh) != len(p.get("hang_hoa", [])):
+            changed += 1
+            p["hang_hoa"] = hh
+        if not hh:
+            continue
         keep.append(p)
         nid = (re.search(r"notifyId=([0-9a-f-]{36})", p.get("link") or "") or [None, None])[1]
         if not nid:
