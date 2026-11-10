@@ -20,7 +20,10 @@ jobs:
           try:
               with urllib.request.urlopen(page_url, timeout=30, context=g.SSL_CTX) as page:
                   html = page.read().decode(errors="replace")
-                  print("PAGE HTTP", page.status)
+                  print("PAGE HTTP", page.status, "URL", page.url, "LENGTH", len(html))
+                  for line in html.splitlines():
+                      if any(key in line for key in ("contractor-selection-v2", "main.", "runtime.", "polyfills", "captcha", "Captcha", "token", "Token")):
+                          print("PAGE LINE", line[:2500])
                   print("SCRIPTS", re.findall(r'<script[^>]+src=["\']([^"\']+)', html)[-20:])
                   for match in list(re.finditer(r"(?i)captcha|smart/search", html))[:10]:
                       print("PAGE CONTEXT", html[max(0,match.start()-100):match.end()+100])
