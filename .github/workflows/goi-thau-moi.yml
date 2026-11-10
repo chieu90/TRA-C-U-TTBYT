@@ -6,12 +6,11 @@ on:
   push:
     paths:
       - 'goi_thau_moi.py'
-      - '.github/workflows/goi-thau-moi.yml'
 permissions:
   contents: write
 concurrency:
   group: cap-nhat-du-lieu
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   discover:
     runs-on: ubuntu-latest
@@ -23,6 +22,7 @@ jobs:
           python-version: "3.12"
       - name: Tìm gói mới và lọc mặt hàng
         id: discover
+        timeout-minutes: 12
         run: python3 -u goi_thau_moi.py --limit 40
         continue-on-error: true
       - name: Lưu gói mới đã lấy thành công
