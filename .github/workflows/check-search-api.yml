@@ -1,0 +1,30 @@
+name: Kiểm tra API tìm gói mới
+on:
+  push:
+    paths: ['.github/workflows/check-search-api.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kiểm tra API tìm kiếm
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          url = "https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search"
+          body = [{"pageSize":1,"pageNumber":0,"query":[{"index":"es-contractor-selection","keyWord":"test nhanh","matchType":"all-1","matchFields":["bidName"],"filters":[{"fieldName":"type","searchType":"in","fieldValues":["es-notify-contractor"]}]}]}]
+          req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+          try:
+              with urllib.request.urlopen(req, timeout=45) as r:
+                  raw = r.read()
+                  print("HTTP", r.status)
+                  print(raw[:10000].decode(errors="replace"))
+          except Exception as e:
+              print(type(e).__name__, str(e))
+              if hasattr(e, "read"): print(e.read()[:2000].decode(errors="replace"))
+              raise
+          PY
