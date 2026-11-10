@@ -144,7 +144,12 @@ def sync(candidates, limit=40):
         key = code + ":" + str(row.get("notifyId") or row.get("id")) + ":" + str(row.get("notifyVersion", ""))
         if code not in known and now - state.get(key, 0) >= 86400:
             pending.append((key, row))
-    pending.sort(key=lambda pair: pair[1].get("publicDate") or "", reverse=True)
+    medical = re.compile(r"test|que thử|xét nghiệm|sinh phẩm|hóa chất|hoá chất|y tế|bệnh viện|truyền máu|huyết học|sản nhi", re.I)
+    def priority(pair):
+        row = pair[1]
+        text = str(row.get("bidName") or "") + " " + str(row.get("investorName") or "")
+        return bool(medical.search(text)), row.get("publicDate") or ""
+    pending.sort(key=priority, reverse=True)
     added, errors = 0, 0
     print(f"{len(pending)} new candidates; processing up to {limit} this run", flush=True)
     for key, row in pending[:limit]:
