@@ -28,13 +28,13 @@ jobs:
           print("SEARCH FUNCTION NAMES", sorted(names))
           ids = set(re.findall(r"p_p_resource_id=([a-zA-Z0-9_%/-]+)", html))
           print("PUBLIC RESOURCE NAMES", sorted(ids))
-          for match in re.finditer(r"openUrlEbidSearch\\s*\\(", html):
+          for match in re.finditer(r"openUrlEbidSearch\s*\(", html):
               fragment = html[max(0,match.start()-500):match.start()+2500]
-              literals = re.findall(r"""["']([^"'\\n]{1,500})["']""", fragment)
+              literals = re.findall(r"""["']([^"'\n]{1,500})["']""", fragment)
               for value in literals:
                   if value.startswith(("/", "https://", "http://")):
                       print("SEARCH TARGET PATH", urlsplit(value).path)
-          for value in re.findall(r"""["'](https?://[^"'\\s]+)["']""", html):
+          for value in re.findall(r"""["'](https?://[^"'\s]+)["']""", html):
               parsed = urlsplit(value)
               if "muasamcong" in parsed.netloc and any(k in parsed.path.lower() for k in ("search", "egp", "ebid")):
                   print("PUBLIC URL PATH", parsed.path)
