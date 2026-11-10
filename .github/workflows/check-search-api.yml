@@ -34,4 +34,4 @@ jobs:
               for value in sorted(values):
                   if any(k in value.lower() for k in ("search", "captcha", "recaptcha")) and ("/" in value or "captcha" in value.lower()):
                       print("PUBLIC SEARCH PATH", urlsplit(value).path)
-                    PY
+          PY
