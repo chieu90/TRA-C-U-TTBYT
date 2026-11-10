@@ -96,7 +96,7 @@ def package(row, data):
         if not name or g.norm(name) in ("không yêu cầu", "không áp dụng", "không", "-"):
             name = category
         group = g.group_of(name, kw, item.get("unit")) or g.group_of(category, kw, item.get("unit"))
-        if not group:
+        if not group or group in getattr(g, "BO_NHOM_BG", set()):
             continue
         quantity = g.num(item.get("quantity"))
         lot = item.get("lotNo") or ""
