@@ -14,12 +14,30 @@ jobs:
       - name: Kiểm tra API tìm kiếm
         run: |
           python3 - <<'PY'
-          import json, urllib.request
+          import json, urllib.request, re
+          import goi_thau as g
+          page_url = g.HOST + "/web/guest/contractor-selection"
+          try:
+              with urllib.request.urlopen(page_url, timeout=30, context=g.SSL_CTX) as page:
+                  html = page.read().decode(errors="replace")
+                  print("PAGE HTTP", page.status)
+                  print("SCRIPTS", re.findall(r'<script[^>]+src=["\']([^"\']+)', html)[-20:])
+                  for match in list(re.finditer(r"(?i)captcha|smart/search", html))[:10]:
+                      print("PAGE CONTEXT", html[max(0,match.start()-100):match.end()+100])
+          except Exception as e: print("PAGE ERROR", type(e).__name__, str(e))
+          detail_url = g.HOST + "/api/unau/portal/ebidorg/bid-no-contractor/get-detail"
+          req = urllib.request.Request(detail_url, data=json.dumps({"body":{"id":"ffeadd0e-dc65-47be-af3a-34265ef86c44"}}).encode(), headers={"Content-Type":"application/json"})
+          try:
+              with urllib.request.urlopen(req, timeout=30, context=g.SSL_CTX) as detail:
+                  data = json.load(detail)
+                  print("DETAIL HTTP", detail.status, "KEYS", list(data))
+                  print("DETAIL HAS NOTIFICATION", bool((data.get("body") or {}).get("bidNotification")))
+          except Exception as e: print("DETAIL ERROR", type(e).__name__, str(e))
           url = "https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search"
           body = [{"pageSize":1,"pageNumber":0,"query":[{"index":"es-contractor-selection","keyWord":"test nhanh","matchType":"all-1","matchFields":["bidName"],"filters":[{"fieldName":"type","searchType":"in","fieldValues":["es-notify-contractor"]}]}]}]
           req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
           try:
-              with urllib.request.urlopen(req, timeout=45) as r:
+              with urllib.request.urlopen(req, timeout=45, context=g.SSL_CTX) as r:
                   raw = r.read()
                   print("HTTP", r.status)
                   print(raw[:10000].decode(errors="replace"))
