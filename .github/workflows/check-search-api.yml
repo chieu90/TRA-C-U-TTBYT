@@ -25,7 +25,7 @@ jobs:
                       if any(key in line for key in ("iframe", "egp-portal-contractor", "main.", "runtime.", "polyfills", "captcha", "Captcha")):
                           print("PAGE LINE", line[:2500])
                   print("SCRIPTS", re.findall(r'<script[^>]+src=["\']([^"\']+)', html)[-20:])
-                  for match in list(re.finditer(r"(?i)captcha|smart/search", html))[:10]:
+                  for match in list(re.finditer(r"(?i)/api/|/services/|axios\\.post|axios\\.get|captcha|smart/search", html))[:35]:
                       print("PAGE CONTEXT", html[max(0,match.start()-100):match.end()+100])
           except Exception as e: print("PAGE ERROR", type(e).__name__, str(e))
           from urllib.parse import urljoin
