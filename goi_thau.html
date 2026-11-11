@@ -407,13 +407,15 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) relo
 // Nút "Cập nhật ngay" (chỉ hiện trên bản Vercel có /api/cap-nhat): chạy workflow GitHub rồi tự tải dữ liệu mới
 (() => {
   const btn = document.getElementById('updBtn'), msg = document.getElementById('updMsg');
+  const UPDATE_URL = '/api/cap-nhat?target=goi-thau';
   const DATA_URL = location.pathname.includes('bao-gia') ? '/api/bao-gia' : '/api/goi-thau';
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const vn = iso => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
   const say = (t, busy) => { msg.textContent = t; btn.disabled = !!busy; btn.textContent = busy ? 'Đang cập nhật…' : 'Cập nhật ngay'; };
-  async function status() { const r = await fetch('/api/cap-nhat', { cache: 'no-store' }); if (!r.ok) throw 0; return r.json(); }
+  async function status() { const r = await fetch(UPDATE_URL, { cache: 'no-store' }); if (!r.ok) throw 0; return r.json(); }
   async function follow(since) {
-    const before = (DATA || {}).cap_nhat;
+    const stamp = d => [d?.cap_nhat || '', d?.phat_hien_moi || ''].join('|');
+    const before = stamp(DATA);
     say('Đang lấy dữ liệu từ muasamcong (khoảng 3–6 phút)…', true);
     let run;
     for (let i = 0; i < 90; i++) {
@@ -427,13 +429,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) relo
     for (let i = 0; i < 18; i++) {  // Vercel triển khai lại ~1–2 phút
       await sleep(10000);
       try { const d = await (await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' })).json();
-            if (d.cap_nhat && d.cap_nhat !== before) { say('Đã cập nhật lúc ' + d.cap_nhat + ', đang tải lại…', true); return location.reload(); } } catch (e) {}
+            if (stamp(d) !== before) { say('Đã cập nhật lúc ' + (d.phat_hien_moi || d.cap_nhat) + ', đang tải lại…', true); return location.reload(); } } catch (e) {}
     }
     say('Đã chạy xong, không có dữ liệu mới.');
   }
   status().then(s => {
     btn.hidden = false;
-    if (!s.ready) { btn.disabled = true; msg.textContent = 'Chưa cài GH_TOKEN trên Vercel.'; return; }
+    if (!s.ready) { btn.disabled = true; msg.textContent = 'Cần kết nối GitHub cho máy chủ để dùng nút này. Lịch tự động vẫn hoạt động.'; return; }
     if (s.run && s.run.status !== 'completed') return follow(Date.parse(s.run.created_at));
     if (s.run) msg.textContent = 'Lần chạy gần nhất: ' + vn(s.run.updated_at);
   }).catch(() => {});
@@ -441,7 +443,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) relo
     const t = Date.now();
     say('Đang gửi lệnh…', true);
     try {
-      const r = await (await fetch('/api/cap-nhat', { method: 'POST' })).json();
+      const r = await (await fetch(UPDATE_URL, { method: 'POST' })).json();
       if (!r.ok) return say('Không chạy được: ' + (r.error || 'lỗi'));
       if (!r.started && r.reason === 'vua-chay') return say('Vừa cập nhật lúc ' + vn(r.run.created_at) + ', thử lại sau 5 phút.');
       follow(r.started ? t : Date.parse(r.run.created_at));
