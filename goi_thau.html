@@ -487,5 +487,34 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
   const t = document.createElement('script'); t.src = 'https://translate.google.com/translate_a/element.js?cb=gtInit'; document.body.appendChild(t);
 })();
 </script>
+<!-- nút lên đầu trang (góc phải dưới) -->
+<style>
+.to-top { position: fixed; right: 18px; bottom: 18px; z-index: 45; width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--accent); box-shadow: 0 4px 14px rgba(16,35,70,.18);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .2s, transform .2s, visibility .2s; }
+.to-top.show { opacity: 1; visibility: visible; transform: none; }
+.to-top:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.to-top svg { width: 22px; height: 22px; }
+@media (max-width: 760px) { .to-top { right: 14px; bottom: calc(78px + env(safe-area-inset-bottom)); } }
+@media print { .to-top { display: none; } }
+</style>
+<button type="button" class="to-top" id="toTop" aria-label="Lên đầu trang" title="Lên đầu trang">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+<script>
+(() => {
+  const b = document.getElementById('toTop');
+  const tab = document.querySelector('.tabbar');
+  // trên điện thoại: đặt nút ngay trên thanh menu dưới (chiều cao thanh menu khác nhau giữa các trang)
+  const place = () => { const h = tab && getComputedStyle(tab).display !== 'none' && getComputedStyle(tab).position === 'fixed' ? tab.offsetHeight : 0;
+    b.style.bottom = h ? (h + 12) + 'px' : ''; };
+  const on = () => b.classList.toggle('show', window.scrollY > 400);
+  place(); window.addEventListener('resize', place);
+  window.addEventListener('scroll', on, { passive: true }); on();
+  b.addEventListener('click', () => window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+})();
+</script>
 </body>
 </html>
