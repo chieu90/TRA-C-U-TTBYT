@@ -131,6 +131,15 @@ def load_kw():
 
 # nhóm không hiển thị trên trang Báo giá / Gói thầu (theo yêu cầu người dùng 10/11/2026): que tổng phân tích nước tiểu chạy máy
 BO_NHOM_BG = {"Que thử nước tiểu"}
+# H. pylori dùng mẫu sinh thiết / nội soi dạ dày (test urease, ống thạch/gel, kìm sinh thiết) — bỏ theo yêu cầu 11/11/2026;
+# giữ test HP máu / phân / hơi thở
+HP_SINH_THIET = re.compile(r"sinh thiết|nội soi|niêm mạc|màng nhầy|urease|\burea?\b|\bclo\b|pronto|mảnh mô|mẫu mô|biopsy|thạch"
+                           r"|\bgel\b|nuôi cấy|dạng giấy|dịch dạ dày|\bkìm\b|dụng cụ lấy mẫu|nk-?pylori|melab", re.I)
+
+
+def bo_bg(nhom, text=""):
+    """Mặt hàng không hiển thị trên Báo giá / Gói thầu."""
+    return nhom in BO_NHOM_BG or (nhom == "H. pylori" and bool(HP_SINH_THIET.search(text or "")))
 
 
 TEST_UOM = {"test", "que", "khay", "thanh", "test/khay", "test/que", "kit"}
@@ -519,7 +528,7 @@ def build(ids_path):
         hit = []
         for t in items:
             g = group_of(t["name"], kw, t.get("uom"))
-            if not g or g in BO_NHOM_BG:
+            if not g or bo_bg(g, " ".join(str(t.get(k) or "") for k in ("name", "specification", "description"))):
                 continue
             lot = lots.get(str(t.get("parent")), {})
             qty = num(t.get("qty"))
@@ -589,7 +598,7 @@ def refresh():
     keep = []
     res["nhom"] = [x for x in res.get("nhom", []) if x not in BO_NHOM_BG]
     for p in res.get("goi", []):
-        hh = [h for h in p.get("hang_hoa", []) if h.get("nhom") not in BO_NHOM_BG]
+        hh = [h for h in p.get("hang_hoa", []) if not bo_bg(h.get("nhom"), h.get("ten", "") + " " + h.get("tskt", ""))]
         if len(hh) != len(p.get("hang_hoa", [])):
             changed += 1
             p["hang_hoa"] = hh

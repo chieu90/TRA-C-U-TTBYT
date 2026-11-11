@@ -117,7 +117,7 @@ def build_open(kw, old_open):
             nhom = g.group_of(name, kw, t.get("unit")) or g.group_of(name + " " + desc[:120], kw, t.get("unit"))
             if nhom in g.KHAC:
                 nhom = g.group_of(name + " " + desc[:200], kw, t.get("unit")) or nhom
-            if nhom and nhom not in g.BO_NHOM_BG:
+            if nhom and not g.bo_bg(nhom, name + " " + desc):
                 items.append({"nhom": nhom, "ten": name, "mo_ta": desc, "dvt": g.clean(t.get("unit")),
                               "sl": qty(t.get("qty")), "noi_giao": g.clean(t.get("location"))})
         if not items:
@@ -146,7 +146,7 @@ def build():
         old = {it["key"]: it for it in prev.get("items", [])}
         old_open = {r["id"]: r for r in prev.get("ycbg", [])}
         # dữ liệu cộng dồn từ các lần trước: phân nhóm lại theo bộ từ khóa hiện tại, bỏ mặt hàng không còn quan tâm
-        regroup = lambda it: (lambda nh: None if nh in g.BO_NHOM_BG else nh)(g.group_of(it["ten"], kw, it.get("dvt")) or g.group_of(it["ten"] + " " + (it.get("mo_ta") or "")[:120], kw, it.get("dvt")))
+        regroup = lambda it: (lambda nh: None if g.bo_bg(nh, it["ten"] + " " + (it.get("mo_ta") or "")) else nh)(g.group_of(it["ten"], kw, it.get("dvt")) or g.group_of(it["ten"] + " " + (it.get("mo_ta") or "")[:120], kw, it.get("dvt")))
         for k, it in list(old.items()):
             nh = regroup(it)
             if nh:
@@ -169,7 +169,7 @@ def build():
         nhom = g.group_of(name, kw, r.get("unit")) or g.group_of(name + " " + desc[:120], kw, r.get("unit"))
         if nhom in g.KHAC:
             nhom = g.group_of(name + " " + desc[:200], kw, r.get("unit")) or nhom
-        if not nhom or nhom in g.BO_NHOM_BG:
+        if not nhom or g.bo_bg(nhom, name + " " + desc):
             continue
         prices = sorted(q["price"] for q in quotes if (q.get("price") or 0) > 1)  # bỏ giá 0 / 1đ (giá giữ chỗ)
         noi = g.clean(r.get("location"))

@@ -366,8 +366,11 @@ fetch('/api/bao-gia').then(r => r.json()).then(d => {
   d.ycbg = d.ycbg || [];
   // không hiển thị que thử nước tiểu (chạy máy)
   const BO_NHOM = new Set(['Que thử nước tiểu']);
-  d.items = d.items.filter(h => !BO_NHOM.has(h.nhom));
-  d.ycbg = d.ycbg.map(r => ({ ...r, items: r.items.filter(h => !BO_NHOM.has(h.nhom)) })).filter(r => r.items.length);
+  // H. pylori dùng mẫu sinh thiết / nội soi dạ dày: không hiển thị (giữ test HP máu / phân / hơi thở)
+  const HP_ST = /sinh thiết|nội soi|niêm mạc|màng nhầy|urease|\burea?\b|\bclo\b|pronto|mảnh mô|mẫu mô|biopsy|thạch|\bgel\b|nuôi cấy|dạng giấy|dịch dạ dày|\bkìm\b|dụng cụ lấy mẫu|nk-?pylori|melab/i;
+  const boHang = h => BO_NHOM.has(h.nhom) || (h.nhom === 'H. pylori' && HP_ST.test((h.ten || '') + ' ' + (h.mo_ta || '')));
+  d.items = d.items.filter(h => !boHang(h));
+  d.ycbg = d.ycbg.map(r => ({ ...r, items: r.items.filter(h => !boHang(h)) })).filter(r => r.items.length);
   d.nhom = (d.nhom || []).filter(x => !BO_NHOM.has(x));
   DATA = d;
   const acc = {};

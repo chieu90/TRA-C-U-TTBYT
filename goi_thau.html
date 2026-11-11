@@ -236,6 +236,9 @@ font[style] { background: none !important; box-shadow: none !important; }
 
 <script>
 const BO_NHOM = new Set(['Que thử nước tiểu']);
+// H. pylori dùng mẫu sinh thiết / nội soi dạ dày: không hiển thị (giữ test HP máu / phân / hơi thở)
+const HP_ST = /sinh thiết|nội soi|niêm mạc|màng nhầy|urease|\burea?\b|\bclo\b|pronto|mảnh mô|mẫu mô|biopsy|thạch|\bgel\b|nuôi cấy|dạng giấy|dịch dạ dày|\bkìm\b|dụng cụ lấy mẫu|nk-?pylori|melab/i;
+const boHang = h => BO_NHOM.has(h.nhom) || (h.nhom === 'H. pylori' && HP_ST.test((h.ten || '') + ' ' + (h.tskt || h.mo_ta || '')));
 const $ = s => document.querySelector(s);
 const fmt = n => n == null || n === '' ? '' : Number(n).toLocaleString('vi-VN');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -386,7 +389,7 @@ async function reloadData(initial = false) {
     const d = await r.json();
     if (!Array.isArray(d.goi)) throw new Error(d.error || 'Chưa có dữ liệu');
     // không hiển thị que thử nước tiểu (chạy máy) — kể cả gói do nguồn khác thêm vào
-    d.goi = d.goi.map(p => ({ ...p, hang_hoa: p.hang_hoa.filter(h => !BO_NHOM.has(h.nhom)) })).filter(p => p.hang_hoa.length);
+    d.goi = d.goi.map(p => ({ ...p, hang_hoa: p.hang_hoa.filter(h => !boHang(h)) })).filter(p => p.hang_hoa.length);
     d.nhom = (d.nhom || []).filter(x => !BO_NHOM.has(x));
     if (DATA && JSON.stringify(DATA) === JSON.stringify(d)) return;
     const province = $('#tinh').value;
