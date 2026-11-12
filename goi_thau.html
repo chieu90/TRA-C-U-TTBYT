@@ -298,7 +298,7 @@ function render() {
       return true;
     });
     return { ...p, items, isNew };
-  }).filter(p => p.items.length && (!onlyNew || p.isNew) && (!tt || (tt === 'mo') === (daysLeft(p.han) > 0)) && (!cdt || fold(p.cdt + ' ' + p.tinh).includes(cdt)) && (!tinh || p.tinh === tinh) && (!uq || (p.uy_quyen || {}).muc === uq) && tgMatch(p.tg_hd, tg));
+  }).filter(p => p.items.length && (!onlyNew || p.isNew) && (!tt || (tt === 'mo') === (daysLeft(p.han) > 0)) && (!cdt || fold(p.cdt + ' ' + p.tinh + ' ' + p.ma).includes(cdt)) && (!tinh || p.tinh === tinh) && (!uq || (p.uy_quyen || {}).muc === uq) && tgMatch(p.tg_hd, tg));
   const s = $('#sort').value;
   pkgs.sort((a, b) => s === 'moi' ? b.dang.localeCompare(a.dang) : s === 'gia' ? (b.gia_goi || 0) - (a.gia_goi || 0) : byHan(a, b));
   window._view = pkgs;
@@ -375,6 +375,7 @@ function saveXlsx(rows, name) {
 
 $('#list').addEventListener('click', e => { const s = e.target.closest('.spec'); if (s) s.classList.toggle('cut'); });
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
+{ const ma = new URLSearchParams(location.search).get('ma'); if (ma) $('#cdt').value = ma; }  // link từ email thông báo
 ['#q', '#cdt', '#watch'].forEach(s => $(s).addEventListener('input', () => { if (s === '#watch') store('gt_watch', $('#watch').value); render(); }));
 ['#onlyWatch', '#onlyNew', '#sort', '#uq', '#tg', '#tinh', '#tt'].forEach(s => $(s).addEventListener('change', () => { store('gt_onlyWatch', $('#onlyWatch').checked ? '1' : ''); render(); }));
 $('#csv').addEventListener('click', csv);

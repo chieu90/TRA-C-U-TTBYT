@@ -1,0 +1,52 @@
+# Gửi email khi có gói thầu / yêu cầu báo giá test nhanh mới (thong_bao_mail.py). Không dùng AI.
+# Chạy sau mỗi lần cập nhật dữ liệu tự động và khi dữ liệu được đẩy lên từ máy.
+# Cần 3 GitHub Secrets do chủ tài khoản tự nhập: MAIL_USER, MAIL_PASS (mật khẩu ứng dụng Gmail), MAIL_TO.
+name: Thông báo email gói thầu / báo giá mới
+
+on:
+  workflow_run:
+    workflows: ["Tự tìm gói thầu mới", "Cập nhật dữ liệu tự động (mỗi giờ)"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - 'data/goi_thau.json'
+      - 'data/bao_gia.json'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: thong-bao-mail
+  cancel-in-progress: false
+
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Gửi email nếu có gói thầu / YCBG mới
+        env:
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python3 thong_bao_mail.py
+      - name: Lưu danh sách đã báo
+        run: |
+          git add thong_bao_da_gui.json
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Ghi nhận gói thầu / YCBG đã báo qua email [skip render]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep 20
+          done
+          exit 1
