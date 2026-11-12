@@ -130,8 +130,8 @@ def phan_cong(sheet_id):
             best = max(((difflib.SequenceMatcher(None, k, n).ratio(), n) for n in names if cs[n][0] == t), default=(0, None))
             if best[0] >= 0.9:
                 hit = cs[best[1]]
-        person = hit[1] if hit else by_tinh.get(t)
-        return nv.get(person, [])
+        # chỉ gửi nhân viên được giao cơ sở này trong tab "Cơ sở y tế"; cơ sở chưa giao chỉ gửi quản lý
+        return nv.get(hit[1], []) if hit else []
     print(f"Phân công: {len(nv)} nhân viên có email, {len(cs)} cơ sở, {len(by_tinh)} tỉnh")
     who.nv = nv
     who.cc = cc
@@ -212,8 +212,11 @@ def main():
             hits = [n for n in nv if n == k] or [n for n in nv if k in n]
             if len(hits) != 1:
                 raise SystemExit(f"Không tìm thấy đúng 1 nhân viên có email tên '{gui_cho}' trong Google Sheet (khớp {len(hits)}).")
+            mine = lambda rows: sorted([r for r in rows if pc(r.get("cdt"), r.get("tinh")) == nv[hits[0]]],
+                                       key=lambda r: r.get("lan_dau") or "", reverse=True)[:3]
+            new_g, new_y = mine(goi), mine(ycbg)  # 3 gói + 3 YCBG mới nhất thuộc cơ sở được giao
             extra = ('<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
-                     '<b>Thư thử.</b> 3 gói thầu và 3 yêu cầu báo giá mới nhất trên hệ thống. Thư thật chỉ gồm các cơ sở y tế anh/chị phụ trách.</div>')
+                     f'<b>Thư thử.</b> {len(new_g)} gói thầu và {len(new_y)} yêu cầu báo giá mới nhất của các cơ sở y tế được giao cho anh/chị.</div>')
             send(user, pw, nv[hits[0]], "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y), cc=pc.cc)
             print("Đã gửi thư thử cho nhân viên:", gui_cho, f"(kèm CC {len(pc.cc)} địa chỉ)" if pc.cc else "")
             return
