@@ -144,6 +144,7 @@ def subject_of(g, y):
 
 def main():
     thu = "--thu" in sys.argv
+    gui_thu = os.environ.get("GUI_THU") == "1"  # gửi 1 thư thử cho quản lý, không gửi nhân viên, không lưu
     now = datetime.now(VN).strftime("%Y-%m-%d %H:%M")
     goi = load("goi_thau.json").get("goi", [])
     ycbg = load("bao_gia.json").get("ycbg", [])
@@ -154,7 +155,7 @@ def main():
         return
     st = json.load(open(STATE, encoding="utf-8")) if os.path.exists(STATE) else {"goi": [], "ycbg": []}
     seen_g, seen_y = set(st.get("goi", [])), set(st.get("ycbg", []))
-    if thu:  # bản thử: 3 gói + 3 YCBG mới nhất để xem mẫu thư, không gửi, không lưu
+    if thu or gui_thu:  # bản thử: 3 gói + 3 YCBG mới nhất để xem mẫu thư, không gửi, không lưu
         new_g = sorted(goi, key=lambda p: p.get("lan_dau") or "", reverse=True)[:3]
         new_y = sorted(ycbg, key=lambda y: y.get("lan_dau") or "", reverse=True)[:3]
     else:
@@ -184,6 +185,15 @@ def main():
                     mails[(e,)] = (d["g"], d["y"])
             except Exception as e:
                 print("Không đọc được Google Sheet phân công:", type(e).__name__, e)
+        if gui_thu:
+            user, pw = os.environ.get("MAIL_USER", "").strip(), os.environ.get("MAIL_PASS", "").replace(" ", "")
+            note = "".join(f"<li>{esc(', '.join(to))}: {len(g)} gói, {len(y)} YCBG</li>" for to, (g, y) in mails.items() if to != manager)
+            extra = (f'<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
+                     f'<b>Thư thử.</b> Với 6 mục mẫu dưới đây, hệ thống sẽ gửi cho nhân viên:<ul>{note or "<li>(chưa có nhân viên nào có email trong Google Sheet)</li>"}</ul>'
+                     'Thư thật chỉ gửi khi có gói thầu / YCBG mới.</div>')
+            send(user, pw, list(manager), "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y))
+            print("Đã gửi thư thử cho quản lý;", len(mails) - 1, "nhân viên sẽ nhận theo phân công")
+            return
         if thu:
             for to, (g, y) in mails.items():
                 print("Bản thử ->", len(to), "địa chỉ:", subject_of(g, y))
