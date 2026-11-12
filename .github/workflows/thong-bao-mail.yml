@@ -1,6 +1,6 @@
 # Gửi email khi có gói thầu / yêu cầu báo giá test nhanh mới (thong_bao_mail.py). Không dùng AI.
 # Chạy sau mỗi lần cập nhật dữ liệu tự động và khi dữ liệu được đẩy lên từ máy.
-# Cần 3 GitHub Secrets do chủ tài khoản tự nhập: MAIL_USER, MAIL_PASS (mật khẩu ứng dụng Gmail), MAIL_TO.
+# Cần GitHub Secrets do chủ tài khoản tự nhập: MAIL_USER, MAIL_PASS (mật khẩu ứng dụng Gmail), MAIL_TO, SHEET_ID (Google Sheet phân công).
 name: Thông báo email gói thầu / báo giá mới
 
 on:
@@ -37,6 +37,7 @@ jobs:
           MAIL_USER: ${{ secrets.MAIL_USER }}
           MAIL_PASS: ${{ secrets.MAIL_PASS }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
         run: python3 thong_bao_mail.py
       - name: Lưu danh sách đã báo
         run: |
