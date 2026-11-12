@@ -30,6 +30,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Cài thư viện đọc file Chương V (PDF/Excel)
+        run: pip install -q pymupdf openpyxl
+        continue-on-error: true
       - name: Làm mới gói thầu đã biết từ muasamcong
         id: goi-thau
         run: python3 goi_thau.py refresh

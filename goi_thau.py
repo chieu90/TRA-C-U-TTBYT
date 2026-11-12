@@ -298,9 +298,25 @@ def clean_lines(t):
     return "\n".join(clean(x) for x in t.splitlines() if x.strip())
 
 
+def docx_xml(p):
+    import zipfile
+    try:
+        return zipfile.ZipFile(p).read("word/document.xml").decode("utf-8", "ignore")
+    except Exception:
+        return ""
+
+
+def xml_text(x):
+    x = re.sub(r"</w:p>", "\n", x)
+    x = re.sub(r"<w:tab/>", " ", x)
+    return html_lib.unescape(re.sub(r"<[^>]+>", "", x))
+
+
 def read_text_file(p):
     ext = p.rsplit(".", 1)[-1].lower()
     try:
+        if ext == "docx" and not shutil.which("textutil"):
+            return xml_text(docx_xml(p))
         if ext in ("doc", "docx", "rtf") and shutil.which("textutil"):
             return subprocess.run(["textutil", "-convert", "txt", "-stdout", p], capture_output=True, timeout=180).stdout.decode("utf-8", "ignore")
         if ext in ("xlsx", "xlsm"):
@@ -319,7 +335,10 @@ def read_table_file(p):
     ext = p.rsplit(".", 1)[-1].lower()
     rows = []
     try:
-        if ext in ("doc", "docx", "rtf") and shutil.which("textutil"):
+        if ext == "docx" and not shutil.which("textutil"):
+            for tr in re.findall(r"<w:tr[ >].*?</w:tr>", docx_xml(p), re.S):
+                rows.append([clean(xml_text(c)) for c in re.findall(r"<w:tc>.*?</w:tc>", tr, re.S)])
+        elif ext in ("doc", "docx", "rtf") and shutil.which("textutil"):
             html = subprocess.run(["textutil", "-convert", "html", "-stdout", p], capture_output=True, timeout=180).stdout.decode("utf-8", "ignore")
             for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S | re.I):
                 cells = [clean(re.sub(r"<[^>]+>", " ", c).replace("&nbsp;", " ")) for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S | re.I)]
@@ -338,6 +357,53 @@ def read_table_file(p):
     except Exception:
         pass
     return [r for r in rows if sum(len(c) for c in r) > 5]
+
+
+TSKT_TRONG = re.compile(r"^\W*(theo|như|xem|chi tiết|tham khảo|đáp ứng|tại)\b.{0,80}?"
+                        r"(chương\s*v\b|e-?hsmt|hsmt|hồ sơ mời thầu|yêu cầu (về )?kỹ thuật|phụ lục)", re.I)
+
+
+def tskt_trong(s):
+    """Ô thông số rỗng hoặc chỉ ghi kiểu 'Theo quy định tại Chương V' -> cần đọc file Chương V."""
+    s = clean(s or "")
+    return not s or (len(s) < 150 and bool(TSKT_TRONG.search(s)))
+
+
+def merge_rows(rows):
+    """Bảng PDF/Word bị ngắt trang: bỏ dòng tiêu đề lặp lại, nối dòng không có STT vào dòng trước."""
+    out, last = [], None
+    for r in rows:
+        head = norm(" ".join(r[:3]))
+        if "danh mục" in head or "tên hàng hóa" in head or re.match(r"^(st ?t|tt)\b", head):
+            continue
+        if last is not None and not (r[0] or "").strip() and len(r) == len(last):
+            for i, c in enumerate(r):
+                if c:
+                    last[i] = (last[i] + " " + c).strip()
+            continue
+        last = list(r)
+        out.append(last)
+    return out
+
+
+def fill_specs(p):
+    """Điền thông số từ file Chương V cho các mặt hàng chỉ ghi 'Theo Chương V'. Trả về số mặt hàng điền được."""
+    hh = [h for h in p.get("hang_hoa", []) if tskt_trong(h.get("tskt"))]
+    if not hh or p.get("c5_da_doc"):
+        return 0
+    nid = (re.search(r"notifyId=([0-9a-f-]{36})", p.get("link") or "") or [None, None])[1]
+    if not nid:
+        return 0
+    files = parse(forms(nid))[2]
+    rows = merge_rows([r for fid, fname in files for r in file_rows(fid, fname)])
+    n = 0
+    for h in hh:
+        spec = clean(spec_from_rows(h["ten"], h.get("sl"), rows)) if rows else ""
+        if spec and not tskt_trong(spec):
+            h["tskt"] = spec
+            n += 1
+    p["c5_da_doc"] = True
+    return n
 
 
 def spec_from_rows(name, qty, rows):
@@ -549,12 +615,13 @@ def build(ids_path):
                                                       ("Thông số mặt hàng", spec)])})
         if not hit:
             continue
-        if any(not h["tskt"] for h in hit) and files:
+        if any(tskt_trong(h["tskt"]) for h in hit) and files:
             rows = []
             for fid, fname in files:
                 rows += file_rows(fid, fname)
+            rows = merge_rows(rows)
             for h in hit:
-                if not h["tskt"] and rows:
+                if tskt_trong(h["tskt"]) and rows:
                     h["tskt"] = clean(spec_from_rows(h["ten"], h["sl"], rows))
         lots_raw = [t for f in forms(m["id"]) for t in ((json.loads(f.get("formValue") or "null") or {}).get("Table") or []
                                                          if isinstance(json.loads(f.get("formValue") or "null"), dict) else []) if t.get("lotNo")]
@@ -633,6 +700,13 @@ def refresh():
         if any(p.get(k) != v for k, v in new.items()):
             changed += 1
             p.update(new)
+        try:
+            n = fill_specs(p)
+            if n:
+                changed += 1
+                print(p["ma"], f"điền thông số Chương V cho {n} mặt hàng", file=sys.stderr)
+        except Exception as e:
+            print(p["ma"], "lỗi đọc Chương V:", e, file=sys.stderr)
     res["goi"] = keep
     if not failed:
         res["cap_nhat"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M")
