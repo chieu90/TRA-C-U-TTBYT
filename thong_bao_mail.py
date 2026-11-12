@@ -114,6 +114,14 @@ def phan_cong(sheet_id):
         if r[0].strip() and r[1].strip():
             by_tinh[fold_tinh(r[0])] = fold(r[1])
     names = list(cs)
+    cc = []  # tab "Cấu hình", dòng "Luôn gửi kèm (CC)": thêm vào mọi thư gửi nhân viên
+    try:
+        for r in sheet_csv(sheet_id, "Cấu hình"):
+            r += [""] * 2
+            if "cc" in fold(r[0]) or "gui kem" in fold(r[0]):
+                cc += [e.strip() for e in re.split(r"[,;\s]+", r[1]) if "@" in e]
+    except Exception as e:
+        print("Không đọc được tab Cấu hình:", type(e).__name__)
 
     def who(cdt, tinh):
         k, t = fold(cdt), fold_tinh(tinh)
@@ -126,12 +134,16 @@ def phan_cong(sheet_id):
         return nv.get(person, [])
     print(f"Phân công: {len(nv)} nhân viên có email, {len(cs)} cơ sở, {len(by_tinh)} tỉnh")
     who.nv = nv
+    who.cc = cc
     return who
 
 
-def send(user, pw, to, subject, html_body):
+def send(user, pw, to, subject, html_body, cc=()):
+    cc = [c for c in cc if c not in to]
     msg = MIMEMultipart("alternative")
     msg["Subject"], msg["From"], msg["To"] = subject, f"Muasamcong ADC <{user}>", ", ".join(to)
+    if cc:
+        msg["Cc"] = ", ".join(cc)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
         try:
@@ -140,7 +152,7 @@ def send(user, pw, to, subject, html_body):
             raise SystemExit(f"Gmail từ chối đăng nhập ({type(e).__name__}). Kiểm tra MAIL_USER là địa chỉ Gmail đầy đủ "
                              f"và MAIL_PASS là mật khẩu ứng dụng 16 ký tự (không phải mật khẩu Gmail). "
                              f"Độ dài MAIL_USER={len(user)}, MAIL_PASS={len(pw)}, có @: {'@' in user}")
-        s.sendmail(user, to, msg.as_string())
+        s.sendmail(user, list(to) + cc, msg.as_string())
 
 
 def subject_of(g, y):
@@ -174,7 +186,7 @@ def main():
         print("Không có gói thầu / YCBG mới.")
     else:
         # thư cho quản lý (MAIL_TO): toàn bộ; thư cho từng nhân viên: chỉ cơ sở mình phụ trách (Google Sheet)
-        mails = {}
+        mails, staff_cc = {}, []
         manager = tuple(x.strip() for x in (os.environ.get("MAIL_TO") or os.environ.get("MAIL_USER") or "").split(",") if x.strip())
         if manager:
             mails[manager] = (new_g, new_y)
@@ -182,6 +194,7 @@ def main():
         if sheet_id:
             try:
                 who = phan_cong(sheet_id)
+                staff_cc = who.cc
                 per = {}
                 for kind, rows in (("g", new_g), ("y", new_y)):
                     for p in rows:
@@ -194,15 +207,15 @@ def main():
                 print("Không đọc được Google Sheet phân công:", type(e).__name__, e)
         if gui_cho:
             user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
-            nv = phan_cong(os.environ.get("SHEET_ID", "").strip()).nv
+            pc = phan_cong(os.environ.get("SHEET_ID", "").strip()); nv = pc.nv
             k = fold(gui_cho)
             hits = [n for n in nv if n == k] or [n for n in nv if k in n]
             if len(hits) != 1:
                 raise SystemExit(f"Không tìm thấy đúng 1 nhân viên có email tên '{gui_cho}' trong Google Sheet (khớp {len(hits)}).")
             extra = ('<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
                      '<b>Thư thử.</b> 3 gói thầu và 3 yêu cầu báo giá mới nhất trên hệ thống. Thư thật chỉ gồm các cơ sở y tế anh/chị phụ trách.</div>')
-            send(user, pw, nv[hits[0]], "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y))
-            print("Đã gửi thư thử cho nhân viên:", gui_cho)
+            send(user, pw, nv[hits[0]], "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y), cc=pc.cc)
+            print("Đã gửi thư thử cho nhân viên:", gui_cho, f"(kèm CC {len(pc.cc)} địa chỉ)" if pc.cc else "")
             return
         if gui_thu:
             user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
@@ -223,7 +236,7 @@ def main():
             print("Chưa cấu hình MAIL_USER / MAIL_PASS -> bỏ qua gửi:", subject_of(new_g, new_y))
         else:
             for to, (g, y) in mails.items():
-                send(user, pw, list(to), subject_of(g, y), body(g, y))
+                send(user, pw, list(to), subject_of(g, y), body(g, y), cc=() if to == manager else staff_cc)
                 print("Đã gửi:", subject_of(g, y), "->", len(to), "địa chỉ")
     if thu:
         return
