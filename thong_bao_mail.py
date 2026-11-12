@@ -133,7 +133,12 @@ def send(user, pw, to, subject, html_body):
     msg["Subject"], msg["From"], msg["To"] = subject, f"Muasamcong ADC <{user}>", ", ".join(to)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
-        s.login(user, pw)
+        try:
+            s.login(user, pw)
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPServerDisconnected) as e:
+            raise SystemExit(f"Gmail từ chối đăng nhập ({type(e).__name__}). Kiểm tra MAIL_USER là địa chỉ Gmail đầy đủ "
+                             f"và MAIL_PASS là mật khẩu ứng dụng 16 ký tự (không phải mật khẩu Gmail). "
+                             f"Độ dài MAIL_USER={len(user)}, MAIL_PASS={len(pw)}, có @: {'@' in user}")
         s.sendmail(user, to, msg.as_string())
 
 
@@ -186,7 +191,7 @@ def main():
             except Exception as e:
                 print("Không đọc được Google Sheet phân công:", type(e).__name__, e)
         if gui_thu:
-            user, pw = os.environ.get("MAIL_USER", "").strip(), os.environ.get("MAIL_PASS", "").replace(" ", "")
+            user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
             note = "".join(f"<li>{esc(', '.join(to))}: {len(g)} gói, {len(y)} YCBG</li>" for to, (g, y) in mails.items() if to != manager)
             extra = (f'<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
                      f'<b>Thư thử.</b> Với 6 mục mẫu dưới đây, hệ thống sẽ gửi cho nhân viên:<ul>{note or "<li>(chưa có nhân viên nào có email trong Google Sheet)</li>"}</ul>'
@@ -199,7 +204,7 @@ def main():
                 print("Bản thử ->", len(to), "địa chỉ:", subject_of(g, y))
             open(os.path.join(HERE, "thong_bao_thu.html"), "w", encoding="utf-8").write(body(new_g, new_y))
             return
-        user, pw = os.environ.get("MAIL_USER", "").strip(), os.environ.get("MAIL_PASS", "").replace(" ", "")
+        user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
         if not (user and pw and mails):
             print("Chưa cấu hình MAIL_USER / MAIL_PASS -> bỏ qua gửi:", subject_of(new_g, new_y))
         else:
