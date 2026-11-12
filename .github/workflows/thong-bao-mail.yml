@@ -22,14 +22,6 @@ on:
         description: "Hoặc gửi thử cho 1 nhân viên (gõ tên như trong Google Sheet)"
         type: string
         default: ""
-      so_goi:
-        description: "Số gói thầu trong thư thử"
-        type: number
-        default: 3
-      so_ycbg:
-        description: "Số yêu cầu báo giá trong thư thử"
-        type: number
-        default: 3
 
 permissions:
   contents: write
@@ -57,8 +49,6 @@ jobs:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GUI_THU: ${{ github.event_name == 'workflow_dispatch' && inputs.gui_thu && '1' || '' }}
           GUI_CHO: ${{ github.event_name == 'workflow_dispatch' && inputs.gui_cho || '' }}
-          SO_GOI: ${{ inputs.so_goi }}
-          SO_YCBG: ${{ inputs.so_ycbg }}
         run: python3 thong_bao_mail.py
       - name: Lưu danh sách đã báo
         run: |

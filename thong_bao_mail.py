@@ -163,9 +163,8 @@ def main():
     st = json.load(open(STATE, encoding="utf-8")) if os.path.exists(STATE) else {"goi": [], "ycbg": []}
     seen_g, seen_y = set(st.get("goi", [])), set(st.get("ycbg", []))
     if thu or gui_thu:  # bản thử: 3 gói + 3 YCBG mới nhất để xem mẫu thư, không gửi, không lưu
-        ng = int(os.environ.get("SO_GOI") or 3); ny = int(os.environ.get("SO_YCBG") or 3)
-        new_g = sorted(goi, key=lambda p: p.get("lan_dau") or "", reverse=True)[:ng]
-        new_y = sorted(ycbg, key=lambda y: y.get("lan_dau") or "", reverse=True)[:ny]
+        new_g = sorted(goi, key=lambda p: p.get("lan_dau") or "", reverse=True)[:3]
+        new_y = sorted(ycbg, key=lambda y: y.get("lan_dau") or "", reverse=True)[:3]
     else:
         new_g = [p for p in goi if p["ma"] not in seen_g and open_now(p.get("han"), now)]
         new_y = [y for y in ycbg if y["ma"] not in seen_y and open_now(y.get("han"), now)]
@@ -201,7 +200,7 @@ def main():
             if len(hits) != 1:
                 raise SystemExit(f"Không tìm thấy đúng 1 nhân viên có email tên '{gui_cho}' trong Google Sheet (khớp {len(hits)}).")
             extra = ('<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
-                     f'<b>Thư thử.</b> {len(new_g)} gói thầu và {len(new_y)} yêu cầu báo giá mới nhất trên hệ thống. Thư thật chỉ gồm các cơ sở y tế anh/chị phụ trách.</div>')
+                     '<b>Thư thử.</b> 3 gói thầu và 3 yêu cầu báo giá mới nhất trên hệ thống. Thư thật chỉ gồm các cơ sở y tế anh/chị phụ trách.</div>')
             send(user, pw, nv[hits[0]], "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y))
             print("Đã gửi thư thử cho nhân viên:", gui_cho)
             return
@@ -209,7 +208,7 @@ def main():
             user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
             note = "".join(f"<li>{esc(', '.join(to))}: {len(g)} gói, {len(y)} YCBG</li>" for to, (g, y) in mails.items() if to != manager)
             extra = (f'<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
-                     f'<b>Thư thử.</b> Với các mục mẫu dưới đây, hệ thống sẽ gửi cho nhân viên:<ul>{note or "<li>(chưa có nhân viên nào có email trong Google Sheet)</li>"}</ul>'
+                     f'<b>Thư thử.</b> Với 6 mục mẫu dưới đây, hệ thống sẽ gửi cho nhân viên:<ul>{note or "<li>(chưa có nhân viên nào có email trong Google Sheet)</li>"}</ul>'
                      'Thư thật chỉ gửi khi có gói thầu / YCBG mới.</div>')
             send(user, pw, list(manager), "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y))
             print("Đã gửi thư thử cho quản lý;", len(mails) - 1, "nhân viên sẽ nhận theo phân công")
