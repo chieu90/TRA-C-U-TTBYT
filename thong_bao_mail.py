@@ -125,6 +125,7 @@ def phan_cong(sheet_id):
         person = hit[1] if hit else by_tinh.get(t)
         return nv.get(person, [])
     print(f"Phân công: {len(nv)} nhân viên có email, {len(cs)} cơ sở, {len(by_tinh)} tỉnh")
+    who.nv = nv
     return who
 
 
@@ -149,7 +150,8 @@ def subject_of(g, y):
 
 def main():
     thu = "--thu" in sys.argv
-    gui_thu = os.environ.get("GUI_THU") == "1"  # gửi 1 thư thử cho quản lý, không gửi nhân viên, không lưu
+    gui_cho = os.environ.get("GUI_CHO", "").strip()  # tên nhân viên: gửi thử 3 gói + 3 YCBG mới nhất cho riêng người đó
+    gui_thu = os.environ.get("GUI_THU") == "1" or bool(gui_cho)  # gửi 1 thư thử cho quản lý, không gửi nhân viên, không lưu
     now = datetime.now(VN).strftime("%Y-%m-%d %H:%M")
     goi = load("goi_thau.json").get("goi", [])
     ycbg = load("bao_gia.json").get("ycbg", [])
@@ -190,6 +192,18 @@ def main():
                     mails[(e,)] = (d["g"], d["y"])
             except Exception as e:
                 print("Không đọc được Google Sheet phân công:", type(e).__name__, e)
+        if gui_cho:
+            user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
+            nv = phan_cong(os.environ.get("SHEET_ID", "").strip()).nv
+            k = fold(gui_cho)
+            hits = [n for n in nv if n == k] or [n for n in nv if k in n]
+            if len(hits) != 1:
+                raise SystemExit(f"Không tìm thấy đúng 1 nhân viên có email tên '{gui_cho}' trong Google Sheet (khớp {len(hits)}).")
+            extra = ('<div style="font-family:Arial;font-size:14px;background:#fff7e0;padding:10px;border-radius:8px">'
+                     '<b>Thư thử.</b> 3 gói thầu và 3 yêu cầu báo giá mới nhất trên hệ thống. Thư thật chỉ gồm các cơ sở y tế anh/chị phụ trách.</div>')
+            send(user, pw, nv[hits[0]], "[Thử] " + subject_of(new_g, new_y), extra + body(new_g, new_y))
+            print("Đã gửi thư thử cho nhân viên:", gui_cho)
+            return
         if gui_thu:
             user, pw = re.sub(r"\s+", "", os.environ.get("MAIL_USER", "")), re.sub(r"\s+", "", os.environ.get("MAIL_PASS", ""))
             note = "".join(f"<li>{esc(', '.join(to))}: {len(g)} gói, {len(y)} YCBG</li>" for to, (g, y) in mails.items() if to != manager)

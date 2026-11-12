@@ -18,6 +18,10 @@ on:
         description: "Gửi 1 thư thử cho quản lý (không gửi nhân viên)"
         type: boolean
         default: true
+      gui_cho:
+        description: "Hoặc gửi thử cho 1 nhân viên (gõ tên như trong Google Sheet)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -44,6 +48,7 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GUI_THU: ${{ github.event_name == 'workflow_dispatch' && inputs.gui_thu && '1' || '' }}
+          GUI_CHO: ${{ github.event_name == 'workflow_dispatch' && inputs.gui_cho || '' }}
         run: python3 thong_bao_mail.py
       - name: Lưu danh sách đã báo
         run: |
