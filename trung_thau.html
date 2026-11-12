@@ -208,6 +208,7 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .ms .dd label { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
 .ms .dd label:hover { background: var(--line-2); }
 .ms .dd label[hidden] { display: none; }
+@media (min-width: 761px) { #t_cs .nm { min-width: 240px; } }
 .ms .dd label b { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12px; }
 .ms .dd .act { display: flex; gap: 6px; padding: 4px 4px 8px; border-bottom: 1px solid var(--line-2); margin-bottom: 4px; }
 .ms .dd .act button { padding: 4px 10px; font-size: 12.5px; }
@@ -412,6 +413,7 @@ font[style] { background: none !important; box-shadow: none !important; }
     <section class="card full" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg></span>Nhóm test</h2><p class="cap cby"></p><div id="t_nh"></div></section>
     <section class="card full" data-c="violet"><h2><span class="hi" data-c="violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20V8l6 4V8l6 4V4h4l2 16z"/></svg></span>Hãng sản xuất</h2><p class="cap cby"></p><div id="t_hang"></div></section>
     <section class="card full" data-c="blue"><h2><span class="hi" data-c="blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>Nhà thầu trúng</h2><p class="cap cby"></p><div id="t_nt"></div></section>
+    <section class="card full" data-c="orange"><h2><span class="hi" data-c="orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg></span>Cơ sở y tế</h2><p class="cap cby"></p><div id="t_cs"></div></section>
     <section class="card full" data-c="aqua"><h2><span class="hi" data-c="aqua"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>Đơn giá trúng bình quân theo nhóm</h2>
       <p class="cap">Trung vị đơn giá một test (chỉ dòng có đơn vị test / que / khay). Giá giảm là dấu hiệu bị ép giá.</p><div id="t_gia"></div></section>
     <section class="card full" data-c="magenta"><h2><span class="hi" data-c="magenta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Tỉnh/TP</h2><p class="cap cby"></p><div id="t_tp"></div></section>
@@ -733,6 +735,7 @@ function renderCmp() {
   ctable('t_nh', 'Nhóm test', 'Nhóm test', cgroup(r => r.nhom), 30);
   ctable('t_hang', 'Hãng sản xuất', 'Hãng', cgroup(r => r.hk, r => r.hn).filter(g => g.k !== 'Không ghi rõ'));
   ctable('t_nt', 'Nhà thầu trúng', 'Nhà thầu', cgroup(r => r.nha_thau.split('; ').filter(Boolean)));
+  ctable('t_cs', 'Cơ sở y tế', 'Cơ sở y tế', cgroup(CS, r => r.cdt + (r.tinh ? ' · ' + r.tinh : '')));
   ctable('t_tp', 'Tỉnh/TP', 'Tỉnh/TP', cgroup(r => OLD2NEW[r.tinh] || r.tinh || 'Chưa rõ'));
   // đơn giá trung vị / test theo nhóm
   const med = v => { v.sort((p, q) => p - q); return !v.length ? null : v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2; };
