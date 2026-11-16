@@ -1285,9 +1285,10 @@ GAS_RE = re.compile(r"https://script\.google\.com/(?:a/macros/[\w.-]+/|macros/)s
 QUYEN_LINK = [("xem", "Ai có link đều xem được"), ("sua", "Ai có link đều sửa được"), ("rieng", "Chỉ tài khoản Google của tôi")]
 
 
-def goi_google(c, viec, url=None, **them):
-    """Gọi Apps Script chạy bằng tài khoản Google của người dùng (xem ket_noi_google.gs)."""
-    url, khoa = url or doc_cd(c, "gas_url"), doc_cd(c, "gas_khoa")
+def goi_google(c, viec, gas_url=None, **them):
+    """Gọi Apps Script chạy bằng tài khoản Google của người dùng (xem ket_noi_google.gs).
+    gas_url: link /exec cần thử (chưa lưu); các tham số khác (kể cả `url` của file mẫu) gửi nguyên cho script."""
+    url, khoa = gas_url or doc_cd(c, "gas_url"), doc_cd(c, "gas_khoa")
     if not url:
         raise Loi(400, "Chưa kết nối Google. Quản lý vào mục Mẫu HĐ để kết nối.")
     rq = urllib.request.Request(url, data=json.dumps({"khoa": khoa, "viec": viec, **them}).encode(),
@@ -1400,7 +1401,7 @@ def mau_hop_dong(c):
             url = c.chu("gas_url", "Link Apps Script", True, 500)
             if not GAS_RE.fullmatch(url):
                 raise Loi(400, "Link phải có dạng https://script.google.com/macros/s/…/exec (bước Triển khai → Ứng dụng web).")
-            kq = goi_google(c, "thu", url=url)                # thử trước, chạy được mới lưu
+            kq = goi_google(c, "thu", gas_url=url)                # thử trước, chạy được mới lưu
             ghi_cd(c, "gas_url", url)
             ghi_cd(c, "gas_tai_khoan", kq.get("tai_khoan") or "")
             c.db.commit()
