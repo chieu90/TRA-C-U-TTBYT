@@ -1309,8 +1309,19 @@ def goi_google(c, viec, url=None, **them):
     try:
         kq = json.loads(raw)
     except ValueError:
-        raise Loi(502, "Apps Script không trả về đúng dữ liệu. Khi triển khai cần chọn: Thực thi với tư cách = Tôi, "
-                       "Người có quyền truy cập = Bất kỳ ai.")
+        # Google trả trang HTML báo lỗi: lấy câu báo lỗi để người dùng biết cần sửa gì
+        chu = raw.decode("utf-8", "replace")
+        chu = re.sub(r"<(script|style)\b.*?</\1>", " ", chu, flags=re.S | re.I)
+        chu = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", chu))).strip()
+        if "doPost" in chu:
+            raise Loi(502, "Google báo: bản triển khai không có hàm doPost, tức là đoạn mã của app chưa được lưu trước khi "
+                           "triển khai. Trong Apps Script: dán đoạn mã từ trang này, bấm Lưu (biểu tượng đĩa), rồi Triển khai → "
+                           "Quản lý các lần triển khai → bút chì → Phiên bản: Phiên bản mới → Triển khai. Link /exec giữ nguyên.")
+        if "accounts.google.com" in raw.decode("utf-8", "replace") or "Đăng nhập" in chu or "Sign in" in chu:
+            raise Loi(502, "Google đòi đăng nhập: bản triển khai đang để Người có quyền truy cập là \"Bất cứ ai có Tài khoản "
+                           "Google\". Hãy đổi thành \"Bất kỳ ai\" và triển khai Phiên bản mới.")
+        raise Loi(502, "Apps Script không trả về đúng dữ liệu" + (f" (Google báo: {chu[:200]})" if chu else "") +
+                       ". Khi triển khai cần chọn: Thực thi với tư cách = Tôi, Người có quyền truy cập = Bất kỳ ai.")
     if not kq.get("ok"):
         raise Loi(400, "Google: " + str(kq.get("loi") or "lỗi không rõ")[:300])
     return kq
