@@ -1,0 +1,5 @@
+# dữ liệu hợp đồng thật — không đưa lên GitHub
+du-lieu/
+__pycache__/
+# thư mục public của app này là file giao diện, cần đưa lên (repo gốc đang bỏ qua public/)
+!public/
