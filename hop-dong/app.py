@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS tep (
 # cột thêm sau khi database đã có dữ liệu: (bảng, cột, kiểu)
 COT_THEM = [
     ("nguoi_dung", "email", "TEXT DEFAULT ''"),
+    ("nguoi_dung", "duoc_xoa", "INTEGER DEFAULT 0"),
     ("khach_hang", "dai_dien", "TEXT DEFAULT ''"), ("khach_hang", "chuc_vu", "TEXT DEFAULT ''"),
     ("khach_hang", "email", "TEXT DEFAULT ''"), ("khach_hang", "nhan_vien_bh", "TEXT DEFAULT ''"),
     ("hop_dong", "loai", "TEXT DEFAULT 'thau'"),
@@ -203,8 +204,9 @@ def mo_db():
     global _san_sang
     db = KetNoi()
     if not _san_sang:
-        # trên PostgreSQL chỉ chạy khi thiếu bảng thêm gần đây nhất (đổi tên này mỗi lần thêm bảng / cột)
-        if not PG_URL or not db.execute("SELECT to_regclass('cai_dat') AS v").fetchone()["v"]:
+        # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
+        if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
+                                        "AND column_name = ?", ("nguoi_dung", "duoc_xoa")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -321,6 +323,11 @@ class Ctx:
     def ql(self):
         return bool(self.user) and self.user["vai_tro"] == "quan_ly"
 
+    @property
+    def duoc_xoa(self):
+        """Quản lý luôn được xóa hợp đồng; nhân viên chỉ khi được quản lý cấp quyền."""
+        return self.ql or (bool(self.user) and bool(self.user["duoc_xoa"]))
+
     def dat_cookie(self, ten, gt, giay):
         an_toan = "; Secure" if self.h.headers.get("X-Forwarded-Proto") == "https" else ""
         self.cookies.append(f"{ten}={gt}; Path=/; Max-Age={giay}; HttpOnly; SameSite=Lax{an_toan}")
@@ -393,6 +400,9 @@ def an_csrf(c):
     return f'<input type="hidden" name="csrf" value="{e(c.csrf)}">'
 
 
+QUYEN_XOA = [("0", "Không được xóa"), ("1", "Được xóa hợp đồng mình phụ trách")]
+
+
 def nut_xoa(c, url, hoi, nhan="Xóa"):
     return (f'<form method="post" action="{url}" class="trong-dong" data-xac-nhan="{e(hoi)}">{an_csrf(c)}'
             f'<button class="nut-chu nguy">{nhan}</button></form>')
@@ -433,8 +443,9 @@ def them_nguoi_dung(c, vai_tro):
     kiem_mk(mk, c.form.get("mat_khau_2"))
     muoi = secrets.token_hex(16)
     try:
-        uid = c.db.them("INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau, muoi, vai_tro, email) VALUES (?,?,?,?,?,?)",
-                        (ten, ho_ten, bam(mk, muoi), muoi, vai_tro, email))
+        uid = c.db.them("INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau, muoi, vai_tro, email, duoc_xoa) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        (ten, ho_ten, bam(mk, muoi), muoi, vai_tro, email, 1 if c.form.get("duoc_xoa") == "1" else 0))
     except LOI_TRUNG:
         raise Loi(400, "Tên đăng nhập này đã có.")
     c.db.commit()
@@ -519,22 +530,26 @@ def nguoi_dung(c):
                     f'<button class="nut-chu">{nhan}</button></form>')
         dong += (f'<tr><td>{e(u["ho_ten"])}</td><td>{e(u["ten_dang_nhap"])}</td>'
                  f'<td>{e(u["email"]) or "<span class=mo>chưa có</span>"}</td>'
-                 f'<td>{e(dict(VAI_TRO)[u["vai_tro"]])}</td><td class="so">{u["n"]}</td>'
+                 f'<td>{e(dict(VAI_TRO)[u["vai_tro"]])}</td>'
+                 f'<td>{"Có" if u["vai_tro"] == "quan_ly" or u["duoc_xoa"] else "<span class=mo>Không</span>"}</td>'
+                 f'<td class="so">{u["n"]}</td>'
                  f'<td>{"Đang dùng" if u["hoat_dong"] else "<span class=mo>Đã khóa</span>"}</td>'
                  f'<td class="thao-tac"><a href="/nguoi-dung/{u["id"]}/sua">Sửa</a>'
                  f'<a href="/nguoi-dung/{u["id"]}/mat-khau">Đặt lại mật khẩu</a>{khoa}</td></tr>')
     return trang(c, "Người dùng", f"""
       <h1>Người dùng</h1>
-      <div class="the cuon"><table><thead><tr><th>Họ tên</th><th>Tên đăng nhập</th><th>Email</th><th>Vai trò</th>
+      <div class="the cuon"><table><thead><tr><th>Họ tên</th><th>Tên đăng nhập</th><th>Email</th><th>Vai trò</th><th>Xóa hợp đồng</th>
         <th class="so">Hợp đồng</th><th>Tình trạng</th><th></th></tr></thead><tbody>{dong}</tbody></table></div>
       <div class="the"><h2>Thêm người dùng</h2>
       <p class="mo">Nhân viên chỉ thấy hợp đồng mình phụ trách. Quản lý thấy tất cả.
+        Quản lý luôn xóa được hợp đồng; nhân viên chỉ xóa được hợp đồng mình phụ trách khi được cấp quyền (bấm Sửa).
         Mail cảnh báo hết hạn gửi cho người phụ trách và mọi quản lý có email.</p>
       <form method="post" action="/nguoi-dung" class="luoi">{an_csrf(c)}
         {o("Họ tên", "ho_ten", bat_buoc=True)}
         {o("Email", "email", kieu="email")}
         {o("Tên đăng nhập", "ten_dang_nhap", bat_buoc=True, them='autocomplete="off"')}
         <label>Vai trò{chon("vai_tro", VAI_TRO, "nhan_vien")}</label>
+        <label>Quyền xóa hợp đồng{chon("duoc_xoa", QUYEN_XOA, "0")}</label>
         {o("Mật khẩu tạm (ít nhất 8 ký tự)", "mat_khau", kieu="password", bat_buoc=True, them='autocomplete="new-password"')}
         <div class="hang-nut"><button class="nut">Thêm</button></div></form></div>""", "nd")
 
@@ -556,11 +571,14 @@ def nguoi_dung_sua(c, uid):
         vt = u["vai_tro"] if chinh_minh else c.form.get("vai_tro")
         if vt not in dict(VAI_TRO):
             raise Loi(400, "Vai trò không hợp lệ.")
-        c.db.execute("UPDATE nguoi_dung SET ho_ten = ?, email = ?, vai_tro = ? WHERE id = ?",
-                     (c.chu("ho_ten", "Họ tên", True, 100), doc_email(c), vt, uid))
+        dx = u["duoc_xoa"] if chinh_minh else (1 if c.form.get("duoc_xoa") == "1" else 0)
+        c.db.execute("UPDATE nguoi_dung SET ho_ten = ?, email = ?, vai_tro = ?, duoc_xoa = ? WHERE id = ?",
+                     (c.chu("ho_ten", "Họ tên", True, 100), doc_email(c), vt, dx, uid))
         c.db.commit()
         return Chuyen("/nguoi-dung", "Đã lưu.")
-    o_vt = "" if chinh_minh else f'<label>Vai trò{chon("vai_tro", VAI_TRO, u["vai_tro"])}</label>'
+    o_vt = "" if chinh_minh else (
+        f'<label>Vai trò{chon("vai_tro", VAI_TRO, u["vai_tro"])}</label>'
+        f'<label>Quyền xóa hợp đồng (quản lý thì luôn được xóa){chon("duoc_xoa", QUYEN_XOA, 1 if u["duoc_xoa"] else 0)}</label>')
     return trang(c, "Sửa người dùng", f"""
       <div class="the hep"><h1>Sửa người dùng</h1><p class="mo">Tên đăng nhập: {e(u["ten_dang_nhap"])}</p>
       <form method="post" class="luoi-1">{an_csrf(c)}
@@ -714,9 +732,18 @@ def loc_quyen(c):
     return ("", []) if c.ql else (" AND phu_trach_id = ?", [c.user["id"]])
 
 
-def bang_hd(ds):
+def hoi_xoa_hd(h):
+    if h["loai"] == "nguyen_tac":
+        return f"Xóa hợp đồng nguyên tắc {h['so_hd']} của {h['khach']}? Không khôi phục được."
+    return f"Xóa hợp đồng {h['so_hd']} cùng mọi mã hàng, phụ lục và lịch sử giao hàng? Không khôi phục được."
+
+
+def bang_hd(ds, c=None):
+    """c: truyền vào ở trang danh sách để có cột nút Xóa (chỉ hiện với người được xóa)."""
+    co_xoa = bool(c) and c.duoc_xoa
     dong = ""
     for h in ds:
+        xoa = (f'<td class="thao-tac">' + nut_xoa(c, f'/hop-dong/{h["id"]}/xoa', hoi_xoa_hd(h)) + '</td>') if co_xoa else ""
         pt = phan_tram(h)
         if h["loai"] == "nguyen_tac":
             gt_td = '<td class="so mo">—</td><td class="mo">theo đơn hàng</td>'
@@ -725,9 +752,9 @@ def bang_hd(ds):
                      f'<td><progress max="100" value="{pt}"></progress> <span class="mo">{pt}%</span></td>')
         dong += (f'<tr><td><a href="/hop-dong/{h["id"]}"><b>{e(h["so_hd"])}</b></a></td><td>{e(h["khach"])}</td>'
                  f'<td>{ngay(h["het_han"])}</td>{gt_td}'
-                 f'<td>{e(h["phu_trach"] or "—")}</td><td>{nhan_hd(h)}</td></tr>')
+                 f'<td>{e(h["phu_trach"] or "—")}</td><td>{nhan_hd(h)}</td>{xoa}</tr>')
     return ('<div class="the cuon"><table><thead><tr><th>Số hợp đồng</th><th>Khách hàng</th><th>Hết hạn</th>'
-            '<th class="so">Giá trị (đ)</th><th>Đã giao</th><th>Phụ trách</th><th>Tình trạng</th></tr></thead>'
+            '<th class="so">Giá trị (đ)</th><th>Đã giao</th><th>Phụ trách</th><th>Tình trạng</th>' + ('<th></th>' if co_xoa else '') + '</tr></thead>'
             f'<tbody>{dong}</tbody></table></div>')
 
 
@@ -793,7 +820,7 @@ def ds_hop_dong(c):
         nd = c.db.execute("SELECT id, ho_ten FROM nguoi_dung ORDER BY ho_ten").fetchall()
         loc_pt = chon("pt", [(u["id"], u["ho_ten"]) for u in nd], pt, "Mọi người phụ trách")
     an_kh = f'<input type="hidden" name="kh" value="{e(kh)}">' if kh.isdigit() else ""
-    bang = bang_hd(ds) if ds else '<div class="the trong">Không có hợp đồng nào khớp.</div>'
+    bang = bang_hd(ds, c) if ds else '<div class="the trong">Không có hợp đồng nào khớp.</div>'
     return trang(c, "Hợp đồng", f"""
       <div class="dau-trang"><h1>Hợp đồng <span class="dem">{len(ds)}</span></h1><a class="nut" href="/hop-dong/moi">Thêm hợp đồng</a></div>
       <form class="bo-loc">{an_kh}
@@ -886,6 +913,8 @@ def hd_sua(c, hid):
 
 def hd_xoa(c, hid):
     h = lay_hd(c, hid)
+    if not c.duoc_xoa:
+        raise Loi(403, "Bạn chưa được cấp quyền xóa hợp đồng. Hãy nhờ quản lý cấp quyền ở mục Người dùng.")
     c.db.execute("DELETE FROM giao_hang WHERE dong_hang_id IN (SELECT id FROM dong_hang WHERE hop_dong_id = ?)", (hid,))
     c.db.execute("DELETE FROM hop_dong WHERE id = ?", (hid,))
     c.db.commit()
@@ -983,8 +1012,7 @@ def hd_xem(c, hid):
     bang_pl = (f'<div class="the cuon"><table><thead><tr><th>Số phụ lục</th><th>Ngày ký</th><th>Nội dung</th>'
                f'<th>Hết hạn mới</th><th>File</th><th></th></tr></thead><tbody>{dong_pl}</tbody></table></div>' if pl else "")
 
-    xoa_hd = nut_xoa(c, f"{url}/xoa", f"Xóa hợp đồng {h['so_hd']} cùng mọi mã hàng, phụ lục và lịch sử giao hàng?",
-                     "Xóa hợp đồng") if c.ql else ""
+    xoa_hd = nut_xoa(c, f"{url}/xoa", hoi_xoa_hd(h), "Xóa hợp đồng") if c.duoc_xoa else ""
     phan_pl = f"""<h2>Phụ lục <span class="dem">{len(pl)}</span></h2>{bang_pl}
       <details class="the"><summary>Thêm phụ lục</summary>
         <form method="post" action="{url}/phu-luc" class="luoi">{an_csrf(c)}
@@ -1668,7 +1696,7 @@ TUYEN = [
     ("GET|POST", r"/hop-dong/moi", hd_moi, "nd"),
     ("GET", r"/hop-dong/(\d+)", hd_xem, "nd"),
     ("GET|POST", r"/hop-dong/(\d+)/sua", hd_sua, "nd"),
-    ("POST", r"/hop-dong/(\d+)/xoa", hd_xoa, "ql"),
+    ("POST", r"/hop-dong/(\d+)/xoa", hd_xoa, "nd"),
     ("POST", r"/hop-dong/(\d+)/dong-hang", dong_hang_them, "nd"),
     ("GET|POST", r"/dong-hang/(\d+)/sua", dong_hang_sua, "nd"),
     ("POST", r"/dong-hang/(\d+)/xoa", dong_hang_xoa, "nd"),
