@@ -95,3 +95,5 @@ details.the[open] > summary { margin-bottom: 14px; }
 
 .thong-bao { background: var(--xanh-nen); color: var(--xanh); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-weight: 500; }
 .thong-bao.loi { background: var(--do-nen); color: var(--do); }
+.cach-tren { margin-top: 10px; }
+code { background: var(--nhe); padding: 1px 6px; border-radius: 4px; font-size: 13px; }

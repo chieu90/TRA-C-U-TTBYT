@@ -3,7 +3,7 @@
 Gửi mail cảnh báo hợp đồng sắp hết hạn / quá hạn. Không dùng AI.
 Chạy hằng ngày bằng GitHub Actions (.github/workflows/canh-bao-hop-dong.yml).
 
-Mỗi hợp đồng đang thực hiện được báo một lần ở mỗi mốc: còn ≤ 60 ngày, ≤ 30 ngày, ≤ 7 ngày, và khi quá hạn.
+Mỗi hợp đồng thầu đang thực hiện (bỏ qua HĐ nguyên tắc vì tự gia hạn) được báo một lần ở mỗi mốc: còn ≤ 60 ngày, ≤ 30 ngày, ≤ 7 ngày, và khi quá hạn.
 Gia hạn bằng phụ lục (ngày hết hạn đổi) thì các mốc được tính lại từ đầu.
 Người nhận: người phụ trách hợp đồng + mọi quản lý, lấy email trong mục Người dùng của app.
 Nếu chưa quản lý nào có email thì gửi về MAIL_TO.
@@ -43,7 +43,7 @@ def can_bao(db, hom_nay, bo_qua_da_gui=False):
     """Danh sách (hợp đồng, số ngày còn lại, mốc) cần báo hôm nay."""
     ds = db.execute(
         "SELECT v.*, u.email AS email_pt, u.hoat_dong AS pt_hoat_dong FROM v_hop_dong v "
-        "LEFT JOIN nguoi_dung u ON u.id = v.phu_trach_id WHERE v.trang_thai = 'dang_thuc_hien' ORDER BY v.het_han").fetchall()
+        "LEFT JOIN nguoi_dung u ON u.id = v.phu_trach_id WHERE v.trang_thai = 'dang_thuc_hien' AND v.loai <> 'nguyen_tac' ORDER BY v.het_han").fetchall()
     da_gui = {(r["hop_dong_id"], r["het_han"], r["moc"]) for r in db.execute("SELECT * FROM canh_bao_da_gui").fetchall()}
     kq = []
     for h in ds:
