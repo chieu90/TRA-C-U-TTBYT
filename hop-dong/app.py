@@ -1632,8 +1632,11 @@ def hdnt_moi(c):
         <div class="hang-nut cach-tren"><input type="text" id="o-tra-mst" inputmode="numeric" maxlength="20"
           placeholder="Ví dụ 0104670584" autocomplete="off"><button type="button" class="nut phu" id="nut-tra-mst">Tra cứu</button></div>
         <p class="mo cach-tren" id="kq-tra-mst">App lấy tên và địa chỉ đăng ký thuế rồi điền vào các ô bên dưới. Người đại diện,
-        chức vụ, điện thoại, email không có trong dữ liệu thuế: nhập tay một lần, lần sau app nhớ.</p></div>
-      <details class="the"><summary>Dán thông tin bên mua để tự điền</summary>
+        chức vụ, điện thoại, email không có trong dữ liệu thuế: nhập tay một lần, lần sau app nhớ.</p>
+        <p class="cach-tren" id="goi-y-mst" hidden>Muốn lấy người đại diện, điện thoại:
+        <a id="link-mst" href="https://masothue.com/" target="_blank" rel="noopener noreferrer">mở trang masothue.com của mã này</a>,
+        bôi đen bảng thông tin, chép, rồi dán vào ô "Dán thông tin bên mua" ngay dưới và bấm Tự điền.</p></div>
+      <details class="the" id="khung-dan"><summary>Dán thông tin bên mua để tự điền</summary>
         <p class="mo">Dán đoạn chữ có dạng "Mã số thuế: …", "Địa chỉ: …", "Người đại diện: …" (ví dụ chép từ tin nhắn Zalo
         hoặc trang tra cứu mã số thuế), rồi bấm Tự điền. Kiểm tra lại trước khi tạo.</p>
         <textarea id="o-dan" rows="6"></textarea>

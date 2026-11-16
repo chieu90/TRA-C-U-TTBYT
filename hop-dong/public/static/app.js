@@ -83,6 +83,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (thieu.length) tb += " Còn thiếu người đại diện, chức vụ: nhập tay bên dưới.";
         if (thue.trang_thai && !/đang hoạt động/i.test(thue.trang_thai)) tb = "LƯU Ý: " + thue.trang_thai + ". " + tb;
         kqMst.textContent = tb + (loi.length ? " " + loi.join(" ") : "");
+        var goiY = document.getElementById("goi-y-mst");   // dữ liệu thuế không có người đại diện: chỉ đường lấy nhanh
+        goiY.hidden = !thieu.length;
+        if (thieu.length) {
+          document.getElementById("link-mst").href = "https://masothue.com/Search/?q=" + encodeURIComponent(d.mst) + "&type=auto";
+          document.getElementById("khung-dan").open = true;
+        }
       }, function () { kqMst.textContent = "Chưa tra được. Kiểm tra mạng rồi thử lại."; });
   }
   document.getElementById("nut-tra-mst").addEventListener("click", traMst);
@@ -106,6 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
       var m = dong.match(/^([^:\t]{2,40})[:\t]\s*(.+)$/);
       if (m) {
         var khoa = gap(m[1]), gt = m[2].trim();
+        if (/^ten (quoc te|viet tat|tieng anh)/.test(khoa)) return;   // không phải tên dùng trong hợp đồng
         for (var i = 0; i < KHOA.length; i++) {
           if (KHOA[i][1].test(khoa)) {
             var ten = KHOA[i][0];
