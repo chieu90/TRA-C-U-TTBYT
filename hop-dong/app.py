@@ -42,7 +42,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS nguoi_dung (
   id INTEGER PRIMARY KEY, ten_dang_nhap TEXT UNIQUE NOT NULL, ho_ten TEXT NOT NULL,
   mat_khau TEXT NOT NULL, muoi TEXT NOT NULL,
-  vai_tro TEXT NOT NULL DEFAULT 'nhan_vien', hoat_dong INTEGER NOT NULL DEFAULT 1);
+  vai_tro TEXT NOT NULL DEFAULT 'nhan_vien', hoat_dong INTEGER NOT NULL DEFAULT 1, email TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS phien (
   ma TEXT PRIMARY KEY, nguoi_dung_id INTEGER NOT NULL REFERENCES nguoi_dung(id) ON DELETE CASCADE,
   csrf TEXT NOT NULL, het_han TEXT NOT NULL);
@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS giao_hang (
   id INTEGER PRIMARY KEY, dong_hang_id INTEGER NOT NULL REFERENCES dong_hang(id),
   ngay TEXT NOT NULL, so_luong REAL NOT NULL, so_phieu TEXT DEFAULT '', ghi_chu TEXT DEFAULT '',
   nguoi_nhap_id INTEGER REFERENCES nguoi_dung(id));
+CREATE TABLE IF NOT EXISTS canh_bao_da_gui (
+  hop_dong_id INTEGER NOT NULL REFERENCES hop_dong(id) ON DELETE CASCADE,
+  het_han TEXT NOT NULL, moc INTEGER NOT NULL, gui_luc TEXT NOT NULL,
+  PRIMARY KEY (hop_dong_id, het_han, moc));
 DROP VIEW IF EXISTS v_hop_dong;
 CREATE VIEW v_hop_dong AS
 SELECT h.*, k.ten AS khach, u.ho_ten AS phu_trach,
@@ -130,6 +134,11 @@ class KetNoi:
         for cau in sch.split(";"):
             if cau.strip():
                 self.c.execute(cau)
+        # cột thêm sau khi database đã có dữ liệu
+        if PG_URL:
+            self.c.execute("ALTER TABLE nguoi_dung ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''")
+        elif "email" not in [r["name"] for r in self.c.execute("PRAGMA table_info(nguoi_dung)")]:
+            self.c.execute("ALTER TABLE nguoi_dung ADD COLUMN email TEXT DEFAULT ''")
         self.c.commit()
 
     def commit(self):
@@ -150,7 +159,8 @@ def mo_db():
     global _san_sang
     db = KetNoi()
     if not _san_sang:
-        if not PG_URL or not db.execute("SELECT to_regclass('v_hop_dong') AS v").fetchone()["v"]:
+        # trên PostgreSQL chỉ chạy khi thiếu bảng thêm gần đây nhất (đổi tên này mỗi lần thêm bảng / cột)
+        if not PG_URL or not db.execute("SELECT to_regclass('canh_bao_da_gui') AS v").fetchone()["v"]:
             db.khoi_tao()
         _san_sang = True
     return db
@@ -343,17 +353,25 @@ def kiem_mk(mk, lai=None):
         raise Loi(400, "Hai lần nhập mật khẩu không khớp.")
 
 
+def doc_email(c):
+    v = c.chu("email", "Email", toi_da=200).lower()
+    if v and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v):
+        raise Loi(400, "Email không đúng định dạng.")
+    return v
+
+
 def them_nguoi_dung(c, vai_tro):
     ten = c.chu("ten_dang_nhap", "Tên đăng nhập", True, 50).lower()
     if not re.fullmatch(r"[a-z0-9._-]{3,50}", ten):
         raise Loi(400, "Tên đăng nhập chỉ gồm chữ thường không dấu, số, dấu chấm, gạch; từ 3 ký tự.")
     ho_ten = c.chu("ho_ten", "Họ tên", True, 100)
+    email = doc_email(c)
     mk = c.form.get("mat_khau", "")
     kiem_mk(mk, c.form.get("mat_khau_2"))
     muoi = secrets.token_hex(16)
     try:
-        uid = c.db.them("INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau, muoi, vai_tro) VALUES (?,?,?,?,?)",
-                        (ten, ho_ten, bam(mk, muoi), muoi, vai_tro))
+        uid = c.db.them("INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau, muoi, vai_tro, email) VALUES (?,?,?,?,?,?)",
+                        (ten, ho_ten, bam(mk, muoi), muoi, vai_tro, email))
     except LOI_TRUNG:
         raise Loi(400, "Tên đăng nhập này đã có.")
     c.db.commit()
@@ -371,6 +389,7 @@ def thiet_lap(c):
       <p class="mo">Tạo tài khoản quản lý đầu tiên. Tài khoản này thấy mọi hợp đồng và thêm được người dùng khác.</p>
       <form method="post" class="luoi-1">
         {o("Họ tên", "ho_ten", bat_buoc=True)}
+        {o("Email (để nhận mail cảnh báo)", "email", kieu="email")}
         {o("Tên đăng nhập", "ten_dang_nhap", bat_buoc=True, them='autocomplete="username"')}
         {o("Mật khẩu (ít nhất 8 ký tự)", "mat_khau", kieu="password", bat_buoc=True, them='autocomplete="new-password"')}
         {o("Nhập lại mật khẩu", "mat_khau_2", kieu="password", bat_buoc=True, them='autocomplete="new-password"')}
@@ -436,17 +455,21 @@ def nguoi_dung(c):
             khoa = (f'<form method="post" action="/nguoi-dung/{u["id"]}/khoa" class="trong-dong">{an_csrf(c)}'
                     f'<button class="nut-chu">{nhan}</button></form>')
         dong += (f'<tr><td>{e(u["ho_ten"])}</td><td>{e(u["ten_dang_nhap"])}</td>'
+                 f'<td>{e(u["email"]) or "<span class=mo>chưa có</span>"}</td>'
                  f'<td>{e(dict(VAI_TRO)[u["vai_tro"]])}</td><td class="so">{u["n"]}</td>'
                  f'<td>{"Đang dùng" if u["hoat_dong"] else "<span class=mo>Đã khóa</span>"}</td>'
-                 f'<td class="thao-tac"><a href="/nguoi-dung/{u["id"]}/mat-khau">Đặt lại mật khẩu</a>{khoa}</td></tr>')
+                 f'<td class="thao-tac"><a href="/nguoi-dung/{u["id"]}/sua">Sửa</a>'
+                 f'<a href="/nguoi-dung/{u["id"]}/mat-khau">Đặt lại mật khẩu</a>{khoa}</td></tr>')
     return trang(c, "Người dùng", f"""
       <h1>Người dùng</h1>
-      <div class="the cuon"><table><thead><tr><th>Họ tên</th><th>Tên đăng nhập</th><th>Vai trò</th>
+      <div class="the cuon"><table><thead><tr><th>Họ tên</th><th>Tên đăng nhập</th><th>Email</th><th>Vai trò</th>
         <th class="so">Hợp đồng</th><th>Tình trạng</th><th></th></tr></thead><tbody>{dong}</tbody></table></div>
       <div class="the"><h2>Thêm người dùng</h2>
-      <p class="mo">Nhân viên chỉ thấy hợp đồng mình phụ trách. Quản lý thấy tất cả.</p>
+      <p class="mo">Nhân viên chỉ thấy hợp đồng mình phụ trách. Quản lý thấy tất cả.
+        Mail cảnh báo hết hạn gửi cho người phụ trách và mọi quản lý có email.</p>
       <form method="post" action="/nguoi-dung" class="luoi">{an_csrf(c)}
         {o("Họ tên", "ho_ten", bat_buoc=True)}
+        {o("Email", "email", kieu="email")}
         {o("Tên đăng nhập", "ten_dang_nhap", bat_buoc=True, them='autocomplete="off"')}
         <label>Vai trò{chon("vai_tro", VAI_TRO, "nhan_vien")}</label>
         {o("Mật khẩu tạm (ít nhất 8 ký tự)", "mat_khau", kieu="password", bat_buoc=True, them='autocomplete="new-password"')}
@@ -459,6 +482,28 @@ def nguoi_dung_them(c):
         raise Loi(400, "Vai trò không hợp lệ.")
     them_nguoi_dung(c, vt)
     return Chuyen("/nguoi-dung", "Đã thêm người dùng.")
+
+
+def nguoi_dung_sua(c, uid):
+    u = c.db.execute("SELECT * FROM nguoi_dung WHERE id = ?", (uid,)).fetchone()
+    if not u:
+        raise Loi(404, "Không tìm thấy người dùng.")
+    chinh_minh = uid == c.user["id"]
+    if c.method == "POST":
+        vt = u["vai_tro"] if chinh_minh else c.form.get("vai_tro")
+        if vt not in dict(VAI_TRO):
+            raise Loi(400, "Vai trò không hợp lệ.")
+        c.db.execute("UPDATE nguoi_dung SET ho_ten = ?, email = ?, vai_tro = ? WHERE id = ?",
+                     (c.chu("ho_ten", "Họ tên", True, 100), doc_email(c), vt, uid))
+        c.db.commit()
+        return Chuyen("/nguoi-dung", "Đã lưu.")
+    o_vt = "" if chinh_minh else f'<label>Vai trò{chon("vai_tro", VAI_TRO, u["vai_tro"])}</label>'
+    return trang(c, "Sửa người dùng", f"""
+      <div class="the hep"><h1>Sửa người dùng</h1><p class="mo">Tên đăng nhập: {e(u["ten_dang_nhap"])}</p>
+      <form method="post" class="luoi-1">{an_csrf(c)}
+        {o("Họ tên", "ho_ten", u["ho_ten"], bat_buoc=True)}
+        {o("Email (để nhận mail cảnh báo)", "email", u["email"], kieu="email")}{o_vt}
+        <div class="hang-nut"><button class="nut">Lưu</button><a href="/nguoi-dung">Hủy</a></div></form></div>""", "nd")
 
 
 def nguoi_dung_khoa(c, uid):
@@ -974,6 +1019,7 @@ TUYEN = [
     ("POST", r"/khach-hang/(\d+)/xoa", khach_hang_xoa, "ql"),
     ("GET", r"/nguoi-dung", nguoi_dung, "ql"),
     ("POST", r"/nguoi-dung", nguoi_dung_them, "ql"),
+    ("GET|POST", r"/nguoi-dung/(\d+)/sua", nguoi_dung_sua, "ql"),
     ("POST", r"/nguoi-dung/(\d+)/khoa", nguoi_dung_khoa, "ql"),
     ("GET|POST", r"/nguoi-dung/(\d+)/mat-khau", nguoi_dung_mat_khau, "ql"),
 ]

@@ -1,0 +1,48 @@
+# Gửi mail cảnh báo hợp đồng sắp hết hạn / quá hạn (hop-dong/canh_bao_mail.py). Không dùng AI.
+# Chạy mỗi sáng 7:30 giờ Việt Nam. Người nhận lấy từ mục Người dùng của app quản lý hợp đồng.
+# Cần GitHub Secrets do chủ tài khoản tự nhập:
+#   HD_DATABASE_URL  chuỗi kết nối database Neon của app (Vercel > Storage > neon-bronze-arrow > Show secret > DATABASE_URL)
+#   MAIL_USER, MAIL_PASS, MAIL_TO  dùng chung với thông báo gói thầu (đã có sẵn)
+name: Cảnh báo hợp đồng sắp hết hạn
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+    inputs:
+      gui_thu:
+        description: "Gửi 1 thư thử cho quản lý (không ghi nhận, không gửi nhân viên)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canh-bao-hop-dong
+  cancel-in-progress: false
+
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cài thư viện kết nối database
+        run: pip install -q -r hop-dong/requirements.txt
+      - name: Gửi mail cảnh báo
+        env:
+          DATABASE_URL: ${{ secrets.HD_DATABASE_URL }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_PASS: ${{ secrets.MAIL_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          GUI_THU: ${{ github.event_name == 'workflow_dispatch' && inputs.gui_thu && '1' || '' }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Chưa có secret HD_DATABASE_URL nên chưa gửi được. Xem hướng dẫn ở đầu file workflow."
+            exit 1
+          fi
+          python3 hop-dong/canh_bao_mail.py
