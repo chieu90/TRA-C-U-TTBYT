@@ -80,6 +80,88 @@ def dien(data, gia_tri):
     return viet_lai(data, lambda ten, xml: sua_xml(xml, mau))
 
 
+# ───── chuẩn hóa file mẫu xuất từ Google Docs ─────
+
+def dem_phan(data):
+    """Số phần (section) của văn bản; Google Docs xuất mỗi tab thành một phần."""
+    x = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml").decode("utf-8")
+    return x.count("<w:sectPr")
+
+
+def _cat_phan(xml, k):
+    """Chỉ giữ phần thứ k (đếm từ 0) của thân văn bản."""
+    dau = xml.index(">", xml.index("<w:body")) + 1
+    cuoi = xml.rindex("</w:body>")
+    than = xml[dau:cuoi]
+    vt = [m.start() for m in re.finditer(r"<w:sectPr[ >]", than)]
+    if k >= len(vt):
+        raise ValueError("Không có phần số %d." % (k + 1))
+    bat_dau = 0
+    for i, s in enumerate(vt):
+        e = than.index("</w:sectPr>", s) + len("</w:sectPr>")
+        if i == len(vt) - 1:                              # phần cuối: sectPr nằm thẳng trong thân bài
+            ket, giu = s, than[bat_dau:s]
+        else:                                             # các phần khác: sectPr nằm trong đoạn cuối của phần
+            ket = than.index("</w:p>", e) + len("</w:p>")
+            giu = than[bat_dau:s] + than[e:ket]
+        if i == k:
+            return xml[:dau] + giu + than[s:e] + xml[cuoi:]
+        bat_dau = ket
+
+
+# chữ gợi ý sẵn trong mẫu ADM03901 -> ô điền (chỉ đổi phần Bên B, Bên A giữ nguyên)
+_GOI_Y_BEN_B = [
+    (r"\[\s*TÊN\s+CÔNG\s+TY\s*\]", "{ten_kh}"),
+    (r"\[\s*Nhập\s+địa\s+chỉ(\s+công\s+ty)?\s*\]", "{dia_chi}"),
+    (r"\[\s*Nhập\s+mã\s+số\s+thuế\s*\]", "{mst}"),
+    (r"\[\s*Nhập\s+họ\s+tên\s+người\s+đại\s+diện\s*\]\s*", "{dai_dien}"),
+    (r"\[\s*Nhập\s+chức\s+vụ\s*\]", "{chuc_vu}"),
+    (r"\[\s*Nhập\s+số\s+điện\s+thoại(\s+liên\s+hệ)?\s*\]", "{dien_thoai}"),
+    (r"\[\s*Nhập\s+(địa\s+chỉ\s+)?email\s*\]", "{email}"),
+]
+_GOI_Y_SO = re.compile(r"Số\s*:[ \t ]*(?:\[[^\]]*\])?[ \t .…_]*-?[ \t ]*HĐNT/(?:\[[^\]]*\]|[^\s<]+)", re.I)
+_TRONG = r"(?:\d{1,4}|\[[^\]]*\]|[_.…]+|[ \t ]+)"
+_GOI_Y_NGAY = re.compile(r"ngày\s*" + _TRONG + r"\s*tháng\s*" + _TRONG + r"\s*năm\s*" + _TRONG, re.I)
+
+
+def doi_goi_y(xml):
+    """Đổi chữ gợi ý của mẫu ADM03901 thành ô điền và bỏ màu chữ ở các đoạn đó (in ra chữ đen)."""
+    trang_thai = {"ben_b": False}
+    ben_b = [(re.compile(p, re.I), t) for p, t in _GOI_Y_BEN_B]
+
+    def mot_doan(m):
+        doan = m.group(0)
+        chu = "".join(unescape(t) for t in re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", doan))
+        mau = []
+        if re.search(r"HĐNT", chu):
+            mau.append((_GOI_Y_SO, "Số: {so_hd}"))
+        if re.search(r"Hôm\s+nay", chu, re.I):
+            mau.append((_GOI_Y_NGAY, "ngày {ngay} tháng {thang} năm {nam}"))
+        if trang_thai["ben_b"]:
+            mau += ben_b
+        if re.search(r"Bên\s*B\b", chu):
+            trang_thai["ben_b"] = True
+        if not mau:
+            return doan
+        moi = _sua_doan(doan, mau)
+        if moi != doan:
+            moi = re.sub(r"<w:color [^>]*/>", "", moi)
+        return moi
+
+    return _DOAN.sub(mot_doan, xml)
+
+
+def chuan_hoa(data, phan=None):
+    """Chuẩn bị file mẫu: giữ phần (tab) số `phan` nếu có, đổi chữ gợi ý thành ô điền."""
+    def sua(ten, xml):
+        if ten == "word/document.xml":
+            if phan is not None:
+                xml = _cat_phan(xml, phan)
+            xml = doi_goi_y(xml)
+        return xml
+    return viet_lai(data, sua)
+
+
 def kiem_tra(data):
     """Trả về danh sách ô điền có trong mẫu; báo lỗi nếu không phải file .docx."""
     try:

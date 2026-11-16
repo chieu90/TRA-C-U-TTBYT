@@ -10,7 +10,7 @@ Trên máy: chỉ dùng thư viện có sẵn của Python, dữ liệu nằm tr
 Trên Vercel: đặt biến môi trường DATABASE_URL (PostgreSQL) — xem api/index.py và vercel.json.
 Lần chạy đầu tiên app sẽ hỏi tạo tài khoản quản lý.
 """
-import csv, hashlib, hmac, html, io, json, math, mimetypes, os, re, secrets, sqlite3, time, unicodedata, urllib.parse, zipfile
+import base64, csv, hashlib, hmac, html, io, json, math, mimetypes, os, re, secrets, sqlite3, time, unicodedata, urllib.error, urllib.parse, urllib.request, zipfile
 import xml.etree.ElementTree as ET
 from email import policy as email_policy
 from email.parser import BytesParser
@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS canh_bao_da_gui (
   hop_dong_id INTEGER NOT NULL REFERENCES hop_dong(id) ON DELETE CASCADE,
   het_han TEXT NOT NULL, moc INTEGER NOT NULL, gui_luc TEXT NOT NULL,
   PRIMARY KEY (hop_dong_id, het_han, moc));
+CREATE TABLE IF NOT EXISTS cai_dat (khoa TEXT PRIMARY KEY, gia_tri TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tep (
   ma TEXT PRIMARY KEY, ten_tep TEXT NOT NULL, noi_dung BLOB NOT NULL, cap_nhat TEXT NOT NULL, nguoi TEXT DEFAULT '');
 """
@@ -90,6 +91,7 @@ COT_THEM = [
     ("khach_hang", "dai_dien", "TEXT DEFAULT ''"), ("khach_hang", "chuc_vu", "TEXT DEFAULT ''"),
     ("khach_hang", "email", "TEXT DEFAULT ''"), ("khach_hang", "nhan_vien_bh", "TEXT DEFAULT ''"),
     ("hop_dong", "loai", "TEXT DEFAULT 'thau'"),
+    ("tep", "nguon", "TEXT DEFAULT ''"),
 ]
 
 SCHEMA_VIEW = """
@@ -202,7 +204,7 @@ def mo_db():
     db = KetNoi()
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu bảng thêm gần đây nhất (đổi tên này mỗi lần thêm bảng / cột)
-        if not PG_URL or not db.execute("SELECT to_regclass('tep') AS v").fetchone()["v"]:
+        if not PG_URL or not db.execute("SELECT to_regclass('cai_dat') AS v").fetchone()["v"]:
             db.khoi_tao()
         _san_sang = True
     return db
@@ -993,9 +995,14 @@ def hd_xem(c, hid):
         <div class="hang-nut"><button class="nut">Thêm phụ lục</button></div></form></details>"""
     if h["loai"] == "nguyen_tac":
         tu_tai = " data-tu-tai" if c.q.get("tai") == "1" else ""
+        mo_gg = (f'<a class="nut" href="{e(h["link_file"])}" target="_blank" rel="noopener noreferrer">Mở Google Docs</a>'
+                 if h["link_file"].startswith("https://docs.google.com/") else "")
+        tao_gg = (f'<form method="post" action="{url}/google-doc" class="trong-dong">{an_csrf(c)}'
+                  f'<button class="nut phu">{"Tạo lại link" if mo_gg else "Tạo link Google Docs"}</button></form>'
+                  if doc_cd(c, "gas_url") else "")
         return trang(c, h["so_hd"], f"""
-      <div class="dau-trang"><h1>{e(h["so_hd"])} {nhan_hd(h)}</h1><div class="hang-nut">
-        <a class="nut" href="{url}/tai-hdnt"{tu_tai}>Tải file Word</a><a class="nut phu" href="{url}/sua">Sửa</a></div></div>
+      <div class="dau-trang"><h1>{e(h["so_hd"])} {nhan_hd(h)}</h1><div class="hang-nut">{mo_gg}{tao_gg}
+        <a class="nut phu" href="{url}/tai-hdnt"{tu_tai}>Tải file Word</a><a class="nut phu" href="{url}/sua">Sửa</a></div></div>
       <div class="the"><dl class="thong-tin">{thong_tin}</dl></div>
       <p class="mo">File Word lấy thông tin bên mua hiện có trong mục Khách hàng. Sửa thông tin khách rồi tải lại nếu cần.</p>
       {phan_pl}{xoa_hd}""", "hd")
@@ -1259,41 +1266,202 @@ def lay_mau(c):
     return (r, bytes(r["noi_dung"])) if r else (None, None)
 
 
+def doc_cd(c, khoa, mac_dinh=""):
+    r = c.db.execute("SELECT gia_tri FROM cai_dat WHERE khoa = ?", (khoa,)).fetchone()
+    return r["gia_tri"] if r else mac_dinh
+
+
+def ghi_cd(c, khoa, gia_tri):
+    c.db.execute("DELETE FROM cai_dat WHERE khoa = ?", (khoa,))
+    c.db.execute("INSERT INTO cai_dat (khoa, gia_tri) VALUES (?, ?)", (khoa, gia_tri))
+
+
+GAS_RE = re.compile(r"https://script\.google\.com/(?:a/macros/[\w.-]+/|macros/)s/[\w-]+/exec")
+QUYEN_LINK = [("xem", "Ai có link đều xem được"), ("sua", "Ai có link đều sửa được"), ("rieng", "Chỉ tài khoản Google của tôi")]
+
+
+def goi_google(c, viec, **them):
+    """Gọi Apps Script chạy bằng tài khoản Google của người dùng (xem ket_noi_google.gs)."""
+    url, khoa = doc_cd(c, "gas_url"), doc_cd(c, "gas_khoa")
+    if not url:
+        raise Loi(400, "Chưa kết nối Google. Quản lý vào mục Mẫu HĐ để kết nối.")
+    rq = urllib.request.Request(url, data=json.dumps({"khoa": khoa, "viec": viec, **them}).encode(),
+                                headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(rq, timeout=50) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as loi:
+        raise Loi(502, f"Google trả lỗi {loi.code}. Kiểm tra lại link triển khai Apps Script.")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise Loi(502, "Không kết nối được Google Apps Script. Thử lại sau ít phút.")
+    try:
+        kq = json.loads(raw)
+    except ValueError:
+        raise Loi(502, "Apps Script không trả về đúng dữ liệu. Khi triển khai cần chọn: Thực thi với tư cách = Tôi, "
+                       "Người có quyền truy cập = Bất kỳ ai.")
+    if not kq.get("ok"):
+        raise Loi(400, "Google: " + str(kq.get("loi") or "lỗi không rõ")[:300])
+    return kq
+
+
+def luu_mau(c, ten_tep, dl, nguon=""):
+    try:
+        co = docx_mau.kiem_tra(dl)
+    except ValueError as loi:
+        raise Loi(400, str(loi))
+    if "ten_kh" not in co:
+        raise Loi(400, "Mẫu chưa có chỗ điền tên bên mua: cần ô {ten_kh} hoặc chữ gợi ý [TÊN CÔNG TY] ở phần Bên B.")
+    c.db.execute("DELETE FROM tep WHERE ma = 'hdnt'")
+    c.db.execute("INSERT INTO tep (ma, ten_tep, noi_dung, cap_nhat, nguoi, nguon) VALUES ('hdnt', ?, ?, ?, ?, ?)",
+                 (ten_tep[:200], dl, datetime.now().isoformat(timespec="seconds"), c.user["ho_ten"], nguon))
+    c.db.commit()
+    return co
+
+
+def lay_mau_tu_link(c, url):
+    if not re.match(r"https://(docs|drive)\.google\.com/", url):
+        raise Loi(400, "Hãy dán link Google Docs hoặc Google Drive (bắt đầu bằng https://docs.google.com/ …).")
+    kq = goi_google(c, "lay_mau", url=url)
+    try:
+        dl = base64.b64decode(kq["docx"])
+        so_phan = docx_mau.dem_phan(dl)
+    except (KeyError, ValueError, zipfile.BadZipFile):
+        raise Loi(400, "File ở link không phải văn bản Word / Google Docs.")
+    tabs, tab, phan, ten_tab = kq.get("tabs") or [], kq.get("tab") or "", None, ""
+    if so_phan > 1:
+        ids = [t["id"] for t in tabs]
+        if len(ids) != so_phan:
+            raise Loi(400, f"Văn bản có {so_phan} phần nhưng {len(ids)} tab nên app không biết lấy tab nào. "
+                           "Hãy chép tab mẫu sang một Google Doc riêng rồi dán link Doc đó.")
+        phan = ids.index(tab) if tab in ids else 0       # link không ghi tab thì lấy tab đầu như Google Docs
+        ten_tab = tabs[phan]["ten"]
+    dl = docx_mau.chuan_hoa(dl, phan)
+    ten = re.sub(r"\.docx$", "", kq.get("ten") or "Mẫu") + (f" (tab {ten_tab})" if ten_tab else "") + ".docx"
+    co = luu_mau(c, ten, dl, url)
+    return f"Đã lấy mẫu từ Google{f' (tab {ten_tab})' if ten_tab else ''}. Mẫu có {len(co)}/{len(docx_mau.O_DIEN)} ô điền."
+
+
+def ma_apps_script(c):
+    khoa = doc_cd(c, "gas_khoa")
+    if not khoa:
+        khoa = secrets.token_urlsafe(24)
+        ghi_cd(c, "gas_khoa", khoa)
+        c.db.commit()
+    with open(os.path.join(HERE, "ket_noi_google.gs"), encoding="utf-8") as f:
+        return f.read().replace("__KHOA__", khoa)
+
+
 def mau_hop_dong(c):
     if c.method == "POST":
-        ten_tep, dl = c.tep.get("tep", ("", b""))
-        if not ten_tep.lower().endswith(".docx"):
-            raise Loi(400, "Hãy chọn file Word .docx.")
-        try:
-            co = docx_mau.kiem_tra(dl)
-        except ValueError as loi:
-            raise Loi(400, str(loi))
-        if "ten_kh" not in co:
-            raise Loi(400, "Mẫu chưa có ô {ten_kh} (tên bên mua). Xem danh sách ô điền ở cuối trang.")
-        c.db.execute("DELETE FROM tep WHERE ma = 'hdnt'")
-        c.db.execute("INSERT INTO tep (ma, ten_tep, noi_dung, cap_nhat, nguoi) VALUES ('hdnt', ?, ?, ?, ?)",
-                     (os.path.basename(ten_tep)[:200], dl, datetime.now().isoformat(timespec="seconds"), c.user["ho_ten"]))
-        c.db.commit()
-        return Chuyen("/mau-hop-dong", f"Đã lưu mẫu. Mẫu có {len(co)}/{len(docx_mau.O_DIEN)} ô điền.")
+        viec = c.form.get("viec", "")
+        if viec == "tai_len":
+            ten_tep, dl = c.tep.get("tep", ("", b""))
+            if not ten_tep.lower().endswith(".docx"):
+                raise Loi(400, "Hãy chọn file Word .docx.")
+            try:
+                phan = 0 if docx_mau.dem_phan(dl) > 1 else None
+                dl = docx_mau.chuan_hoa(dl, phan)
+            except (zipfile.BadZipFile, KeyError, ValueError):
+                raise Loi(400, "File không phải Word .docx hợp lệ.")
+            co = luu_mau(c, os.path.basename(ten_tep), dl)
+            return Chuyen("/mau-hop-dong", f"Đã lưu mẫu{' (lấy phần đầu của file)' if phan == 0 else ''}. "
+                                           f"Mẫu có {len(co)}/{len(docx_mau.O_DIEN)} ô điền.")
+        if viec == "lay_link":
+            return Chuyen("/mau-hop-dong", lay_mau_tu_link(c, c.chu("url", "Link mẫu", True, 1000)))
+        if viec == "cap_nhat_link":
+            r, _ = lay_mau(c)
+            if not (r and r["nguon"]):
+                raise Loi(400, "Mẫu hiện tại không lấy từ link.")
+            return Chuyen("/mau-hop-dong", lay_mau_tu_link(c, r["nguon"]))
+        if viec == "ket_noi":
+            url = c.chu("gas_url", "Link Apps Script", True, 500)
+            if not GAS_RE.fullmatch(url):
+                raise Loi(400, "Link phải có dạng https://script.google.com/macros/s/…/exec (bước Triển khai → Ứng dụng web).")
+            ghi_cd(c, "gas_url", url)
+            c.db.commit()
+            kq = goi_google(c, "thu")
+            ghi_cd(c, "gas_tai_khoan", kq.get("tai_khoan") or "")
+            c.db.commit()
+            return Chuyen("/mau-hop-dong", f"Đã kết nối Google Drive của {kq.get('tai_khoan') or 'bạn'}.")
+        if viec == "cai_dat_link":
+            q = c.form.get("quyen_link", "")
+            if q not in dict(QUYEN_LINK):
+                raise Loi(400, "Quyền link không hợp lệ.")
+            ghi_cd(c, "quyen_link", q)
+            ghi_cd(c, "thu_muc", c.chu("thu_muc", "Thư mục", True, 200))
+            c.db.commit()
+            return Chuyen("/mau-hop-dong", "Đã lưu cài đặt link hợp đồng.")
+        raise Loi(400, "Yêu cầu không hợp lệ.")
+
     r, dl = lay_mau(c)
+    gas_url, tai_khoan = doc_cd(c, "gas_url"), doc_cd(c, "gas_tai_khoan")
     if r:
         co = docx_mau.kiem_tra(dl)
         thieu = [x for x in docx_mau.O_DIEN if x not in co]
+        nguon = ""
+        if r["nguon"]:
+            nguon = (f'<p>Lấy từ <a href="{e(r["nguon"])}" target="_blank" rel="noopener noreferrer">link Google</a>. '
+                     f'Sửa mẫu trên Google Docs xong thì bấm cập nhật.</p>'
+                     f'<form method="post">{an_csrf(c)}<input type="hidden" name="viec" value="cap_nhat_link">'
+                     f'<button class="nut">Cập nhật lại từ link</button></form>')
         hien = (f'<p>Đang dùng: <b>{e(r["ten_tep"])}</b> · cập nhật {e(r["cap_nhat"].replace("T", " "))} bởi {e(r["nguoi"])}'
-                f' · <a href="/mau-hop-dong/tai">Tải mẫu về</a></p>'
+                f' · <a href="/mau-hop-dong/tai">Tải mẫu về xem</a></p>' + nguon
                 + (f'<p class="mo">Mẫu không có các ô: {", ".join("{" + x + "}" for x in thieu)}.</p>' if thieu else ""))
     else:
-        hien = '<p><b>Chưa có mẫu.</b> Tải file mẫu .docx lên để làm được hợp đồng nguyên tắc.</p>'
+        hien = '<p><b>Chưa có mẫu.</b> Dán link Google Docs hoặc tải file .docx ở bên dưới.</p>'
+    if gas_url:
+        tt_gg = f'<p class="thong-bao">Đã kết nối Google Drive{f" của {e(tai_khoan)}" if tai_khoan else ""}.</p>'
+    else:
+        tt_gg = '<p class="thong-bao loi">Chưa kết nối Google. Làm 5 bước dưới đây một lần.</p>'
     bang = "".join(f"<tr><td><code>{{{k}}}</code></td><td>{v}</td></tr>" for k, v in O_DIEN_MO_TA)
     return trang(c, "Mẫu hợp đồng", f"""
       <h1>Mẫu hợp đồng nguyên tắc</h1>
-      <div class="the">{hien}
-        <form method="post" enctype="multipart/form-data" class="luoi-1">{an_csrf(c)}
-        <label>Tải mẫu mới (.docx)<input type="file" name="tep" accept=".docx" required></label>
-        <div class="hang-nut"><button class="nut">Lưu mẫu</button></div></form></div>
+      <div class="the"><h2>Mẫu đang dùng</h2>{hien}</div>
+
+      <div class="the"><h2>Lấy mẫu từ link Google Docs</h2>
+        <p class="mo">Dán link Google Docs (hoặc link file Word trên Drive). Link có chọn tab (…?tab=t.xxx) thì app lấy đúng tab đó,
+        không có thì lấy tab đầu. Chữ gợi ý của mẫu ADM03901 ở phần Bên B ([TÊN CÔNG TY], [Nhập địa chỉ công ty]…), dòng
+        "Số: …-HĐNT/…" và "Hôm nay, ngày … tháng … năm …" được tự đổi thành ô điền. Định dạng giữ nguyên. Doc không cần chia sẻ
+        công khai.</p>
+        <form method="post" class="luoi-1">{an_csrf(c)}<input type="hidden" name="viec" value="lay_link">
+          <label>Link mẫu<input type="url" name="url" required placeholder="https://docs.google.com/document/d/…/edit?tab=…"></label>
+          <div class="hang-nut"><button class="nut"{"" if gas_url else " disabled"}>Lấy mẫu</button>
+          {"" if gas_url else '<span class="mo">Cần kết nối Google trước.</span>'}</div></form></div>
+
+      <div class="the"><h2>Kết nối Google Drive</h2>{tt_gg}
+        <p class="mo">Kết nối chạy bằng tài khoản Google của bạn: app đọc được mẫu trong Drive và tạo hợp đồng thành Google Docs
+        trong Drive của bạn.</p>
+        <ol>
+          <li>Mở <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener noreferrer">script.google.com</a>
+            (đăng nhập tài khoản Google chứa mẫu) để tạo dự án mới.</li>
+          <li>Xóa hết mã có sẵn, dán đoạn mã dưới đây vào, bấm Lưu.</li>
+          <li>Bấm <b>Triển khai → Tùy chọn triển khai mới</b>, loại <b>Ứng dụng web</b>.
+            Chọn <b>Thực thi với tư cách: Tôi</b> và <b>Người có quyền truy cập: Bất kỳ ai</b>, bấm Triển khai.</li>
+          <li>Google hỏi cấp quyền: chọn tài khoản → Nâng cao → Đi tới dự án → Cho phép.</li>
+          <li>Chép <b>URL ứng dụng web</b> (đuôi /exec), dán vào ô dưới đây, bấm Lưu và thử.</li>
+        </ol>
+        <details><summary>Đoạn mã Apps Script (có khóa riêng của app, không gửi cho người khác)</summary>
+          <div class="hang-nut cach-tren"><button type="button" class="nut phu" data-chep="#ma-gas">Chép đoạn mã</button>
+          <span class="mo" id="kq-chep"></span></div>
+          <pre id="ma-gas">{e(ma_apps_script(c))}</pre></details>
+        <form method="post" class="luoi-1 cach-tren">{an_csrf(c)}<input type="hidden" name="viec" value="ket_noi">
+          <label>URL ứng dụng web<input type="url" name="gas_url" value="{e(gas_url)}" required
+            placeholder="https://script.google.com/macros/s/…/exec"></label>
+          <div class="hang-nut"><button class="nut">Lưu và thử kết nối</button></div></form></div>
+
+      <div class="the"><h2>Link hợp đồng tạo ra</h2>
+        <form method="post" class="luoi">{an_csrf(c)}<input type="hidden" name="viec" value="cai_dat_link">
+          <label>Ai mở được link{chon("quyen_link", QUYEN_LINK, doc_cd(c, "quyen_link", "xem"))}</label>
+          {o("Thư mục trong Drive", "thu_muc", doc_cd(c, "thu_muc", "Hợp đồng nguyên tắc"), bat_buoc=True)}
+          <div class="hang-nut"><button class="nut phu">Lưu</button></div></form></div>
+
+      <div class="the"><h2>Hoặc tải file Word lên</h2>
+        <form method="post" enctype="multipart/form-data" class="luoi-1">{an_csrf(c)}<input type="hidden" name="viec" value="tai_len">
+        <label>File mẫu (.docx)<input type="file" name="tep" accept=".docx" required></label>
+        <div class="hang-nut"><button class="nut phu">Lưu mẫu</button></div></form></div>
+
       <div class="the"><h2>Ô điền trong mẫu</h2>
-        <p class="mo">Gõ đúng các ô dưới đây (kể cả dấu ngoặc nhọn) vào chỗ cần điền trong file Word. App thay bằng thông tin
-        bên mua và giữ nguyên định dạng của chữ chứa ô điền.</p>
+        <p class="mo">Mẫu không theo dạng ADM03901 thì gõ đúng các ô dưới đây (kể cả dấu ngoặc nhọn) vào chỗ cần điền.</p>
         <div class="cuon"><table><thead><tr><th>Ô điền</th><th>Nội dung</th></tr></thead><tbody>{bang}</tbody></table></div></div>""",
                  "mau")
 
@@ -1371,6 +1539,13 @@ def hdnt_moi(c):
             c.db.rollback()
             raise Loi(400, f"Số hợp đồng {so_hd} đã có. Hãy đổi số khác.")
         c.db.commit()
+        if doc_cd(c, "gas_url"):
+            try:
+                tao_link_google(c, lay_hd(c, hid))
+                return Chuyen(f"/hop-dong/{hid}", f"Đã tạo hợp đồng {so_hd} trên Google Docs.")
+            except Loi as loi:                                 # Google lỗi: hợp đồng vẫn lưu, tải bản Word thay thế
+                return Chuyen(f"/hop-dong/{hid}?tai=1", f"Đã tạo hợp đồng {so_hd} nhưng chưa tạo được link Google "
+                                                        f"({loi.tb}). File Word đang được tải xuống.")
         return Chuyen(f"/hop-dong/{hid}?tai=1", f"Đã tạo hợp đồng {so_hd}. File Word đang được tải xuống.")
 
     k = None
@@ -1406,7 +1581,8 @@ def hdnt_moi(c):
         {o("Số hợp đồng", "so_hd", so_hdnt_tiep(c, date.today().year), bat_buoc=True)}
         {o("Ngày ký", "ngay_ky", date.today().isoformat(), kieu="date", bat_buoc=True)}{o_pt}
         <p class="mo rong">Thông tin bên mua được lưu lại vào mục Khách hàng. Hợp đồng có hiệu lực 1 năm từ ngày ký, tự gia hạn.</p>
-        <div class="hang-nut"><button class="nut"{"" if r_mau else " disabled"}>Tạo hợp đồng và tải file Word</button>
+        <div class="hang-nut"><button class="nut"{"" if r_mau else " disabled"}>{"Tạo hợp đồng (Google Docs)" if doc_cd(c, "gas_url")
+                                                                              else "Tạo hợp đồng và tải file Word"}</button>
         <a href="/hop-dong?loai=nguyen_tac">Hủy</a></div></form></div>""", "hdnt")
 
 
@@ -1414,8 +1590,7 @@ def ten_tep_an_toan(s):
     return re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "-", s).strip(" .-")[:150] or "hop-dong"
 
 
-def tai_hdnt(c, hid):
-    h = lay_hd(c, hid)
+def tao_file_hdnt(c, h):
     if h["loai"] != "nguyen_tac":
         raise Loi(400, "Chỉ hợp đồng nguyên tắc mới tạo được file từ mẫu.")
     _, mau = lay_mau(c)
@@ -1428,8 +1603,31 @@ def tai_hdnt(c, hid):
     except (TypeError, ValueError):
         ng = {}
     gt = {"so_hd": h["so_hd"], **ng, **{o: k[cot] for o, cot, _ in O_BEN_MUA}}
-    ten = ten_tep_an_toan(f"HĐNT {h['so_hd'].split('-')[0]} - {k['ten']}") + ".docx"
-    return Tep(ten, docx_mau.dien(mau, gt), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    return ten_tep_an_toan(f"HĐNT {h['so_hd'].split('-')[0]} - {k['ten']}"), docx_mau.dien(mau, gt)
+
+
+def tai_hdnt(c, hid):
+    ten, dl = tao_file_hdnt(c, lay_hd(c, hid))
+    return Tep(ten + ".docx", dl, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def tao_link_google(c, h):
+    """Tạo Google Docs của hợp đồng trong Drive, lưu link vào hợp đồng."""
+    ten, dl = tao_file_hdnt(c, h)
+    kq = goi_google(c, "tao_doc", ten=ten, docx=base64.b64encode(dl).decode(),
+                    quyen=doc_cd(c, "quyen_link", "xem"), thu_muc=doc_cd(c, "thu_muc", "Hợp đồng nguyên tắc"))
+    url = kq.get("url") or ""
+    if not url.startswith("https://docs.google.com/"):
+        raise Loi(502, "Google không trả về link hợp đồng.")
+    c.db.execute("UPDATE hop_dong SET link_file = ? WHERE id = ?", (url, h["id"]))
+    c.db.commit()
+    return url
+
+
+def hd_google(c, hid):
+    h = lay_hd(c, hid)
+    tao_link_google(c, h)
+    return Chuyen(f"/hop-dong/{hid}", "Đã tạo link Google Docs mới cho hợp đồng.")
 
 
 # ───────────────────────── định tuyến ─────────────────────────
@@ -1455,6 +1653,7 @@ TUYEN = [
     ("POST", r"/phu-luc/(\d+)/xoa", phu_luc_xoa, "nd"),
     ("GET|POST", r"/hdnt/moi", hdnt_moi, "nd"),
     ("GET", r"/hop-dong/(\d+)/tai-hdnt", tai_hdnt, "nd"),
+    ("POST", r"/hop-dong/(\d+)/google-doc", hd_google, "nd"),
     ("GET|POST", r"/mau-hop-dong", mau_hop_dong, "ql"),
     ("GET", r"/mau-hop-dong/tai", mau_tai, "ql"),
     ("GET|POST", r"/khach-hang/nhap", nhap_khach, "ql"),

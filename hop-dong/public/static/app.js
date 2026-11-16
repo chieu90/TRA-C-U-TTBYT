@@ -11,6 +11,19 @@ document.addEventListener("click", function (ev) {
   }
 });
 
+// Nút chép đoạn mã (trang Mẫu HĐ)
+document.addEventListener("click", function (ev) {
+  var nut = ev.target.closest("[data-chep]");
+  if (!nut) return;
+  var nguon = document.querySelector(nut.getAttribute("data-chep"));
+  var kq = document.getElementById("kq-chep");
+  navigator.clipboard.writeText(nguon.textContent).then(function () {
+    if (kq) kq.textContent = "Đã chép. Dán vào trình soạn thảo Apps Script.";
+  }, function () {
+    if (kq) kq.textContent = "Không chép tự động được, hãy bôi đen đoạn mã rồi chép tay.";
+  });
+});
+
 // Vừa tạo hợp đồng nguyên tắc: tự tải file Word một lần.
 document.addEventListener("DOMContentLoaded", function () {
   var tai = document.querySelector("[data-tu-tai]");

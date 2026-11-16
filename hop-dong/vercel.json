@@ -1,6 +1,9 @@
 {
   "framework": null,
   "regions": ["sin1"],
+  "functions": {
+    "api/index.py": { "maxDuration": 60, "includeFiles": "ket_noi_google.gs" }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
   ]
