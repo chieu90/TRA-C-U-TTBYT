@@ -238,6 +238,9 @@ def thong_nhat_kieu(xml, font, co):
                 return r
             r = re.sub(r"<w:(color|shd|highlight|sz|szCs|rFonts)( [^>]*)?/>", "", r)
             them = rf + ('<w:sz w:val="%s"/><w:szCs w:val="%s"/>' % (dung, dung) if dung else "")
+            if "{ten_kh}" in _chu_run(r):                 # tên công ty bên mua in đậm như tên Bên A
+                r = re.sub(r"<w:(b|bCs)( [^>]*)?/>", "", r)
+                them = rf + '<w:b w:val="1"/><w:bCs w:val="1"/>' + them[len(rf):]
             if "<w:rPr>" in r:
                 return r.replace("<w:rPr>", "<w:rPr>" + them, 1)
             if "<w:rPr/>" in r:
