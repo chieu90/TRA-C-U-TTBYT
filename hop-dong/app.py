@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import docx_mau
+import docx_bao_gia, docx_mau
 
 PORT = int(os.environ.get("PORT", 8770))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -83,6 +83,19 @@ CREATE TABLE IF NOT EXISTS canh_bao_da_gui (
 CREATE TABLE IF NOT EXISTS cai_dat (khoa TEXT PRIMARY KEY, gia_tri TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tep (
   ma TEXT PRIMARY KEY, ten_tep TEXT NOT NULL, noi_dung BLOB NOT NULL, cap_nhat TEXT NOT NULL, nguoi TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS hang_hoa (
+  id INTEGER PRIMARY KEY, ten TEXT DEFAULT '', ten_tm TEXT DEFAULT '', ma TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
+  nuoc_sx TEXT DEFAULT '', phan_loai TEXT DEFAULT '', hsd TEXT DEFAULT '', quy_cach TEXT DEFAULT '',
+  gia_ban REAL DEFAULT 0, gia_min REAL DEFAULT 0, gia_max REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS bao_gia (
+  id INTEGER PRIMARY KEY, so_bg TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL, ten_kh TEXT DEFAULT '',
+  phu_trach_id INTEGER REFERENCES nguoi_dung(id), trang_thai TEXT NOT NULL DEFAULT 'nhap',
+  hieu_luc_den TEXT DEFAULT '', ghi_chu TEXT DEFAULT '', link_file TEXT DEFAULT '', tao_luc TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS bao_gia_dong (
+  id INTEGER PRIMARY KEY, bao_gia_id INTEGER NOT NULL REFERENCES bao_gia(id) ON DELETE CASCADE, tt INTEGER DEFAULT 0,
+  ten TEXT DEFAULT '', ten_tm TEXT DEFAULT '', ma TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
+  nuoc_sx TEXT DEFAULT '', phan_loai TEXT DEFAULT '', hsd TEXT DEFAULT '', quy_cach TEXT DEFAULT '',
+  so_luong REAL DEFAULT 0, don_gia REAL DEFAULT 0, gia_min REAL DEFAULT 0, gia_max REAL DEFAULT 0);
 """
 
 # cột thêm sau khi database đã có dữ liệu: (bảng, cột, kiểu)
@@ -212,7 +225,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("nguoi_dung", "duoc_xoa")).fetchone():
+                                        "AND column_name = ?", ("bao_gia_dong", "gia_max")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -383,7 +396,7 @@ def trang(c, tieu_de, than, muc=""):
     nav = ""
     if c.user:
         cac_muc = [("/", "Tổng quan", "tq"), ("/hop-dong", "Hợp đồng", "hd"), ("/hdnt/moi", "Làm HĐ nguyên tắc", "hdnt"),
-                   ("/khach-hang", "Khách hàng", "kh")]
+                   ("/bao-gia", "Báo giá", "bg"), ("/khach-hang", "Khách hàng", "kh"), ("/hang-hoa", "Hàng hóa", "hh")]
         if c.ql:
             cac_muc += [("/mau-hop-dong", "Mẫu HĐ", "mau"), ("/nguoi-dung", "Người dùng", "nd")]
         lk = "".join(f'<a href="{u}"{" class=chon" if m == muc else ""}>{t}</a>' for u, t, m in cac_muc)
@@ -1171,8 +1184,9 @@ TIEU_DE_NHAP = [
 ]
 
 
-def doc_xlsx(data):
-    """Đọc trang tính đầu tiên của file .xlsx thành danh sách hàng (chỉ dùng thư viện có sẵn)."""
+def doc_xlsx(data, moi_trang=False):
+    """Đọc trang tính đầu tiên của file .xlsx thành danh sách hàng (chỉ dùng thư viện có sẵn).
+    moi_trang=True: trả về danh sách (tên trang tính, các hàng) của mọi trang tính."""
     z = zipfile.ZipFile(io.BytesIO(data))
     ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
     rns = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
@@ -1183,13 +1197,19 @@ def doc_xlsx(data):
             chung.append(t.text or "" if t is not None else
                          "".join(r.find(ns + "t").text or "" for r in si.findall(ns + "r") if r.find(ns + "t") is not None))
     so = ET.fromstring(z.read("xl/workbook.xml"))
-    dau = next(so.iter(ns + "sheet"))
-    rid = dau.get(rns + "id")
-    duong = "xl/worksheets/sheet1.xml"
+    dich = {}
     for r in ET.fromstring(z.read("xl/_rels/workbook.xml.rels")):
-        if r.get("Id") == rid:
-            t = r.get("Target").lstrip("/")
-            duong = t if t.startswith("xl/") else "xl/" + t
+        t = r.get("Target").lstrip("/")
+        dich[r.get("Id")] = t if t.startswith("xl/") else "xl/" + t
+    cac_trang = [(sh.get("name") or "", dich.get(sh.get(rns + "id"), "xl/worksheets/sheet1.xml")) for sh in so.iter(ns + "sheet")]
+    if not cac_trang:
+        raise ValueError("file không có trang tính")
+    if moi_trang:
+        return [(ten, _doc_trang(z, duong, chung, ns)) for ten, duong in cac_trang]
+    return _doc_trang(z, cac_trang[0][1], chung, ns)
+
+
+def _doc_trang(z, duong, chung, ns):
     hang = []
     for row in ET.fromstring(z.read(duong)).iter(ns + "row"):
         o = {}
@@ -1726,6 +1746,509 @@ def hd_google(c, hid):
     return Chuyen(f"/hop-dong/{hid}", "Đã tạo link Google Docs mới cho hợp đồng.")
 
 
+
+# ───────────────────────── hàng hóa (danh mục để soạn báo giá) ─────────────────────────
+
+COT_HANG = [("ten", "Tên TTBYT"), ("ten_tm", "Tên thương mại"), ("ma", "Ký mã hiệu"), ("nhan_hieu", "Nhãn hiệu"),
+            ("nuoc_sx", "Nước sản xuất"), ("phan_loai", "Phân loại TBYT"), ("hsd", "HSD"), ("quy_cach", "Quy cách")]
+COT_GIA = ["gia_ban", "gia_min", "gia_max"]
+TIEU_DE_HANG = [
+    ("ten_tm", ["ten thuong mai"]),
+    ("ten", ["ten ttbyt", "ten trang thiet bi", "ten hang", "ten san pham", "ten vat tu"]),
+    ("ma", ["ky ma hieu", "model", "ma hang", "ma san pham", "ma hieu"]),
+    ("nhan_hieu", ["nhan hieu"]),
+    ("nuoc_sx", ["nuoc san xuat", "xuat xu"]),
+    ("phan_loai", ["phan loai"]),
+    ("hsd", ["hsd", "han su dung", "han dung", "tuoi tho"]),
+    ("quy_cach", ["quy cach"]),
+    ("gia_min", ["gia min", "gia thap nhat"]),
+    ("gia_max", ["gia max", "gia cao nhat"]),
+    ("gia_ban", ["gia ban", "don gia"]),
+]
+
+
+def doc_gia(v):
+    """Đọc ô giá: 13230, 13230.0, hay chữ kiểu Việt '13.230' / '13.230,5'."""
+    v = re.sub(r"[\s₫đ]", "", str(v or ""))
+    if not v:
+        return 0.0
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+(,\d+)?", v):
+        v = v.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(,\d{3})+(\.\d+)?", v):
+        v = v.replace(",", "")
+    else:
+        v = v.replace(",", ".")
+    try:
+        x = float(v)
+    except ValueError:
+        return 0.0
+    return x if math.isfinite(x) and x >= 0 else 0.0
+
+
+def tim_cot_hang(hang):
+    """Hàng tiêu đề của bảng hàng hóa trong 30 hàng đầu: (chỉ số hàng, {cột: vị trí}) hoặc None."""
+    tot = None
+    for i, h in enumerate(hang[:30]):
+        cot = {}
+        for j, o_ in enumerate(h):
+            g = gap(o_)
+            if not g or len(g) > 60:
+                continue
+            for ten, khoa in TIEU_DE_HANG:
+                if ten not in cot and any(g == k or g.startswith(k + " ") or g.startswith(k + "(") for k in khoa):
+                    cot[ten] = j
+                    break
+        if ("ten_tm" in cot or "ten" in cot) and (tot is None or len(cot) > len(tot[1])):
+            tot = (i, cot)
+    return tot
+
+
+def khoa_hang(h):
+    return gap(h["ma"]) or gap(h["ten_tm"]) or gap(h["ten"])
+
+
+def nhap_hang(c):
+    if c.method == "POST":
+        ten_tep, dl = c.tep.get("tep", ("", b""))
+        if not dl:
+            raise Loi(400, "Chưa chọn file.")
+        try:
+            trang_tinh = [("", doc_csv(dl))] if ten_tep.lower().endswith(".csv") else doc_xlsx(dl, moi_trang=True)
+        except (zipfile.BadZipFile, KeyError, ET.ParseError, StopIteration, ValueError, IndexError):
+            raise Loi(400, "Không đọc được file. Hãy dùng file Excel .xlsx hoặc .csv.")
+        # chọn trang tính có bảng giá: nhận ra nhiều cột nhất, ưu tiên trang có cột giá bán và tên "báo giá"
+        ung = []
+        for ten_trang, hang in trang_tinh:
+            kq = tim_cot_hang(hang)
+            if kq:
+                ung.append((("gia_ban" in kq[1]), ("bao gia" in gap(ten_trang)), len(kq[1]), ten_trang, hang, kq))
+        if not ung:
+            raise Loi(400, "Không tìm thấy bảng hàng hóa. Hàng tiêu đề cần có cột \"Tên thương mại\" hoặc \"Tên TTBYT\".")
+        _, _, _, ten_trang, hang, (dau, cot) = max(ung, key=lambda u: u[:3])
+        moi, da_thay, trung = [], set(), 0
+        for h in hang[dau + 1:]:
+            gt = {ten: gon(h[j]) if j < len(h) else "" for ten, j in cot.items()}
+            d = {ten: gt.get(ten, "")[:500] for ten, _ in COT_HANG}
+            for g in COT_GIA:
+                d[g] = doc_gia(gt.get(g))
+            if not (d["ten"] or d["ten_tm"]) or not (d["ma"] or d["gia_ban"]):     # dòng trống, dòng tựa nhóm
+                continue
+            k = khoa_hang(d)
+            if k in da_thay:
+                trung += 1
+                continue
+            da_thay.add(k)
+            moi.append(d)
+        if not moi:
+            raise Loi(400, "Bảng không có dòng hàng nào (mỗi dòng cần tên và ký mã hiệu hoặc giá bán).")
+        ten_cot = [t for t, _ in COT_HANG] + COT_GIA
+        if c.form.get("thay_het") == "1":
+            c.db.execute("DELETE FROM hang_hoa")
+            co = {}
+        else:
+            co = {khoa_hang(r): r["id"] for r in c.db.execute("SELECT * FROM hang_hoa").fetchall()}
+        them = [[d[t] for t in ten_cot] for d in moi if khoa_hang(d) not in co]
+        sua = [[d[t] for t in ten_cot] + [co[khoa_hang(d)]] for d in moi if khoa_hang(d) in co]
+        if them:
+            c.db.executemany(f"INSERT INTO hang_hoa ({', '.join(ten_cot)}) VALUES ({', '.join('?' * len(ten_cot))})", them)
+        if sua:
+            c.db.executemany(f"UPDATE hang_hoa SET {', '.join(t + ' = ?' for t in ten_cot)} WHERE id = ?", sua)
+        c.db.commit()
+        tb = f"Đã nhập{' từ trang tính ' + ten_trang.strip() if ten_trang.strip() else ''}: thêm {len(them)} hàng mới, cập nhật {len(sua)} hàng đã có"
+        return Chuyen("/hang-hoa", tb + (f", bỏ {trung} dòng trùng ký mã hiệu trong file." if trung else "."))
+    return trang(c, "Nhập hàng hóa", f"""
+      <h1>Nhập danh mục hàng hóa</h1>
+      <div class="the"><form method="post" enctype="multipart/form-data" class="luoi-1">{an_csrf(c)}
+        <label>File Excel (.xlsx) hoặc .csv<input type="file" name="tep" accept=".xlsx,.csv" required></label>
+        <label class="o-tich"><input type="checkbox" name="thay_het" value="1"> Thay toàn bộ danh mục bằng file này
+          (xóa hàng không còn trong file; báo giá đã soạn không bị ảnh hưởng)</label>
+        <div class="hang-nut"><button class="nut">Nhập</button><a href="/hang-hoa">Hủy</a></div></form></div>
+      <div class="the"><h2>File cần có</h2>
+        <p>Từ Google Sheet: <b>Tệp → Tải xuống → Microsoft Excel (.xlsx)</b> rồi chọn file đó ở trên.
+        App tự tìm trang tính có bảng giá (ưu tiên trang tên "BÁO GIÁ") và hàng tiêu đề.</p>
+        <p>Các cột nhận theo tiêu đề: Tên TTBYT, Tên thương mại, Ký mã hiệu, Nhãn hiệu, Nước sản xuất, Phân loại TBYT, HSD,
+        Quy cách, Giá bán, Giá Min, Giá Max. Cột khác bị bỏ qua.</p>
+        <p class="mo">Hàng trùng ký mã hiệu với hàng đã có thì được cập nhật thông tin và giá mới, không tạo dòng thứ hai.</p></div>""", "hh")
+
+
+def dk_tim_hang(tu):
+    """Mỗi từ gõ vào phải có ở tên, tên thương mại, ký mã hiệu hoặc nhãn hiệu."""
+    dk, ts = "", []
+    for w in tu.split()[:6]:
+        dk += " AND (ten LIKE ? OR ten_tm LIKE ? OR ma LIKE ? OR nhan_hieu LIKE ?)"
+        ts += [f"%{w}%"] * 4
+    return dk, ts
+
+
+def so_o(x):
+    """Số để đặt vào ô nhập kiểu number (trống nếu bằng 0)."""
+    if not x:
+        return ""
+    return str(round(x)) if abs(x - round(x)) < 1e-9 else repr(float(x))
+
+
+def khoang_gia(h):
+    if not (h["gia_min"] or h["gia_max"]):
+        return ""
+    return f'{tien(h["gia_min"])} – {tien(h["gia_max"])}'
+
+
+def hang_hoa(c):
+    tu, nh = c.q.get("q", ""), c.q.get("nh", "")
+    dk, ts = dk_tim_hang(tu)
+    if nh:
+        dk += " AND nhan_hieu = ?"
+        ts.append(nh)
+    tong = c.db.execute("SELECT COUNT(*) AS n FROM hang_hoa").fetchone()["n"]
+    ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 300", ts).fetchall()
+    n = c.db.execute(f"SELECT COUNT(*) AS n FROM hang_hoa WHERE 1=1{dk}", ts).fetchone()["n"]
+    cac_nh = [r["nhan_hieu"] for r in c.db.execute(
+        "SELECT DISTINCT nhan_hieu FROM hang_hoa WHERE nhan_hieu <> '' ORDER BY nhan_hieu").fetchall()]
+    dong = "".join(
+        f'<tr><td>{e(h["ten"])}</td><td>{e(h["ten_tm"])}</td><td>{e(h["ma"])}</td><td>{e(h["nhan_hieu"])}</td>'
+        f'<td>{e(h["nuoc_sx"])}</td><td>{e(h["phan_loai"])}</td><td>{e(h["hsd"])}</td><td>{e(h["quy_cach"])}</td>'
+        f'<td class="so">{tien(h["gia_ban"]) if h["gia_ban"] else ""}</td><td class="so mo">{khoang_gia(h)}</td></tr>' for h in ds)
+    if ds:
+        bang = ('<div class="the cuon"><table><thead><tr><th>Tên TTBYT</th><th>Tên thương mại</th><th>Ký mã hiệu</th>'
+                '<th>Nhãn hiệu</th><th>Nước SX</th><th>Loại</th><th>HSD</th><th>Quy cách</th><th class="so">Giá bán (đ)</th>'
+                f'<th class="so">Min – Max</th></tr></thead><tbody>{dong}</tbody></table></div>')
+        if n > len(ds):
+            bang += f'<p class="mo">Đang hiện {len(ds)} / {n} hàng. Gõ thêm từ để thu hẹp.</p>'
+    elif tong:
+        bang = '<div class="the trong">Không có hàng nào khớp.</div>'
+    else:
+        bang = ('<div class="the trong">Chưa có danh mục hàng hóa. '
+                + ('Bấm <b>Nhập từ Excel</b> để đưa bảng giá vào.' if c.ql else 'Quản lý cần nhập bảng giá từ Excel.') + '</div>')
+    nhap = '<a class="nut phu" href="/hang-hoa/nhap">Nhập từ Excel</a>' if c.ql else ""
+    return trang(c, "Hàng hóa", f"""
+      <div class="dau-trang"><h1>Hàng hóa <span class="dem">{n}</span></h1>{nhap}</div>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Tên, tên thương mại, ký mã hiệu…">
+        {chon("nh", [(x, x) for x in cac_nh], nh, "Mọi nhãn hiệu")}
+        <button class="nut phu">Lọc</button>{'<a href="/hang-hoa">Bỏ lọc</a>' if c.q else ""}</form>
+      {bang}""", "hh")
+
+
+# ───────────────────────── báo giá ─────────────────────────
+
+TT_BG = [("nhap", "Đang soạn"), ("da_gui", "Đã gửi khách"), ("dong_y", "Khách đồng ý"), ("khong_thanh", "Không thành")]
+HIEU_LUC_NGAY = 30           # hiệu lực mặc định của báo giá
+SQL_BG = ("SELECT b.*, u.ho_ten AS phu_trach, "
+          "(SELECT COUNT(*) FROM bao_gia_dong d WHERE d.bao_gia_id = b.id) AS so_dong, "
+          "COALESCE((SELECT SUM(d.so_luong * d.don_gia) FROM bao_gia_dong d WHERE d.bao_gia_id = b.id), 0) AS gia_tri "
+          "FROM bao_gia b LEFT JOIN nguoi_dung u ON u.id = b.phu_trach_id WHERE 1=1")
+
+
+def lay_bg(c, bid):
+    b = c.db.execute(SQL_BG + " AND b.id = ?", (bid,)).fetchone()
+    if not b:
+        raise Loi(404, "Không tìm thấy báo giá.")
+    if not c.ql and b["phu_trach_id"] != c.user["id"]:
+        raise Loi(403, "Bạn không phụ trách báo giá này.")
+    return b
+
+
+def dong_cua_bg(c, bid):
+    return c.db.execute("SELECT * FROM bao_gia_dong WHERE bao_gia_id = ? ORDER BY tt, id", (bid,)).fetchall()
+
+
+def so_bg_tiep(c, nam):
+    """Số báo giá kế tiếp trong năm: BG26001, BG26002…"""
+    dau = f"BG{nam % 100:02d}"
+    lon = 0
+    for r in c.db.execute("SELECT so_bg FROM bao_gia WHERE so_bg LIKE ?", (dau + "%",)).fetchall():
+        m = re.fullmatch(re.escape(dau) + r"(\d{3,})", r["so_bg"], re.I)
+        if m:
+            lon = max(lon, int(m.group(1)))
+    return f"{dau}{lon + 1:03d}"
+
+
+def nhan_bg(b):
+    tt = b["trang_thai"]
+    if tt == "da_gui":
+        if b["hieu_luc_den"] and b["hieu_luc_den"] < date.today().isoformat():
+            return '<span class="nhan do">Hết hiệu lực</span>'
+        return '<span class="nhan vang">Đã gửi khách</span>'
+    mau = {"dong_y": "xanh"}.get(tt, "xam")
+    return f'<span class="nhan {mau}">{e(dict(TT_BG).get(tt, ""))}</span>'
+
+
+def ds_bao_gia(c):
+    dk, ts = loc_quyen(c)
+    tu, tt, pt = c.q.get("q", ""), c.q.get("tt", ""), c.q.get("pt", "")
+    if tu:
+        dk += (" AND (b.so_bg LIKE ? OR b.ten_kh LIKE ? OR b.id IN "
+               "(SELECT bao_gia_id FROM bao_gia_dong WHERE ma LIKE ? OR ten_tm LIKE ? OR ten LIKE ?))")
+        ts += [f"%{tu}%"] * 5
+    if tt in dict(TT_BG):
+        dk += " AND b.trang_thai = ?"
+        ts.append(tt)
+    if pt.isdigit() and c.ql:
+        dk += " AND b.phu_trach_id = ?"
+        ts.append(int(pt))
+    ds = c.db.execute(SQL_BG + dk + " ORDER BY b.ngay DESC, b.id DESC", ts).fetchall()
+    loc_pt = ""
+    if c.ql:
+        nd = c.db.execute("SELECT id, ho_ten FROM nguoi_dung ORDER BY ho_ten").fetchall()
+        loc_pt = chon("pt", [(u["id"], u["ho_ten"]) for u in nd], pt, "Mọi người phụ trách")
+    dong = ""
+    for b in ds:
+        xoa = ('<td class="thao-tac">' + nut_xoa(c, f'/bao-gia/{b["id"]}/xoa', f"Xóa báo giá {b['so_bg']}? Không khôi phục được.")
+               + '</td>') if c.duoc_xoa else ""
+        link = f' <a href="{e(b["link_file"])}" target="_blank" rel="noopener noreferrer">Docs</a>' if b["link_file"] else ""
+        dong += (f'<tr><td><a href="/bao-gia/{b["id"]}"><b>{e(b["so_bg"])}</b></a>{link}</td><td>{ngay(b["ngay"])}</td>'
+                 f'<td>{e(b["ten_kh"] or "—")}</td><td class="so">{b["so_dong"]}</td>'
+                 f'<td class="so">{tien(b["gia_tri"]) if b["gia_tri"] else "—"}</td><td>{ngay(b["hieu_luc_den"])}</td>'
+                 f'<td>{e(b["phu_trach"] or "—")}</td><td>{nhan_bg(b)}</td>{xoa}</tr>')
+    if ds:
+        bang = ('<div class="the cuon"><table><thead><tr><th>Số báo giá</th><th>Ngày</th><th>Khách hàng</th>'
+                '<th class="so">Mặt hàng</th><th class="so">Giá trị (đ)</th><th>Hiệu lực đến</th><th>Phụ trách</th>'
+                '<th>Tình trạng</th>' + ('<th></th>' if c.duoc_xoa else '') + f'</tr></thead><tbody>{dong}</tbody></table></div>')
+    else:
+        bang = f'<div class="the trong">{"Không có báo giá nào khớp." if c.q else "Chưa có báo giá nào. Bấm Soạn báo giá để bắt đầu."}</div>'
+    return trang(c, "Báo giá", f"""
+      <div class="dau-trang"><h1>Báo giá <span class="dem">{len(ds)}</span></h1><a class="nut" href="/bao-gia/moi">Soạn báo giá</a></div>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Số báo giá, khách, mã hàng…">
+        {chon("tt", TT_BG, tt, "Mọi tình trạng")}{loc_pt}
+        <button class="nut phu">Lọc</button>{'<a href="/bao-gia">Bỏ lọc</a>' if c.q else ""}</form>
+      {bang}""", "bg")
+
+
+def o_dau_bg(c, b=None):
+    """Các ô thông tin chung của báo giá (dùng cho trang soạn mới và trang sửa)."""
+    hom_nay = date.today()
+    g = (lambda k, md="": b[k] if b else md)
+    kh = "".join(f'<option value="{e(r["ten"])}">' for r in c.db.execute("SELECT ten FROM khach_hang ORDER BY ten").fetchall())
+    pt = ""
+    if c.ql:
+        nd = c.db.execute("SELECT id, ho_ten FROM nguoi_dung WHERE hoat_dong = 1 ORDER BY ho_ten").fetchall()
+        pt = f'<label>Người phụ trách{chon("phu_trach_id", [(u["id"], u["ho_ten"]) for u in nd], g("phu_trach_id", c.user["id"]))}</label>'
+    tt = f'<label>Tình trạng{chon("trang_thai", TT_BG, b["trang_thai"])}</label>' if b else ""
+    return f"""
+      {o("Số báo giá", "so_bg", g("so_bg", so_bg_tiep(c, hom_nay.year)), bat_buoc=True)}
+      {o("Ngày báo giá", "ngay", g("ngay", hom_nay.isoformat()), "date", True)}
+      <label class="rong">Kính gửi (tên khách hàng)<input name="ten_kh" value="{e(g("ten_kh"))}" list="ds-khach"
+        placeholder="Để trống thì ghi: Quý Khách hàng"></label><datalist id="ds-khach">{kh}</datalist>
+      {o("Hiệu lực đến ngày", "hieu_luc_den", g("hieu_luc_den", (hom_nay + timedelta(days=HIEU_LUC_NGAY)).isoformat()), "date")}
+      {pt}{tt}
+      <label class="rong">Ghi chú in dưới bảng giá (thuế VAT, giao hàng, thanh toán…)
+        <textarea name="ghi_chu" rows="2">{e(g("ghi_chu"))}</textarea></label>"""
+
+
+def doc_dau_bg(c, b=None):
+    gt = {"so_bg": c.chu("so_bg", "Số báo giá", True, 60), "ngay": c.ngay("ngay", "Ngày báo giá", True),
+          "ten_kh": c.chu("ten_kh", "Tên khách hàng", toi_da=300), "hieu_luc_den": c.ngay("hieu_luc_den", "Hiệu lực đến ngày"),
+          "ghi_chu": c.chu("ghi_chu", "Ghi chú", toi_da=1000)}
+    if gt["hieu_luc_den"] and gt["hieu_luc_den"] < gt["ngay"]:
+        raise Loi(400, "Ngày hết hiệu lực phải sau ngày báo giá.")
+    gt["phu_trach_id"] = b["phu_trach_id"] if b else c.user["id"]
+    if c.ql:
+        v = c.form.get("phu_trach_id", "")
+        if not (v.isdigit() and c.db.execute("SELECT 1 FROM nguoi_dung WHERE id = ?", (v,)).fetchone()):
+            raise Loi(400, "Chưa chọn người phụ trách.")
+        gt["phu_trach_id"] = int(v)
+    if b:
+        gt["trang_thai"] = c.form.get("trang_thai") if c.form.get("trang_thai") in dict(TT_BG) else b["trang_thai"]
+    trung = c.db.execute("SELECT id FROM bao_gia WHERE so_bg = ?", (gt["so_bg"],)).fetchone()
+    if trung and (not b or trung["id"] != b["id"]):
+        raise Loi(400, f"Số báo giá {gt['so_bg']} đã có. Hãy đổi số khác.")
+    return gt
+
+
+def bg_moi(c):
+    if c.method == "POST":
+        gt = doc_dau_bg(c)
+        try:
+            bid = c.db.them(f"INSERT INTO bao_gia ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
+                            list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, f"Số báo giá {gt['so_bg']} đã có. Hãy đổi số khác.")
+        c.db.commit()
+        return Chuyen(f"/bao-gia/{bid}", "Đã tạo báo giá. Tìm và chọn hàng ở mục Thêm hàng bên dưới.")
+    return trang(c, "Soạn báo giá", f"""
+      <h1>Soạn báo giá</h1>
+      <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_dau_bg(c)}
+        <div class="hang-nut"><button class="nut">Tạo và chọn hàng</button><a href="/bao-gia">Hủy</a></div></form></div>""", "bg")
+
+
+def bg_sua(c, bid):
+    b = lay_bg(c, bid)
+    gt = doc_dau_bg(c, b)
+    c.db.execute(f"UPDATE bao_gia SET {', '.join(k + ' = ?' for k in gt)} WHERE id = ?", list(gt.values()) + [bid])
+    c.db.commit()
+    return Chuyen(f"/bao-gia/{bid}", "Đã lưu thông tin báo giá.")
+
+
+def bg_xoa(c, bid):
+    b = lay_bg(c, bid)
+    if not c.duoc_xoa:
+        raise Loi(403, "Bạn chưa được cấp quyền xóa. Hãy nhờ quản lý.")
+    c.db.execute("DELETE FROM bao_gia_dong WHERE bao_gia_id = ?", (bid,))
+    c.db.execute("DELETE FROM bao_gia WHERE id = ?", (bid,))
+    c.db.commit()
+    return Chuyen("/bao-gia", f"Đã xóa báo giá {b['so_bg']}.")
+
+
+def bg_xem(c, bid):
+    b = lay_bg(c, bid)
+    dong = dong_cua_bg(c, bid)
+    tim = c.q.get("tim", "")
+    # bảng các dòng hàng: sửa số lượng, đơn giá ngay trong bảng
+    hang = ""
+    for i, d in enumerate(dong, 1):
+        canh = ""
+        if d["gia_min"] and d["don_gia"] < d["gia_min"]:
+            canh = ' <span class="nhan do">dưới giá Min</span>'
+        elif d["gia_max"] and d["don_gia"] > d["gia_max"]:
+            canh = ' <span class="nhan vang">trên giá Max</span>'
+        tt_ = f'{tien(d["so_luong"] * d["don_gia"])}' if d["so_luong"] else ""
+        hang += (f'<tr><td class="so">{i}</td><td>{e(d["ten"])}<br><span class="mo">{e(d["ten_tm"])}</span></td>'
+                 f'<td>{e(d["ma"])}</td><td>{e(d["nhan_hieu"])}</td><td>{e(d["quy_cach"])}</td>'
+                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{d["id"]}" '
+                 f'value="{so_o(d["so_luong"])}" aria-label="Số lượng"></td>'
+                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="gia_{d["id"]}" '
+                 f'value="{so_o(d["don_gia"])}" aria-label="Đơn giá"></td>'
+                 f'<td class="so">{tt_}</td><td class="mo">{khoang_gia(d)}{canh}</td>'
+                 f'<td class="thao-tac"><button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button></td></tr>')
+    if dong:
+        tong = sum(d["so_luong"] * d["don_gia"] for d in dong)
+        chan = (f'<tr><td colspan="7" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(tong)}</b></td><td colspan="2"></td></tr>'
+                if tong else "")
+        bang = (f'<form method="post" action="/bao-gia/{bid}/dong">{an_csrf(c)}<button class="nut-an" tabindex="-1" aria-hidden="true"></button><div class="cuon"><table><thead><tr><th class="so">STT</th>'
+                '<th>Tên TTBYT / tên thương mại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Quy cách</th><th class="so">Số lượng</th>'
+                '<th class="so">Đơn giá (đ)</th><th class="so">Thành tiền</th><th>Giá Min – Max</th><th></th></tr></thead>'
+                f'<tbody>{hang}{chan}</tbody></table></div>'
+                '<div class="hang-nut"><button class="nut">Lưu số lượng và giá</button>'
+                '<span class="mo">Số lượng để trống thì báo giá chỉ ghi đơn giá, không có cột thành tiền.</span></div></form>')
+    else:
+        bang = '<p class="mo">Chưa có hàng nào. Tìm hàng ở mục Thêm hàng bên dưới.</p>'
+    # tìm hàng trong danh mục để thêm
+    kq_tim = ""
+    if tim:
+        dk, ts = dk_tim_hang(tim)
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 80", ts).fetchall()
+        da_co = {gap(d["ma"]) for d in dong if d["ma"]}
+        if ds:
+            dh = "".join(
+                f'<tr><td><input type="checkbox" name="hh_{h["id"]}" value="1" aria-label="Chọn"></td><td>{e(h["ten"])}</td>'
+                f'<td>{e(h["ten_tm"])}</td><td>{e(h["ma"])}{" <span class=mo>(đã có)</span>" if gap(h["ma"]) in da_co else ""}</td>'
+                f'<td>{e(h["nhan_hieu"])}</td><td>{e(h["quy_cach"])}</td><td class="so">{tien(h["gia_ban"]) if h["gia_ban"] else ""}</td>'
+                f'<td class="so mo">{khoang_gia(h)}</td></tr>' for h in ds)
+            kq_tim = (f'<form method="post" action="/bao-gia/{bid}/them">{an_csrf(c)}<div class="cuon"><table><thead><tr><th></th>'
+                      '<th>Tên TTBYT</th><th>Tên thương mại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Quy cách</th>'
+                      f'<th class="so">Giá bán (đ)</th><th class="so">Min – Max</th></tr></thead><tbody>{dh}</tbody></table></div>'
+                      '<div class="hang-nut"><button class="nut">Thêm các hàng đã chọn</button>'
+                      '<button class="nut phu" name="tat_ca" value="1">Thêm tất cả kết quả</button></div>'
+                      f'<input type="hidden" name="tim" value="{e(tim)}"></form>')
+        else:
+            kq_tim = '<p class="mo">Không có hàng nào khớp trong danh mục.</p>'
+    co_hang = c.db.execute("SELECT 1 FROM hang_hoa").fetchone()
+    chua_dm = "" if co_hang else '<p class="mo">Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa.</p>'
+    nut_google = ""
+    if da_ket_noi(c):
+        nut_google = (f'<form method="post" action="/bao-gia/{bid}/google-doc" class="trong-dong">{an_csrf(c)}'
+                      f'<button class="nut phu">{"Tạo lại" if b["link_file"] else "Tạo"} link Google Docs</button></form>')
+    link = (f'<dt>Link Google Docs</dt><dd><a href="{e(b["link_file"])}" target="_blank" rel="noopener noreferrer">{e(b["link_file"])}</a></dd>'
+            if b["link_file"] else "")
+    xoa = nut_xoa(c, f"/bao-gia/{bid}/xoa", f"Xóa báo giá {b['so_bg']}? Không khôi phục được.", "Xóa báo giá") if c.duoc_xoa else ""
+    tu_tay = "".join(o(nhan, ten, bat_buoc=(ten == "ten_tm")) for ten, nhan in COT_HANG)
+    return trang(c, f"Báo giá {b['so_bg']}", f"""
+      <div class="dau-trang"><h1>Báo giá {e(b["so_bg"])} {nhan_bg(b)}</h1>
+        <div class="hang-nut">{'<a class="nut" href="/bao-gia/%d/tai">Tải file Word</a>' % bid if dong else ""}{nut_google}</div></div>
+      <div class="the"><dl class="thong-tin"><dt>Kính gửi</dt><dd>{e(b["ten_kh"] or "Quý Khách hàng")}</dd>
+        <dt>Ngày</dt><dd>{ngay(b["ngay"])}</dd><dt>Hiệu lực đến</dt><dd>{ngay(b["hieu_luc_den"]) or "—"}</dd>
+        <dt>Phụ trách</dt><dd>{e(b["phu_trach"] or "—")}</dd>{link}
+        {f'<dt>Ghi chú</dt><dd>{e(b["ghi_chu"])}</dd>' if b["ghi_chu"] else ""}</dl></div>
+      <div class="the"><h2>Hàng trong báo giá <span class="dem">{len(dong)}</span></h2>{bang}</div>
+      <div class="the"><h2>Thêm hàng</h2>{chua_dm}
+        <form class="bo-loc"><input type="search" name="tim" value="{e(tim)}" placeholder="Gõ tên, ký mã hiệu, nhãn hiệu… ví dụ: HIV khay" {"autofocus" if tim else ""}>
+          <button class="nut phu">Tìm</button></form>{kq_tim}</div>
+      <details class="the"><summary>Thêm hàng không có trong danh mục</summary>
+        <form method="post" action="/bao-gia/{bid}/them-tay" class="luoi">{an_csrf(c)}{tu_tay}
+          {o("Số lượng", "so_luong", kieu="number", them='min="0" step="any"')}
+          {o("Đơn giá (đ)", "don_gia", kieu="number", them='min="0" step="any"')}
+          <div class="hang-nut"><button class="nut phu">Thêm dòng</button></div></form></details>
+      <details class="the"><summary>Sửa thông tin, đổi tình trạng</summary>
+        <form method="post" action="/bao-gia/{bid}/sua" class="luoi">{an_csrf(c)}{o_dau_bg(c, b)}
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>
+      {xoa}""", "bg")
+
+
+def bg_dong_luu(c, bid):
+    """Lưu số lượng, đơn giá của mọi dòng; hoặc bỏ một dòng khi bấm nút Bỏ."""
+    lay_bg(c, bid)
+    xoa = c.form.get("xoa", "")
+    if xoa.isdigit():
+        c.db.execute("DELETE FROM bao_gia_dong WHERE id = ? AND bao_gia_id = ?", (int(xoa), bid))
+        c.db.commit()
+        return Chuyen(f"/bao-gia/{bid}", "Đã bỏ một dòng hàng.")
+    for d in dong_cua_bg(c, bid):
+        c.db.execute("UPDATE bao_gia_dong SET so_luong = ?, don_gia = ? WHERE id = ?",
+                     (c.so(f"sl_{d['id']}", "Số lượng"), c.so(f"gia_{d['id']}", "Đơn giá"), d["id"]))
+    c.db.commit()
+    return Chuyen(f"/bao-gia/{bid}", "Đã lưu số lượng và giá.")
+
+
+def bg_them_dong(c, bid, cac_dong):
+    cot = [t for t, _ in COT_HANG] + ["so_luong", "don_gia", "gia_min", "gia_max"]
+    tt = (c.db.execute("SELECT COALESCE(MAX(tt), 0) AS m FROM bao_gia_dong WHERE bao_gia_id = ?", (bid,)).fetchone()["m"] or 0)
+    c.db.executemany(f"INSERT INTO bao_gia_dong (bao_gia_id, tt, {', '.join(cot)}) VALUES (?, ?{', ?' * len(cot)})",
+                     [[bid, tt + i] + [d[k] for k in cot] for i, d in enumerate(cac_dong, 1)])
+    c.db.commit()
+
+
+def bg_them(c, bid):
+    lay_bg(c, bid)
+    tim = c.form.get("tim", "")
+    if c.form.get("tat_ca") == "1" and tim.strip():
+        dk, ts = dk_tim_hang(tim)
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 80", ts).fetchall()
+    else:
+        ids = [int(k[3:]) for k in c.form if k.startswith("hh_") and k[3:].isdigit()][:200]
+        if not ids:
+            raise Loi(400, "Chưa tích chọn hàng nào.")
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY id", ids).fetchall()
+    if not ds:
+        raise Loi(400, "Không tìm thấy hàng đã chọn trong danh mục.")
+    bg_them_dong(c, bid, [dict({t: h[t] for t, _ in COT_HANG}, so_luong=0, don_gia=h["gia_ban"] or 0,
+                               gia_min=h["gia_min"] or 0, gia_max=h["gia_max"] or 0) for h in ds])
+    return Chuyen(f"/bao-gia/{bid}", f"Đã thêm {len(ds)} hàng vào báo giá, đơn giá lấy theo giá bán trong danh mục.")
+
+
+def bg_them_tay(c, bid):
+    lay_bg(c, bid)
+    d = {t: c.chu(t, nhan, t == "ten_tm", 500) for t, nhan in COT_HANG}
+    d.update(so_luong=c.so("so_luong", "Số lượng"), don_gia=c.so("don_gia", "Đơn giá"), gia_min=0, gia_max=0)
+    bg_them_dong(c, bid, [d])
+    return Chuyen(f"/bao-gia/{bid}", "Đã thêm một dòng hàng.")
+
+
+def tao_file_bg(c, b):
+    dong = dong_cua_bg(c, b["id"])
+    if not dong:
+        raise Loi(400, "Báo giá chưa có hàng nào.")
+    ten = ten_tep_an_toan(f"Báo giá {b['so_bg']}" + (f" - {b['ten_kh']}" if b["ten_kh"] else ""))
+    return ten, docx_bao_gia.tao(dict(b), [dict(d) for d in dong])
+
+
+def bg_tai(c, bid):
+    ten, dl = tao_file_bg(c, lay_bg(c, bid))
+    return Tep(ten + ".docx", dl, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def bg_google(c, bid):
+    b = lay_bg(c, bid)
+    ten, dl = tao_file_bg(c, b)
+    kq = goi_google(c, "tao_doc", ten=ten, docx=base64.b64encode(dl).decode(),
+                    quyen=doc_cd(c, "quyen_link", "xem"), thu_muc="Báo giá")
+    url = kq.get("url") or ""
+    if not url.startswith("https://docs.google.com/"):
+        raise Loi(502, "Google không trả về link báo giá.")
+    c.db.execute("UPDATE bao_gia SET link_file = ? WHERE id = ?", (url, bid))
+    c.db.commit()
+    return Chuyen(f"/bao-gia/{bid}", "Đã tạo link Google Docs cho báo giá (thư mục Báo giá trong Drive).")
+
+
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
@@ -1751,6 +2274,18 @@ TUYEN = [
     ("GET", r"/tra-mst", tra_mst, "nd"),
     ("GET", r"/hop-dong/(\d+)/tai-hdnt", tai_hdnt, "nd"),
     ("POST", r"/hop-dong/(\d+)/google-doc", hd_google, "nd"),
+    ("GET", r"/bao-gia", ds_bao_gia, "nd"),
+    ("GET|POST", r"/bao-gia/moi", bg_moi, "nd"),
+    ("GET", r"/bao-gia/(\d+)", bg_xem, "nd"),
+    ("POST", r"/bao-gia/(\d+)/sua", bg_sua, "nd"),
+    ("POST", r"/bao-gia/(\d+)/xoa", bg_xoa, "nd"),
+    ("POST", r"/bao-gia/(\d+)/dong", bg_dong_luu, "nd"),
+    ("POST", r"/bao-gia/(\d+)/them", bg_them, "nd"),
+    ("POST", r"/bao-gia/(\d+)/them-tay", bg_them_tay, "nd"),
+    ("GET", r"/bao-gia/(\d+)/tai", bg_tai, "nd"),
+    ("POST", r"/bao-gia/(\d+)/google-doc", bg_google, "nd"),
+    ("GET", r"/hang-hoa", hang_hoa, "nd"),
+    ("GET|POST", r"/hang-hoa/nhap", nhap_hang, "ql"),
     ("GET|POST", r"/mau-hop-dong", mau_hop_dong, "ql"),
     ("GET", r"/mau-hop-dong/tai", mau_tai, "ql"),
     ("GET|POST", r"/khach-hang/nhap", nhap_khach, "ql"),

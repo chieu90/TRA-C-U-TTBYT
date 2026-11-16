@@ -100,3 +100,10 @@ code { background: var(--nhe); padding: 1px 6px; border-radius: 4px; font-size: 
 pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--nhe); border-radius: 8px; padding: 12px; font-size: 12px; max-height: 360px; overflow: auto; }
 ol { padding-left: 20px; }
 ol li { margin: 4px 0; }
+
+/* báo giá, hàng hóa */
+.cuon { overflow-x: auto; }
+input[type=checkbox] { display: inline-block; width: auto; margin: 0 6px 0 0; padding: 0; vertical-align: middle; }
+td input.o-nho { width: 7.5rem; margin: 0; padding: 5px 8px; text-align: right; }
+label.o-tich { font-weight: normal; }
+.nut-an { position: absolute; left: -9999px; width: 1px; height: 1px; padding: 0; border: 0; }
