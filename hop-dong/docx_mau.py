@@ -177,14 +177,88 @@ def doi_goi_y(xml):
     return _DOAN.sub(mot_doan, xml)
 
 
+# ───── thống nhất kiểu chữ ─────
+
+_RFONTS = re.compile(r"<w:rFonts [^>]*/>")
+_TEN_FONT = re.compile(r'w:ascii="([^"]*)"')
+_CO_O = re.compile(r"\{(" + "|".join(O_DIEN) + r")\}")
+
+
+def _chu_run(r):
+    return "".join(unescape(t) for t in re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", r))
+
+
+def _co(r):
+    m = re.search(r'<w:sz w:val="(\d+)"', r)
+    return m.group(1) if m else None
+
+
+def kieu_chinh(data):
+    """(font, cỡ chữ) chiếm nhiều chữ nhất trong thân văn bản; phần không ghi rõ thì tính theo mặc định của file."""
+    z = zipfile.ZipFile(io.BytesIO(data))
+    x = z.read("word/document.xml").decode("utf-8")
+    md = re.search(r"<w:rPrDefault>.*?</w:rPrDefault>", z.read("word/styles.xml").decode("utf-8"), re.S) \
+        if "word/styles.xml" in z.namelist() else None
+    md = md.group(0) if md else ""
+    f0 = _TEN_FONT.search(md)
+    f0, c0 = (f0.group(1) if f0 else None), _co(md)
+    font, co = {}, {}
+    for r in _RUN.findall(x):
+        n = len(_chu_run(r).strip())
+        if not n:
+            continue
+        f = _TEN_FONT.search(r)
+        f = f.group(1) if f else f0
+        font[f] = font.get(f, 0) + n
+        c = _co(r) or c0
+        co[c] = co.get(c, 0) + n
+    lay = lambda d: max(d, key=d.get) if d else None
+    return lay(font), lay(co)
+
+
+def thong_nhat_kieu(xml, font, co):
+    """Đưa mọi chữ về font chính của mẫu (chữ dán từ nơi khác hay mang font lạ), và trả ô điền về
+    đúng kiểu chữ thường của dòng: font chính, cỡ chữ của chữ đứng cạnh (hoặc cỡ chính), không màu, không nền."""
+    if not font:
+        return xml
+    rf = '<w:rFonts w:ascii="%s" w:cs="%s" w:eastAsia="%s" w:hAnsi="%s"/>' % ((escape(font, {'"': "&quot;"}),) * 4)
+    xml = _RFONTS.sub(lambda m: m.group(0) if (_TEN_FONT.search(m.group(0)) or [0, font])[1] == font else rf, xml)
+
+    def mot_doan(m):
+        doan = m.group(0)
+        if "{" not in doan:
+            return doan
+        canh = [_co(r) for r in _RUN.findall(doan) if _chu_run(r).strip() and not _CO_O.search(_chu_run(r))]
+        canh = [c for c in canh if c]
+        dung = canh[0] if canh else co
+
+        def mot_run(n):
+            r = n.group(0)
+            if not _CO_O.search(_chu_run(r)):
+                return r
+            r = re.sub(r"<w:(color|shd|highlight|sz|szCs|rFonts)( [^>]*)?/>", "", r)
+            them = rf + ('<w:sz w:val="%s"/><w:szCs w:val="%s"/>' % (dung, dung) if dung else "")
+            if "<w:rPr>" in r:
+                return r.replace("<w:rPr>", "<w:rPr>" + them, 1)
+            if "<w:rPr/>" in r:
+                return r.replace("<w:rPr/>", "<w:rPr>" + them + "</w:rPr>", 1)
+            return re.sub(r"(<w:r(?: [^>]*)?>)", r"\1<w:rPr>" + them.replace("\\", "\\\\") + "</w:rPr>", r, count=1)
+
+        return _RUN.sub(mot_run, doan)
+
+    return _DOAN.sub(mot_doan, xml)
+
+
 def chuan_hoa(data, phan=None):
-    """Chuẩn bị file mẫu: giữ phần (tab) số `phan` nếu có, đổi chữ gợi ý thành ô điền."""
+    """Chuẩn bị file mẫu: giữ phần (tab) số `phan` nếu có, đổi chữ gợi ý thành ô điền, thống nhất font."""
+    font, co = kieu_chinh(data)
+
     def sua(ten, xml):
         if ten == "word/document.xml":
             if phan is not None:
                 xml = _cat_phan(xml, phan)
             xml = doi_goi_y(xml)
-        return xml
+        return thong_nhat_kieu(xml, font, co)
     return viet_lai(data, sua)
 
 
