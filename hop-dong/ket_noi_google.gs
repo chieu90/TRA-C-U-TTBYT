@@ -7,6 +7,12 @@
  */
 const KHOA = '__KHOA__';
 
+/** Mở link /exec trên trình duyệt (cửa sổ ẩn danh) để kiểm tra bản triển khai đã đúng chưa. */
+function doGet() {
+  return ContentService.createTextOutput('Kết nối Apps Script cho app Quản lý hợp đồng đang chạy đúng. ' +
+    'Hãy dán link này vào trang Mẫu HĐ của app.');
+}
+
 function doPost(e) {
   let kq;
   try {
