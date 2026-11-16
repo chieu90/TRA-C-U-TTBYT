@@ -999,7 +999,7 @@ def hd_xem(c, hid):
                  if h["link_file"].startswith("https://docs.google.com/") else "")
         tao_gg = (f'<form method="post" action="{url}/google-doc" class="trong-dong">{an_csrf(c)}'
                   f'<button class="nut phu">{"Tạo lại link" if mo_gg else "Tạo link Google Docs"}</button></form>'
-                  if doc_cd(c, "gas_url") else "")
+                  if da_ket_noi(c) else "")
         return trang(c, h["so_hd"], f"""
       <div class="dau-trang"><h1>{e(h["so_hd"])} {nhan_hd(h)}</h1><div class="hang-nut">{mo_gg}{tao_gg}
         <a class="nut phu" href="{url}/tai-hdnt"{tu_tai}>Tải file Word</a><a class="nut phu" href="{url}/sua">Sửa</a></div></div>
@@ -1276,13 +1276,18 @@ def ghi_cd(c, khoa, gia_tri):
     c.db.execute("INSERT INTO cai_dat (khoa, gia_tri) VALUES (?, ?)", (khoa, gia_tri))
 
 
+def da_ket_noi(c):
+    """Đã kết nối Google = đã lưu link Apps Script và lần thử kết nối thành công."""
+    return bool(doc_cd(c, "gas_url") and doc_cd(c, "gas_tai_khoan"))
+
+
 GAS_RE = re.compile(r"https://script\.google\.com/(?:a/macros/[\w.-]+/|macros/)s/[\w-]+/exec")
 QUYEN_LINK = [("xem", "Ai có link đều xem được"), ("sua", "Ai có link đều sửa được"), ("rieng", "Chỉ tài khoản Google của tôi")]
 
 
-def goi_google(c, viec, **them):
+def goi_google(c, viec, url=None, **them):
     """Gọi Apps Script chạy bằng tài khoản Google của người dùng (xem ket_noi_google.gs)."""
-    url, khoa = doc_cd(c, "gas_url"), doc_cd(c, "gas_khoa")
+    url, khoa = url or doc_cd(c, "gas_url"), doc_cd(c, "gas_khoa")
     if not url:
         raise Loi(400, "Chưa kết nối Google. Quản lý vào mục Mẫu HĐ để kết nối.")
     rq = urllib.request.Request(url, data=json.dumps({"khoa": khoa, "viec": viec, **them}).encode(),
@@ -1291,6 +1296,13 @@ def goi_google(c, viec, **them):
         with urllib.request.urlopen(rq, timeout=50) as r:
             raw = r.read()
     except urllib.error.HTTPError as loi:
+        if loi.code in (401, 403):
+            raise Loi(502, f"Google từ chối (lỗi {loi.code}): bản triển khai Apps Script chưa mở cho app gọi. Trong Apps Script "
+                           "bấm Triển khai → Quản lý các lần triển khai → biểu tượng bút chì, chọn Người có quyền truy cập: "
+                           "\"Bất kỳ ai\" (không phải \"Bất kỳ ai có Tài khoản Google\"), Phiên bản: Phiên bản mới, rồi bấm "
+                           "Triển khai. Link /exec giữ nguyên, quay lại đây bấm Lưu và thử kết nối.")
+        if loi.code == 404:
+            raise Loi(502, "Google báo không tìm thấy (lỗi 404): link /exec sai hoặc bản triển khai đã bị lưu trữ.")
         raise Loi(502, f"Google trả lỗi {loi.code}. Kiểm tra lại link triển khai Apps Script.")
     except (urllib.error.URLError, TimeoutError, OSError):
         raise Loi(502, "Không kết nối được Google Apps Script. Thử lại sau ít phút.")
@@ -1377,9 +1389,8 @@ def mau_hop_dong(c):
             url = c.chu("gas_url", "Link Apps Script", True, 500)
             if not GAS_RE.fullmatch(url):
                 raise Loi(400, "Link phải có dạng https://script.google.com/macros/s/…/exec (bước Triển khai → Ứng dụng web).")
+            kq = goi_google(c, "thu", url=url)                # thử trước, chạy được mới lưu
             ghi_cd(c, "gas_url", url)
-            c.db.commit()
-            kq = goi_google(c, "thu")
             ghi_cd(c, "gas_tai_khoan", kq.get("tai_khoan") or "")
             c.db.commit()
             return Chuyen("/mau-hop-dong", f"Đã kết nối Google Drive của {kq.get('tai_khoan') or 'bạn'}.")
@@ -1395,6 +1406,8 @@ def mau_hop_dong(c):
 
     r, dl = lay_mau(c)
     gas_url, tai_khoan = doc_cd(c, "gas_url"), doc_cd(c, "gas_tai_khoan")
+    if gas_url and not tai_khoan:                         # link lưu từ bản cũ khi chưa thử được: coi như chưa kết nối
+        gas_url = ""
     if r:
         co = docx_mau.kiem_tra(dl)
         thieu = [x for x in docx_mau.O_DIEN if x not in co]
@@ -1539,7 +1552,7 @@ def hdnt_moi(c):
             c.db.rollback()
             raise Loi(400, f"Số hợp đồng {so_hd} đã có. Hãy đổi số khác.")
         c.db.commit()
-        if doc_cd(c, "gas_url"):
+        if da_ket_noi(c):
             try:
                 tao_link_google(c, lay_hd(c, hid))
                 return Chuyen(f"/hop-dong/{hid}", f"Đã tạo hợp đồng {so_hd} trên Google Docs.")
@@ -1581,7 +1594,7 @@ def hdnt_moi(c):
         {o("Số hợp đồng", "so_hd", so_hdnt_tiep(c, date.today().year), bat_buoc=True)}
         {o("Ngày ký", "ngay_ky", date.today().isoformat(), kieu="date", bat_buoc=True)}{o_pt}
         <p class="mo rong">Thông tin bên mua được lưu lại vào mục Khách hàng. Hợp đồng có hiệu lực 1 năm từ ngày ký, tự gia hạn.</p>
-        <div class="hang-nut"><button class="nut"{"" if r_mau else " disabled"}>{"Tạo hợp đồng (Google Docs)" if doc_cd(c, "gas_url")
+        <div class="hang-nut"><button class="nut"{"" if r_mau else " disabled"}>{"Tạo hợp đồng (Google Docs)" if da_ket_noi(c)
                                                                               else "Tạo hợp đồng và tải file Word"}</button>
         <a href="/hop-dong?loai=nguyen_tac">Hủy</a></div></form></div>""", "hdnt")
 
