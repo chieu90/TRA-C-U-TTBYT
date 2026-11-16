@@ -120,8 +120,34 @@ _GOI_Y_BEN_B = [
     (r"\[\s*Nhập\s+(địa\s+chỉ\s+)?email\s*\]", "{email}"),
 ]
 _GOI_Y_SO = re.compile(r"Số\s*:[ \t ]*(?:\[[^\]]*\])?[ \t .…_]*-?[ \t ]*HĐNT/(?:\[[^\]]*\]|[^\s<]+)", re.I)
+_SO_HD_CO_DUOI = re.compile(r"\{so_hd\}[ \t ]*-?[ \t ]*HĐNT/(?:\[[^\]]*\]|[^\s<]+)", re.I)
 _TRONG = r"(?:\d{1,4}|\[[^\]]*\]|[_.…]+|[ \t ]+)"
 _GOI_Y_NGAY = re.compile(r"ngày\s*" + _TRONG + r"\s*tháng\s*" + _TRONG + r"\s*năm\s*" + _TRONG, re.I)
+
+
+_RUN = re.compile(r"<w:r[ >](?:(?!<w:r[ >]).)*?</w:r>", re.S)
+_MONO = re.compile(r'w:ascii="(Courier[^"]*|Consolas|Menlo|Monaco|Roboto Mono|Source Code Pro|Ubuntu Mono)"')
+
+
+def _bo_kieu_code(doan):
+    """Ô điền dán từ trang web hay mang kiểu chữ "code" (font Courier, nền xám).
+    Trả run chứa ô điền về kiểu chữ của run có chữ đứng trước nó trong cùng đoạn."""
+    if "{" not in doan:
+        return doan
+    truoc = [None]
+
+    def mot_run(m):
+        r = m.group(0)
+        rpr = re.search(r"<w:rPr>.*?</w:rPr>", r, re.S)
+        co_chu = re.search(r"<w:t(?: [^>]*)?>([^<]+)</w:t>", r)
+        if co_chu and re.search(r"\{(" + "|".join(O_DIEN) + r")\}", unescape(co_chu.group(1))) and rpr \
+                and (_MONO.search(rpr.group(0)) or "<w:shd " in rpr.group(0)) and truoc[0]:
+            return r.replace(rpr.group(0), truoc[0], 1)
+        if co_chu and co_chu.group(1).strip() and rpr and not _MONO.search(rpr.group(0)):
+            truoc[0] = rpr.group(0)
+        return r
+
+    return _RUN.sub(mot_run, doan)
 
 
 def doi_goi_y(xml):
@@ -135,18 +161,18 @@ def doi_goi_y(xml):
         mau = []
         if re.search(r"HĐNT", chu):
             mau.append((_GOI_Y_SO, "Số: {so_hd}"))
+            # mẫu tự gõ "{so_hd}-HĐNT/PBH": số app điền đã có đuôi -HĐNT/PBH nên bỏ đuôi trong mẫu để khỏi lặp
+            mau.append((_SO_HD_CO_DUOI, "{so_hd}"))
         if re.search(r"Hôm\s+nay", chu, re.I):
             mau.append((_GOI_Y_NGAY, "ngày {ngay} tháng {thang} năm {nam}"))
         if trang_thai["ben_b"]:
             mau += ben_b
         if re.search(r"Bên\s*B\b", chu):
             trang_thai["ben_b"] = True
-        if not mau:
-            return doan
-        moi = _sua_doan(doan, mau)
+        moi = _sua_doan(doan, mau) if mau else doan
         if moi != doan:
             moi = re.sub(r"<w:color [^>]*/>", "", moi)
-        return moi
+        return _bo_kieu_code(moi)
 
     return _DOAN.sub(mot_doan, xml)
 
