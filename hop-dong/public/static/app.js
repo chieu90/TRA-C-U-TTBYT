@@ -55,6 +55,39 @@ document.addEventListener("DOMContentLoaded", function () {
     for (var i = 1; i < O.length; i++) if (k[i]) o(O[i]).value = k[i];
   });
 
+  // Tra theo mã số thuế: khách đã lưu thì lấy đủ thông tin, tên và địa chỉ lấy theo đăng ký thuế mới nhất
+  var oMst = document.getElementById("o-tra-mst"), kqMst = document.getElementById("kq-tra-mst");
+  function traMst() {
+    var mst = oMst.value.replace(/[\s.]/g, "");
+    if (!mst) return;
+    kqMst.textContent = "Đang tra…";
+    fetch("/tra-mst?mst=" + encodeURIComponent(mst), { credentials: "same-origin" }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) { kqMst.textContent = d.loi; return; }
+        var cu = d.khach || {}, thue = d.thue || {}, loi = [];
+        O.forEach(function (ten) { if (cu[ten]) o(ten).value = cu[ten]; });
+        if (thue.ten_kh && !cu.ten_kh) o("ten_kh").value = thue.ten_kh;
+        if (thue.dia_chi) {
+          if (cu.dia_chi && gap(cu.dia_chi) !== gap(thue.dia_chi)) loi.push("Địa chỉ đã đổi theo đăng ký thuế mới (trước đây: " + cu.dia_chi + ").");
+          o("dia_chi").value = thue.dia_chi;
+        }
+        o("mst").value = d.mst;
+        if (!d.khach) {                                  // khách mới theo MST nhưng có thể đã lưu theo tên
+          var k = theoTen[gap(o("ten_kh").value)];
+          if (k) for (var i = 3; i < O.length; i++) if (k[i]) o(O[i]).value = k[i];
+        }
+        var thieu = ["dai_dien", "chuc_vu"].filter(function (t) { return !o(t).value.trim(); });
+        var tb = (d.thue ? "Đã điền theo dữ liệu Cục Thuế" + (thue.trang_thai ? " (" + thue.trang_thai + ")" : "") + "."
+          : "Chưa tra được dữ liệu thuế, đã điền thông tin khách đã lưu.");
+        if (d.khach) tb += " Khách này đã có trong danh sách.";
+        if (thieu.length) tb += " Còn thiếu người đại diện, chức vụ: nhập tay bên dưới.";
+        if (thue.trang_thai && !/đang hoạt động/i.test(thue.trang_thai)) tb = "LƯU Ý: " + thue.trang_thai + ". " + tb;
+        kqMst.textContent = tb + (loi.length ? " " + loi.join(" ") : "");
+      }, function () { kqMst.textContent = "Chưa tra được. Kiểm tra mạng rồi thử lại."; });
+  }
+  document.getElementById("nut-tra-mst").addEventListener("click", traMst);
+  oMst.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); traMst(); } });
+
   // Dán đoạn chữ -> tự nhận các trường
   var KHOA = [
     ["mst", /^(ma so thue|mst|ma so doanh nghiep|ma doanh nghiep)/],

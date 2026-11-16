@@ -122,6 +122,12 @@ class Chuyen:
         self.url, self.tb = url, tb
 
 
+class Json:
+    """Trả về dữ liệu JSON cho script của trang."""
+    def __init__(self, du_lieu):
+        self.du_lieu = du_lieu
+
+
 class Tep:
     """Trả về một file để trình duyệt tải xuống."""
     def __init__(self, ten, du_lieu, kieu="application/octet-stream"):
@@ -1622,6 +1628,11 @@ def hdnt_moi(c):
       <p class="mo">Nhập thông tin bên mua (Bên B). Chọn khách có sẵn thì app tự điền thông tin đã lưu.</p>{canh_bao}
       <script type="application/json" id="du-lieu-khach">{du_lieu}</script>
       <datalist id="ds-khach">{"".join(f'<option value="{e(r["ten"])}">' for r in ds)}</datalist>
+      <div class="the"><label for="o-tra-mst"><b>Tra theo mã số thuế</b></label>
+        <div class="hang-nut cach-tren"><input type="text" id="o-tra-mst" inputmode="numeric" maxlength="20"
+          placeholder="Ví dụ 0104670584" autocomplete="off"><button type="button" class="nut phu" id="nut-tra-mst">Tra cứu</button></div>
+        <p class="mo cach-tren" id="kq-tra-mst">App lấy tên và địa chỉ đăng ký thuế rồi điền vào các ô bên dưới. Người đại diện,
+        chức vụ, điện thoại, email không có trong dữ liệu thuế: nhập tay một lần, lần sau app nhớ.</p></div>
       <details class="the"><summary>Dán thông tin bên mua để tự điền</summary>
         <p class="mo">Dán đoạn chữ có dạng "Mã số thuế: …", "Địa chỉ: …", "Người đại diện: …" (ví dụ chép từ tin nhắn Zalo
         hoặc trang tra cứu mã số thuế), rồi bấm Tự điền. Kiểm tra lại trước khi tạo.</p>
@@ -1637,6 +1648,35 @@ def hdnt_moi(c):
         <div class="hang-nut"><button class="nut"{"" if r_mau else " disabled"}>{"Tạo hợp đồng (Google Docs)" if da_ket_noi(c)
                                                                               else "Tạo hợp đồng và tải file Word"}</button>
         <a href="/hop-dong?loai=nguyen_tac">Hủy</a></div></form></div>""", "hdnt")
+
+
+MST_RE = re.compile(r"\d{10}(-\d{3})?")
+
+
+def tra_mst(c):
+    """Tra thông tin doanh nghiệp theo mã số thuế: khách đã lưu trong app trước, rồi tới dữ liệu công khai của Cục Thuế
+    (qua api.vietqr.io; chỉ có tên, địa chỉ, tình trạng — không có người đại diện, điện thoại)."""
+    mst = re.sub(r"[\s.]", "", c.q.get("mst", ""))
+    if not MST_RE.fullmatch(mst):
+        return Json({"ok": False, "loi": "Mã số thuế phải gồm 10 số, hoặc 10 số-3 số với chi nhánh."})
+    kq = {"ok": True, "mst": mst}
+    k = c.db.execute("SELECT * FROM khach_hang WHERE REPLACE(ma_so_thue, ' ', '') = ?", (mst,)).fetchone()
+    if k:
+        kq["khach"] = {ten: k[cot] or "" for ten, cot, _ in O_BEN_MUA}
+    try:
+        rq = urllib.request.Request("https://api.vietqr.io/v2/business/" + mst, headers={"User-Agent": "hop-dong-app"})
+        with urllib.request.urlopen(rq, timeout=12) as r:
+            d = json.loads(r.read())
+        dn = d.get("data") if isinstance(d, dict) else None
+        if isinstance(dn, dict) and dn.get("name"):
+            kq["thue"] = {"ten_kh": gon(str(dn.get("name") or ""))[:300], "dia_chi": gon(str(dn.get("address") or ""))[:500],
+                          "trang_thai": gon(str(dn.get("status") or ""))[:100]}
+        elif not k:
+            return Json({"ok": False, "loi": "Không tìm thấy mã số thuế này trong dữ liệu của Cục Thuế. Kiểm tra lại số."})
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        if not k:
+            return Json({"ok": False, "loi": "Chưa tra được (dịch vụ tra cứu không phản hồi). Thử lại sau hoặc nhập tay."})
+    return Json(kq)
 
 
 def ten_tep_an_toan(s):
@@ -1705,6 +1745,7 @@ TUYEN = [
     ("POST", r"/hop-dong/(\d+)/phu-luc", phu_luc_them, "nd"),
     ("POST", r"/phu-luc/(\d+)/xoa", phu_luc_xoa, "nd"),
     ("GET|POST", r"/hdnt/moi", hdnt_moi, "nd"),
+    ("GET", r"/tra-mst", tra_mst, "nd"),
     ("GET", r"/hop-dong/(\d+)/tai-hdnt", tai_hdnt, "nd"),
     ("POST", r"/hop-dong/(\d+)/google-doc", hd_google, "nd"),
     ("GET|POST", r"/mau-hop-dong", mau_hop_dong, "ql"),
@@ -1778,6 +1819,10 @@ class H(BaseHTTPRequestHandler):
             if kq.tb:
                 c.dat_cookie("hd_tb", urllib.parse.quote(kq.tb), 60)
             body = b""
+        elif isinstance(kq, Json):
+            body = json.dumps(kq.du_lieu, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
         elif isinstance(kq, Tep):
             body = kq.du_lieu
             self.send_response(200)
