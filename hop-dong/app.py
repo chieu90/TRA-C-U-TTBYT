@@ -96,6 +96,42 @@ CREATE TABLE IF NOT EXISTS bao_gia_dong (
   ten TEXT DEFAULT '', ten_tm TEXT DEFAULT '', ma TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
   nuoc_sx TEXT DEFAULT '', phan_loai TEXT DEFAULT '', hsd TEXT DEFAULT '', quy_cach TEXT DEFAULT '',
   so_luong REAL DEFAULT 0, don_gia REAL DEFAULT 0, gia_min REAL DEFAULT 0, gia_max REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS nha_cung_cap (
+  id INTEGER PRIMARY KEY, ten TEXT UNIQUE NOT NULL, ma_so_thue TEXT DEFAULT '', dia_chi TEXT DEFAULT '',
+  lien_he TEXT DEFAULT '', dien_thoai TEXT DEFAULT '', email TEXT DEFAULT '', ghi_chu TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS don_hang (
+  id INTEGER PRIMARY KEY, so_dh TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
+  khach_hang_id INTEGER NOT NULL REFERENCES khach_hang(id), bao_gia_id INTEGER REFERENCES bao_gia(id),
+  phu_trach_id INTEGER REFERENCES nguoi_dung(id), trang_thai TEXT NOT NULL DEFAULT 'mo',
+  ghi_chu TEXT DEFAULT '', tao_luc TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS don_hang_dong (
+  id INTEGER PRIMARY KEY, don_hang_id INTEGER NOT NULL REFERENCES don_hang(id) ON DELETE CASCADE, tt INTEGER DEFAULT 0,
+  hang_hoa_id INTEGER REFERENCES hang_hoa(id), ma TEXT DEFAULT '', ten TEXT DEFAULT '', quy_cach TEXT DEFAULT '',
+  so_luong REAL DEFAULT 0, don_gia REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS phieu_xuat (
+  id INTEGER PRIMARY KEY, so_px TEXT UNIQUE NOT NULL, don_hang_id INTEGER NOT NULL REFERENCES don_hang(id),
+  ngay TEXT NOT NULL, han_tt TEXT NOT NULL, so_hoa_don TEXT DEFAULT '', ghi_chu TEXT DEFAULT '',
+  nguoi_nhap_id INTEGER REFERENCES nguoi_dung(id));
+CREATE TABLE IF NOT EXISTS phieu_xuat_dong (
+  id INTEGER PRIMARY KEY, phieu_xuat_id INTEGER NOT NULL REFERENCES phieu_xuat(id) ON DELETE CASCADE,
+  don_hang_dong_id INTEGER NOT NULL REFERENCES don_hang_dong(id), so_lo TEXT DEFAULT '', han_dung TEXT DEFAULT '',
+  so_luong REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS thu_tien (
+  id INTEGER PRIMARY KEY, so_pt TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
+  khach_hang_id INTEGER NOT NULL REFERENCES khach_hang(id), so_tien REAL NOT NULL, hinh_thuc TEXT DEFAULT '',
+  ghi_chu TEXT DEFAULT '', nguoi_nhap_id INTEGER REFERENCES nguoi_dung(id));
+CREATE TABLE IF NOT EXISTS phieu_nhap (
+  id INTEGER PRIMARY KEY, so_pn TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
+  nha_cung_cap_id INTEGER REFERENCES nha_cung_cap(id), han_tt TEXT DEFAULT '', so_hoa_don TEXT DEFAULT '',
+  ghi_chu TEXT DEFAULT '', nguoi_nhap_id INTEGER REFERENCES nguoi_dung(id));
+CREATE TABLE IF NOT EXISTS phieu_nhap_dong (
+  id INTEGER PRIMARY KEY, phieu_nhap_id INTEGER NOT NULL REFERENCES phieu_nhap(id) ON DELETE CASCADE,
+  hang_hoa_id INTEGER NOT NULL REFERENCES hang_hoa(id), so_lo TEXT DEFAULT '', han_dung TEXT DEFAULT '',
+  so_luong REAL NOT NULL, don_gia REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS chi_tien (
+  id INTEGER PRIMARY KEY, so_pc TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
+  nha_cung_cap_id INTEGER NOT NULL REFERENCES nha_cung_cap(id), so_tien REAL NOT NULL, hinh_thuc TEXT DEFAULT '',
+  ghi_chu TEXT DEFAULT '', nguoi_nhap_id INTEGER REFERENCES nguoi_dung(id));
 """
 
 # cột thêm sau khi database đã có dữ liệu: (bảng, cột, kiểu)
@@ -106,6 +142,7 @@ COT_THEM = [
     ("khach_hang", "email", "TEXT DEFAULT ''"), ("khach_hang", "nhan_vien_bh", "TEXT DEFAULT ''"),
     ("hop_dong", "loai", "TEXT DEFAULT 'thau'"),
     ("tep", "nguon", "TEXT DEFAULT ''"),
+    ("khach_hang", "han_no", "INTEGER DEFAULT 30"),
 ]
 
 SCHEMA_VIEW = """
@@ -225,7 +262,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("bao_gia_dong", "gia_max")).fetchone():
+                                        "AND column_name = ?", ("chi_tien", "so_tien")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -720,7 +757,15 @@ def o_khach(k=None):
             + o("Địa chỉ", "dia_chi", g("dia_chi")) + o("Người đại diện", "dai_dien", g("dai_dien"))
             + o("Chức vụ", "chuc_vu", g("chuc_vu")) + o("Điện thoại", "dien_thoai", g("dien_thoai"))
             + o("Email", "email", g("email"), kieu="email") + o("Người liên hệ", "lien_he", g("lien_he"))
-            + o("Nhân viên bán hàng", "nhan_vien_bh", g("nhan_vien_bh")) + o("Ghi chú", "ghi_chu", g("ghi_chu")))
+            + o("Nhân viên bán hàng", "nhan_vien_bh", g("nhan_vien_bh"))
+            + o("Số ngày được nợ", "han_no", 30 if not k or k["han_no"] is None else k["han_no"], "number", them='min="0" step="1"')
+            + o("Ghi chú", "ghi_chu", g("ghi_chu")))
+
+
+def luu_han_no(c, ten):
+    """Số ngày được nợ lưu riêng (không nằm trong COT_KHACH vì file nhập khách không có cột này)."""
+    hn = int(c.so("han_no", "Số ngày được nợ")) if (c.form.get("han_no") or "").strip() else 30
+    c.db.execute("UPDATE khach_hang SET han_no = ? WHERE ten = ?", (hn, ten))
 
 
 def doc_khach(c):
@@ -774,6 +819,7 @@ def khach_hang_them(c):
                      doc_khach(c))
     except LOI_TRUNG:
         raise Loi(400, "Đã có khách hàng trùng tên này.")
+    luu_han_no(c, c.chu("ten", "Tên khách hàng", True, 300))
     c.db.commit()
     return Chuyen("/khach-hang", "Đã thêm khách hàng.")
 
@@ -788,6 +834,7 @@ def khach_hang_sua(c, kid):
                          doc_khach(c) + (kid,))
         except LOI_TRUNG:
             raise Loi(400, "Đã có khách hàng trùng tên này.")
+        luu_han_no(c, c.chu("ten", "Tên khách hàng", True, 300))
         c.db.commit()
         return Chuyen("/khach-hang", "Đã lưu.")
     n = c.db.execute("SELECT COUNT(*) AS n FROM hop_dong WHERE khach_hang_id = ?", (kid,)).fetchone()["n"]
@@ -796,7 +843,8 @@ def khach_hang_sua(c, kid):
         xoa = nut_xoa(c, f"/khach-hang/{kid}/xoa", f"Xóa khách hàng {k['ten']}?", "Xóa khách hàng")
     return trang(c, k["ten"], f"""
       <div class="dau-trang"><h1>{e(k["ten"])}</h1><a class="nut" href="/hdnt/moi?kh={kid}">Làm HĐ nguyên tắc</a></div>
-      <p class="mo"><a href="/hop-dong?kh={kid}">{n} hợp đồng</a></p>
+      <p class="mo"><a href="/hop-dong?kh={kid}">{n} hợp đồng</a> · <a href="/don-hang?kh={kid}">Đơn hàng</a>
+        · <a href="/cong-no/{kid}">Công nợ</a></p>
       <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_khach(k)}
         <div class="hang-nut"><button class="nut">Lưu</button><a href="/khach-hang">Hủy</a></div></form></div>{xoa}""", "kh")
 
@@ -804,6 +852,9 @@ def khach_hang_sua(c, kid):
 def khach_hang_xoa(c, kid):
     if c.db.execute("SELECT 1 FROM hop_dong WHERE khach_hang_id = ?", (kid,)).fetchone():
         raise Loi(400, "Khách hàng đã có hợp đồng nên không xóa được.")
+    if (c.db.execute("SELECT 1 FROM don_hang WHERE khach_hang_id = ?", (kid,)).fetchone()
+            or c.db.execute("SELECT 1 FROM thu_tien WHERE khach_hang_id = ?", (kid,)).fetchone()):
+        raise Loi(400, "Khách hàng đã có đơn hàng hoặc phiếu thu nên không xóa được.")
     c.db.execute("DELETE FROM khach_hang WHERE id = ?", (kid,))
     c.db.commit()
     return Chuyen("/khach-hang", "Đã xóa khách hàng.")
@@ -1956,10 +2007,9 @@ def nhap_hang(c):
             raise Loi(400, "Bảng không có dòng hàng nào (mỗi dòng cần tên và ký mã hiệu hoặc giá bán).")
         ten_cot = [t for t, _ in COT_HANG] + COT_GIA
         if c.form.get("thay_het") == "1":
-            c.db.execute("DELETE FROM hang_hoa")
-            co = {}
-        else:
-            co = {khoa_hang(r): r["id"] for r in c.db.execute("SELECT * FROM hang_hoa").fetchall()}
+            c.db.execute("DELETE FROM hang_hoa WHERE id NOT IN (SELECT hang_hoa_id FROM don_hang_dong WHERE hang_hoa_id IS NOT NULL) "
+                         "AND id NOT IN (SELECT hang_hoa_id FROM phieu_nhap_dong)")
+        co = {khoa_hang(r): r["id"] for r in c.db.execute("SELECT * FROM hang_hoa").fetchall()}
         them = [[d[t] for t in ten_cot] for d in moi if khoa_hang(d) not in co]
         sua = [[d[t] for t in ten_cot] + [co[khoa_hang(d)]] for d in moi if khoa_hang(d) in co]
         if them:
@@ -2270,7 +2320,7 @@ def bg_xem(c, bid):
     tu_tay = "".join(o(nhan, ten, bat_buoc=(ten == "ten_tm")) for ten, nhan in COT_HANG)
     return trang(c, f"Báo giá {b['so_bg']}", f"""
       <div class="dau-trang"><h1>Báo giá {e(b["so_bg"])} {nhan_bg(b)}</h1>
-        <div class="hang-nut">{'<a class="nut" href="/bao-gia/%d/tai">Tải file Word</a>' % bid if dong else ""}{nut_google}</div></div>
+        <div class="hang-nut">{'<a class="nut" href="/bao-gia/%d/tai">Tải file Word</a><a class="nut phu" href="/don-hang/moi?bg=%d">Lập đơn hàng</a>' % (bid, bid) if dong else ""}{nut_google}</div></div>
       <div class="the"><dl class="thong-tin"><dt>Kính gửi</dt><dd>{e(b["ten_kh"] or "Quý Khách hàng")}</dd>
         <dt>Ngày</dt><dd>{ngay(b["ngay"])}</dd><dt>Hiệu lực đến</dt><dd>{ngay(b["hieu_luc_den"]) or "—"}</dd>
         <dt>Phụ trách</dt><dd>{e(b["phu_trach"] or "—")}</dd>{link}
@@ -2365,6 +2415,1047 @@ def bg_google(c, bid):
     return Chuyen(f"/bao-gia/{bid}", "Đã tạo link Google Docs cho báo giá (thư mục Báo giá trong Drive).")
 
 
+# ───────────────────────── bán hàng: phần dùng chung ─────────────────────────
+# Đơn giá trong đơn hàng, phiếu nhập là giá đã gồm thuế VAT. Công nợ phát sinh khi giao hàng (phiếu xuất);
+# tiền thu / chi trừ vào phiếu cũ nhất trước.
+
+HINH_THUC = [("ck", "Chuyển khoản"), ("tm", "Tiền mặt"), ("khac", "Khác")]
+CAN_DATE = 180               # cảnh báo lô còn hạn dùng ≤ 180 ngày
+MOC_NO = ["Trong hạn", "Quá 1–30 ngày", "31–60 ngày", "61–90 ngày", "Trên 90 ngày"]
+
+ICON.update({k: _svg(v) for k, v in {
+    "ban_hang": '<path d="M5 8h6l5 22h20l5-15H14" fill="none" stroke="#1d5b79" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+                '<path d="M15 16h25l-4 13H18z" fill="#1fc7b0"/><circle cx="19" cy="38" r="4" fill="#f58220"/><circle cx="34" cy="38" r="4" fill="#f58220"/>',
+    "tien": '<rect x="5" y="12" width="38" height="26" rx="5" fill="#1d7a6b"/><rect x="5" y="18" width="38" height="6" fill="#fbb945"/>'
+            '<circle cx="34" cy="31" r="4" fill="#fff"/>' + _DONG.format(x=10, y=29, w=12),
+    "bieu_do": '<rect x="6" y="26" width="9" height="16" rx="2" fill="#2ea8f5"/><rect x="19.5" y="16" width="9" height="26" rx="2" fill="#8f4f86"/>'
+               '<rect x="33" y="6" width="9" height="36" rx="2" fill="#f58220"/>',
+    "kho": '<path d="M4 20 24 6l20 14v22H4z" fill="#8f4f86"/><rect x="12" y="24" width="24" height="18" fill="#fbb945"/>'
+           '<path d="M12 30h24M12 36h24" stroke="#fff" stroke-width="2.4"/>',
+    "nhap": '<rect x="8" y="22" width="32" height="20" rx="4" fill="#2ea8f5"/><path d="M24 4v20m-8-8 8 8 8-8" fill="none" stroke="#f58220" '
+            'stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>' + _DONG.format(x=15, y=33, w=18),
+}.items()})
+UNG_DUNG += [
+    ("ban-hang", "Bán hàng", "ban_hang", [
+        ("/don-hang", "Đơn hàng", "dh", "ds_hd", False), ("/don-hang/moi", "Lập đơn hàng", "dhm", "soan", False),
+        ("/cong-no", "Công nợ phải thu", "cn", "tien", False), ("/doanh-so", "Báo cáo doanh số", "ds", "bieu_do", False)]),
+    ("kho", "Kho – Mua hàng", "kho", [
+        ("/kho", "Tồn kho", "tk", "hang_hoa", False), ("/nhap-kho", "Nhập kho / mua hàng", "pn", "nhap", True),
+        ("/nha-cung-cap", "Nhà cung cấp", "ncc", "khach", True), ("/phai-tra", "Nợ nhà cung cấp", "pt", "tien", True)]),
+]
+
+
+def so_tiep(c, bang, cot, chu):
+    """Số chứng từ kế tiếp trong năm: DH26001, PX26001…"""
+    dau = f"{chu}{date.today().year % 100:02d}"
+    lon = 0
+    for r in c.db.execute(f"SELECT {cot} AS s FROM {bang} WHERE {cot} LIKE ?", (dau + "%",)).fetchall():
+        m = re.fullmatch(re.escape(dau) + r"(\d{3,})", r["s"], re.I)
+        if m:
+            lon = max(lon, int(m.group(1)))
+    return f"{dau}{lon + 1:03d}"
+
+
+def goi_y_khach(c):
+    return ('<datalist id="ds-khach">' + "".join(f'<option value="{e(r["ten"])}">' for r in c.db.execute(
+        "SELECT ten FROM khach_hang ORDER BY ten").fetchall()) + '</datalist>')
+
+
+def tim_khach(c):
+    ten = c.chu("ten_kh", "Khách hàng", True, 300)
+    for r in c.db.execute("SELECT * FROM khach_hang").fetchall():
+        if gap(r["ten"]) == gap(ten):
+            return r
+    raise Loi(400, f"Chưa có khách hàng “{ten}”. Hãy chọn trong danh sách gợi ý, hoặc thêm khách ở mục Khách hàng trước.")
+
+
+def cong(d, k, v):
+    d[k] = d.get(k, 0) + v
+
+
+def xep_no(nhom):
+    """nhom = {id đối tác: {"phieu": [phiếu theo thứ tự ngày, có gia_tri / ngay / han_tt], "da_tra": số tiền}}.
+    Trừ tiền đã trả vào phiếu cũ nhất trước, rồi chia phần còn nợ theo tuổi quá hạn."""
+    hom_nay = date.today()
+    for n in nhom.values():
+        con = n["da_tra"]
+        n["phat_sinh"], n["con_no"], n["tuoi"] = 0, 0, [0] * 5
+        for p in n["phieu"]:
+            tru = min(con, p["gia_tri"])
+            con -= tru
+            p["con_lai"] = p["gia_tri"] - tru if p["gia_tri"] - tru >= 0.5 else 0
+            p["tre"] = (hom_nay - date.fromisoformat(p["han_tt"] or p["ngay"])).days
+            n["phat_sinh"] += p["gia_tri"]
+            n["con_no"] += p["con_lai"]
+            n["tuoi"][0 if p["tre"] <= 0 else 1 if p["tre"] <= 30 else 2 if p["tre"] <= 60 else 3 if p["tre"] <= 90 else 4] += p["con_lai"]
+        n["qua_han"] = sum(n["tuoi"][1:])
+        n["tra_thua"] = con if con >= 0.5 else 0
+    return nhom
+
+
+def nhan_no(p):
+    if not p["con_lai"]:
+        return '<span class="nhan xanh">Đã trả đủ</span>'
+    if p["tre"] > 0:
+        return f'<span class="nhan do">Quá hạn {p["tre"]} ngày</span>'
+    return f'<span class="nhan vang">Còn {-p["tre"]} ngày</span>'
+
+
+def bang_no(nhom, ten, url):
+    """Bảng công nợ theo đối tác kèm tuổi nợ. ten = {id: tên}."""
+    ds = sorted(nhom.items(), key=lambda x: (-x[1]["con_no"], ten.get(x[0], "")))
+    dong = "".join(
+        f'<tr><td><a href="{url}/{i}">{e(ten.get(i, "?"))}</a></td><td class="so">{tien(n["phat_sinh"])}</td>'
+        f'<td class="so">{tien(n["da_tra"])}</td><td class="so"><b>{tien(n["con_no"] - n["tra_thua"])}</b></td>'
+        + "".join(f'<td class="so{" mo" if not v else ""}">{tien(v) if v else "—"}</td>' for v in n["tuoi"]) + '</tr>'
+        for i, n in ds)
+    tong = [sum(n["tuoi"][j] for n in nhom.values()) for j in range(5)]
+    chan = ('<tr><td><b>Tổng cộng</b></td>'
+            + "".join(f'<td class="so"><b>{tien(v)}</b></td>' for v in
+                      [sum(n["phat_sinh"] for n in nhom.values()), sum(n["da_tra"] for n in nhom.values()),
+                       sum(n["con_no"] - n["tra_thua"] for n in nhom.values())] + tong) + '</tr>')
+    return ('<div class="the cuon"><table><thead><tr><th>Tên</th><th class="so">Phát sinh (đ)</th><th class="so">Đã trả</th>'
+            '<th class="so">Còn nợ</th>' + "".join(f'<th class="so">{m}</th>' for m in MOC_NO)
+            + f'</tr></thead><tbody>{dong}{chan}</tbody></table></div>')
+
+
+def o_tien(c, chu, bang, cot):
+    """Các ô của phiếu thu / phiếu chi."""
+    return (o("Số phiếu", cot, so_tiep(c, bang, cot, chu), bat_buoc=True) + o("Ngày", "ngay", date.today().isoformat(), "date", True)
+            + o("Số tiền (đ)", "so_tien", kieu="number", bat_buoc=True, them='min="1" step="any"')
+            + f'<label>Hình thức{chon("hinh_thuc", HINH_THUC)}</label>' + o("Ghi chú", "ghi_chu"))
+
+
+def luu_tien(c, bang, cot, cot_doi_tac, doi_tac_id):
+    ht = c.form.get("hinh_thuc") if c.form.get("hinh_thuc") in dict(HINH_THUC) else "ck"
+    tien_ = c.so("so_tien", "Số tiền", True)
+    if tien_ <= 0:
+        raise Loi(400, "Số tiền phải lớn hơn 0.")
+    so = c.chu(cot, "Số phiếu", True, 60)
+    try:
+        c.db.execute(f"INSERT INTO {bang} ({cot}, ngay, {cot_doi_tac}, so_tien, hinh_thuc, ghi_chu, nguoi_nhap_id) VALUES (?,?,?,?,?,?,?)",
+                     (so, c.ngay("ngay", "Ngày", True), doi_tac_id, tien_, ht, c.chu("ghi_chu", "Ghi chú"), c.user["id"]))
+    except LOI_TRUNG:
+        c.db.rollback()
+        raise Loi(400, f"Số phiếu {so} đã có. Hãy đổi số khác.")
+    c.db.commit()
+    return so, tien_
+
+
+def bang_tien(c, ds, cot, url_xoa):
+    if not ds:
+        return '<p class="mo">Chưa có phiếu nào.</p>'
+    dong = "".join(
+        f'<tr><td><b>{e(t[cot])}</b></td><td>{ngay(t["ngay"])}</td><td class="so">{tien(t["so_tien"])}</td>'
+        f'<td>{e(dict(HINH_THUC).get(t["hinh_thuc"], ""))}</td><td>{e(t["ghi_chu"])}</td><td class="thao-tac">'
+        + (nut_xoa(c, f'{url_xoa}/{t["id"]}/xoa', f"Xóa phiếu {t[cot]} số tiền {tien(t['so_tien'])} đ?") if c.ql else "") + '</td></tr>'
+        for t in ds)
+    return ('<div class="cuon"><table><thead><tr><th>Số phiếu</th><th>Ngày</th><th class="so">Số tiền (đ)</th><th>Hình thức</th>'
+            f'<th>Ghi chú</th><th></th></tr></thead><tbody>{dong}</tbody></table></div>')
+
+
+# ───────────────────────── kho: tồn theo lô ─────────────────────────
+
+def ton_kho(c):
+    """{(hàng hóa id, số lô, hạn dùng): tồn} = tổng nhập − tổng xuất."""
+    ton = {}
+    for r in c.db.execute("SELECT hang_hoa_id, so_lo, han_dung, so_luong FROM phieu_nhap_dong").fetchall():
+        cong(ton, (r["hang_hoa_id"], r["so_lo"] or "", r["han_dung"] or ""), r["so_luong"])
+    for r in c.db.execute("SELECT d.hang_hoa_id, x.so_lo, x.han_dung, x.so_luong FROM phieu_xuat_dong x "
+                          "JOIN don_hang_dong d ON d.id = x.don_hang_dong_id WHERE d.hang_hoa_id IS NOT NULL").fetchall():
+        cong(ton, (r["hang_hoa_id"], r["so_lo"] or "", r["han_dung"] or ""), -r["so_luong"])
+    return ton
+
+
+def ton_theo_hang(ton):
+    kq = {}
+    for (hh, _, _), q in ton.items():
+        cong(kq, hh, q)
+    return kq
+
+
+def phan_lo(ton, hh, n, ngay_xuat):
+    """Chia số lượng xuất vào các lô còn hàng, lô hết hạn trước xuất trước, bỏ qua lô đã hết hạn.
+    Trả về ([(số lô, hạn dùng, số lượng)], số lượng kho không đủ). Phần thiếu ghi không lô."""
+    lo_con = sorted((hd or "9999", lo, hd) for (h, lo, hd), q in ton.items()
+                    if h == hh and q > 1e-9 and not (hd and hd < ngay_xuat))
+    kq, con = {}, n
+    for _, lo, hd in lo_con:
+        if con <= 1e-9:
+            break
+        lay = min(con, ton[(hh, lo, hd)])
+        ton[(hh, lo, hd)] -= lay
+        kq[(lo, hd)] = lay
+        con -= lay
+    thieu = con if con > 1e-9 else 0
+    if thieu:
+        cong(kq, ("", ""), thieu)
+        cong(ton, (hh, "", ""), -thieu)
+    return [(lo, hd, q) for (lo, hd), q in kq.items()], thieu
+
+
+def nhan_lo(hd):
+    if not hd:
+        return ""
+    con = (date.fromisoformat(hd) - date.today()).days
+    if con < 0:
+        return ' <span class="nhan do">Hết hạn</span>'
+    if con <= CAN_DATE:
+        return f' <span class="nhan vang">Còn {con} ngày</span>'
+    return ""
+
+
+def kho(c):
+    tu, canh = c.q.get("q", ""), c.q.get("canh", "")
+    ton = {k: q for k, q in ton_kho(c).items() if abs(q) > 1e-9}
+    dk, ts = dk_tim_hang(tu)
+    hang = {h["id"]: h for h in c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk}", ts).fetchall()}
+    moc = (date.today() + timedelta(days=CAN_DATE)).isoformat()
+    theo_hang, tong_gia_tri = {}, 0
+    for (hh, lo, hd), q in ton.items():
+        if hh in hang and not (canh and not (hd and hd <= moc and q > 0)):
+            theo_hang.setdefault(hh, []).append((hd or "9999", lo, hd, q))
+    dong = ""
+    for hh in sorted(theo_hang, key=lambda i: gap(hang[i]["ten_tm"] or hang[i]["ten"])):
+        h, cac_lo = hang[hh], sorted(theo_hang[hh])
+        tong = sum(x[3] for x in cac_lo)
+        am = ' <span class="nhan do">Xuất vượt tồn</span>' if tong < -1e-9 else ""
+        dong += (f'<tr><td rowspan="{len(cac_lo)}">{e(h["ten_tm"] or h["ten"])}<br><span class="mo">{e(h["ma"])} · {e(h["quy_cach"])}</span></td>'
+                 f'<td rowspan="{len(cac_lo)}" class="so"><b>{sl(tong)}</b>{am}</td>')
+        for i, (_, lo, hd, q) in enumerate(cac_lo):
+            dong += (("<tr>" if i else "") + f'<td>{e(lo) or "<span class=mo>không ghi lô</span>"}</td>'
+                     f'<td>{ngay(hd) or "—"}{nhan_lo(hd) if q > 0 else ""}</td><td class="so">{sl(q)}</td></tr>')
+    if dong:
+        bang = ('<div class="the cuon"><table><thead><tr><th>Hàng hóa</th><th class="so">Tổng tồn</th><th>Số lô</th><th>Hạn dùng</th>'
+                f'<th class="so">Tồn theo lô</th></tr></thead><tbody>{dong}</tbody></table></div>')
+    elif ton:
+        bang = '<div class="the trong">Không có hàng nào khớp.</div>'
+    else:
+        bang = ('<div class="the trong">Kho chưa có hàng. '
+                + ('Lập phiếu ở mục <a href="/nhap-kho">Nhập kho / mua hàng</a> để ghi tồn đầu kỳ và hàng mua về.' if c.ql
+                   else 'Quản lý cần lập phiếu nhập kho.') + '</div>')
+    n_can = sum(1 for (_, _, hd), q in ton.items() if hd and hd <= moc and q > 0)
+    return trang(c, "Tồn kho", f"""
+      <div class="dau-trang"><h1>Tồn kho <span class="dem">{len(theo_hang)}</span></h1>
+        {'<a class="nut" href="/nhap-kho/moi">Lập phiếu nhập</a>' if c.ql else ""}</div>
+      <p class="mo">Tồn = tổng nhập − tổng đã giao theo đơn hàng. {n_can} lô còn hạn dùng từ {CAN_DATE} ngày trở xuống hoặc đã hết hạn.</p>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Tên, ký mã hiệu, nhãn hiệu…">
+        {chon("canh", [("1", f"Chỉ lô cận hạn dùng (≤ {CAN_DATE} ngày)")], canh, "Mọi lô")}
+        <button class="nut phu">Lọc</button>{'<a href="/kho">Bỏ lọc</a>' if c.q else ""}</form>
+      {bang}""", "tk")
+
+
+# ───────────────────────── đơn hàng bán ─────────────────────────
+
+SQL_DH = ("SELECT o.*, k.ten AS khach, k.han_no, u.ho_ten AS phu_trach, "
+          "COALESCE((SELECT SUM(d.so_luong * d.don_gia) FROM don_hang_dong d WHERE d.don_hang_id = o.id), 0) AS gia_tri, "
+          "COALESCE((SELECT SUM(x.so_luong * d.don_gia) FROM phieu_xuat_dong x JOIN don_hang_dong d ON d.id = x.don_hang_dong_id "
+          "WHERE d.don_hang_id = o.id), 0) AS da_giao "
+          "FROM don_hang o JOIN khach_hang k ON k.id = o.khach_hang_id LEFT JOIN nguoi_dung u ON u.id = o.phu_trach_id WHERE 1=1")
+TT_DH = [("chua", "Chưa giao"), ("mot_phan", "Giao một phần"), ("du", "Đã giao đủ"), ("huy", "Đã hủy")]
+
+
+def tt_dh(o_):
+    if o_["trang_thai"] == "huy":
+        return "huy"
+    if o_["da_giao"] < 0.5:
+        return "chua"
+    return "mot_phan" if o_["da_giao"] < o_["gia_tri"] - 0.5 else "du"
+
+
+def nhan_dh(o_):
+    tt = tt_dh(o_)
+    return f'<span class="nhan {dict(huy="xam", chua="vang", mot_phan="vang", du="xanh")[tt]}">{dict(TT_DH)[tt]}</span>'
+
+
+def lay_dh(c, did):
+    o_ = c.db.execute(SQL_DH + " AND o.id = ?", (did,)).fetchone()
+    if not o_:
+        raise Loi(404, "Không tìm thấy đơn hàng.")
+    if not c.ql and o_["phu_trach_id"] != c.user["id"]:
+        raise Loi(403, "Bạn không phụ trách đơn hàng này.")
+    return o_
+
+
+def dong_cua_dh(c, did):
+    return c.db.execute(
+        "SELECT d.*, COALESCE((SELECT SUM(x.so_luong) FROM phieu_xuat_dong x WHERE x.don_hang_dong_id = d.id), 0) AS da_giao "
+        "FROM don_hang_dong d WHERE d.don_hang_id = ? ORDER BY d.tt, d.id", (did,)).fetchall()
+
+
+def ds_don_hang(c):
+    dk, ts = loc_quyen(c)
+    tu, tt, kh = c.q.get("q", ""), c.q.get("tt", ""), c.q.get("kh", "")
+    if tu:
+        dk += " AND (o.so_dh LIKE ? OR k.ten LIKE ? OR o.id IN (SELECT don_hang_id FROM don_hang_dong WHERE ma LIKE ? OR ten LIKE ?))"
+        ts += [f"%{tu}%"] * 4
+    if kh.isdigit():
+        dk += " AND o.khach_hang_id = ?"
+        ts.append(int(kh))
+    ds = [o_ for o_ in c.db.execute(SQL_DH + dk + " ORDER BY o.ngay DESC, o.id DESC", ts).fetchall()
+          if tt not in dict(TT_DH) or tt_dh(o_) == tt]
+    dong = "".join(
+        f'<tr><td><a href="/don-hang/{o_["id"]}"><b>{e(o_["so_dh"])}</b></a></td><td>{ngay(o_["ngay"])}</td><td>{e(o_["khach"])}</td>'
+        f'<td class="so">{tien(o_["gia_tri"])}</td><td class="so">{tien(o_["da_giao"])}</td>'
+        f'<td>{e(o_["phu_trach"] or "—")}</td><td>{nhan_dh(o_)}</td></tr>' for o_ in ds)
+    if ds:
+        bang = ('<div class="the cuon"><table><thead><tr><th>Số đơn</th><th>Ngày</th><th>Khách hàng</th><th class="so">Giá trị (đ)</th>'
+                f'<th class="so">Đã giao (đ)</th><th>Phụ trách</th><th>Tình trạng</th></tr></thead><tbody>{dong}</tbody></table></div>')
+    else:
+        bang = f'<div class="the trong">{"Không có đơn hàng nào khớp." if c.q else "Chưa có đơn hàng nào. Bấm Lập đơn hàng để bắt đầu."}</div>'
+    return trang(c, "Đơn hàng", f"""
+      <div class="dau-trang"><h1>Đơn hàng <span class="dem">{len(ds)}</span></h1><a class="nut" href="/don-hang/moi">Lập đơn hàng</a></div>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Số đơn, khách, mã hàng…">
+        {chon("tt", TT_DH, tt, "Mọi tình trạng")}
+        <button class="nut phu">Lọc</button>{'<a href="/don-hang">Bỏ lọc</a>' if c.q else ""}</form>
+      {bang}""", "dh")
+
+
+def o_dau_dh(c, o_=None, ten_kh=""):
+    g = (lambda k, md="": o_[k] if o_ else md)
+    pt = ""
+    if c.ql:
+        nd = c.db.execute("SELECT id, ho_ten FROM nguoi_dung WHERE hoat_dong = 1 ORDER BY ho_ten").fetchall()
+        pt = f'<label>Người phụ trách{chon("phu_trach_id", [(u["id"], u["ho_ten"]) for u in nd], g("phu_trach_id", c.user["id"]))}</label>'
+    tt = (f'<label>Tình trạng{chon("trang_thai", [("mo", "Đang thực hiện"), ("huy", "Hủy đơn")], o_["trang_thai"])}</label>' if o_ else "")
+    return f"""
+      {o("Số đơn hàng", "so_dh", g("so_dh", so_tiep(c, "don_hang", "so_dh", "DH")), bat_buoc=True)}
+      {o("Ngày đặt hàng", "ngay", g("ngay", date.today().isoformat()), "date", True)}
+      <label class="rong">Khách hàng <b class="sao">*</b><input name="ten_kh" value="{e(g("khach", ten_kh))}" list="ds-khach" required
+        placeholder="Gõ để tìm trong danh sách khách hàng"></label>{goi_y_khach(c)}
+      {pt}{tt}
+      <label class="rong">Ghi chú (địa chỉ giao, người nhận, điều kiện thanh toán…)
+        <textarea name="ghi_chu" rows="2">{e(g("ghi_chu"))}</textarea></label>"""
+
+
+def doc_dau_dh(c, o_=None):
+    gt = {"so_dh": c.chu("so_dh", "Số đơn hàng", True, 60), "ngay": c.ngay("ngay", "Ngày đặt hàng", True),
+          "khach_hang_id": tim_khach(c)["id"], "ghi_chu": c.chu("ghi_chu", "Ghi chú", toi_da=1000)}
+    gt["phu_trach_id"] = o_["phu_trach_id"] if o_ else c.user["id"]
+    if c.ql:
+        v = c.form.get("phu_trach_id", "")
+        if not (v.isdigit() and c.db.execute("SELECT 1 FROM nguoi_dung WHERE id = ?", (int(v),)).fetchone()):
+            raise Loi(400, "Chưa chọn người phụ trách.")
+        gt["phu_trach_id"] = int(v)
+    if o_:
+        gt["trang_thai"] = "huy" if c.form.get("trang_thai") == "huy" else "mo"
+        if o_["da_giao"] >= 0.5 and (gt["trang_thai"] == "huy" or gt["khach_hang_id"] != o_["khach_hang_id"]):
+            raise Loi(400, "Đơn đã có phiếu giao hàng nên không hủy hoặc đổi khách được. Hãy xóa phiếu giao trước.")
+    trung = c.db.execute("SELECT id FROM don_hang WHERE so_dh = ?", (gt["so_dh"],)).fetchone()
+    if trung and (not o_ or trung["id"] != o_["id"]):
+        raise Loi(400, f"Số đơn hàng {gt['so_dh']} đã có. Hãy đổi số khác.")
+    return gt
+
+
+def dh_them_dong(c, did, cac_dong):
+    tt = c.db.execute("SELECT COALESCE(MAX(tt), 0) AS m FROM don_hang_dong WHERE don_hang_id = ?", (did,)).fetchone()["m"] or 0
+    c.db.executemany("INSERT INTO don_hang_dong (don_hang_id, tt, hang_hoa_id, ma, ten, quy_cach, so_luong, don_gia) VALUES (?,?,?,?,?,?,?,?)",
+                     [(did, tt + i, d["hang_hoa_id"], d["ma"], d["ten"], d["quy_cach"], d["so_luong"], d["don_gia"])
+                      for i, d in enumerate(cac_dong, 1)])
+
+
+def dh_moi(c):
+    bg = lay_bg(c, int(c.q["bg"])) if c.q.get("bg", "").isdigit() else None
+    if c.method == "POST":
+        gt = doc_dau_dh(c)
+        bid = c.form.get("bao_gia_id", "")
+        bg = lay_bg(c, int(bid)) if bid.isdigit() else None
+        if bg:
+            gt["bao_gia_id"] = bg["id"]
+        try:
+            did = c.db.them(f"INSERT INTO don_hang ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
+                            list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, f"Số đơn hàng {gt['so_dh']} đã có. Hãy đổi số khác.")
+        tb = "Đã tạo đơn hàng. Tìm và chọn hàng ở mục Thêm hàng bên dưới."
+        if bg:
+            theo_ma = {}
+            for h in c.db.execute("SELECT id, ma FROM hang_hoa WHERE ma <> '' ORDER BY id DESC").fetchall():
+                theo_ma[gap(h["ma"])] = h["id"]
+            dh_them_dong(c, did, [dict(hang_hoa_id=theo_ma.get(gap(d["ma"])) if d["ma"] else None, ma=d["ma"], ten=d["ten_tm"] or d["ten"],
+                                       quy_cach=d["quy_cach"], so_luong=d["so_luong"], don_gia=d["don_gia"]) for d in dong_cua_bg(c, bg["id"])])
+            if bg["trang_thai"] in ("nhap", "da_gui"):
+                c.db.execute("UPDATE bao_gia SET trang_thai = 'dong_y' WHERE id = ?", (bg["id"],))
+            tb = f"Đã tạo đơn hàng từ báo giá {bg['so_bg']}. Kiểm tra lại số lượng và đơn giá."
+        c.db.commit()
+        return Chuyen(f"/don-hang/{did}", tb)
+    an = f'<input type="hidden" name="bao_gia_id" value="{bg["id"]}">' if bg else ""
+    tu_bg = f'<p class="mo">Lấy hàng, số lượng và đơn giá từ báo giá <a href="/bao-gia/{bg["id"]}">{e(bg["so_bg"])}</a>.</p>' if bg else ""
+    return trang(c, "Lập đơn hàng", f"""
+      <h1>Lập đơn hàng</h1>{tu_bg}
+      <div class="the"><form method="post" action="/don-hang/moi" class="luoi">{an_csrf(c)}{an}{o_dau_dh(c, ten_kh=bg["ten_kh"] if bg else "")}
+        <div class="hang-nut"><button class="nut">{"Tạo đơn hàng" if bg else "Tạo và chọn hàng"}</button><a href="/don-hang">Hủy</a></div></form></div>
+      <p class="mo">Đơn giá trong đơn hàng là giá đã gồm thuế VAT. Công nợ của khách được ghi nhận mỗi lần giao hàng.</p>""", "dhm")
+
+
+def dh_sua(c, did):
+    o_ = lay_dh(c, did)
+    gt = doc_dau_dh(c, o_)
+    c.db.execute(f"UPDATE don_hang SET {', '.join(k + ' = ?' for k in gt)} WHERE id = ?", list(gt.values()) + [did])
+    c.db.commit()
+    return Chuyen(f"/don-hang/{did}", "Đã lưu thông tin đơn hàng.")
+
+
+def dh_xoa(c, did):
+    o_ = lay_dh(c, did)
+    if not c.duoc_xoa:
+        raise Loi(403, "Bạn chưa được cấp quyền xóa. Hãy nhờ quản lý.")
+    if c.db.execute("SELECT 1 FROM phieu_xuat WHERE don_hang_id = ?", (did,)).fetchone():
+        raise Loi(400, "Đơn đã có phiếu giao hàng nên không xóa được. Hãy xóa phiếu giao trước.")
+    c.db.execute("DELETE FROM don_hang_dong WHERE don_hang_id = ?", (did,))
+    c.db.execute("DELETE FROM don_hang WHERE id = ?", (did,))
+    c.db.commit()
+    return Chuyen("/don-hang", f"Đã xóa đơn hàng {o_['so_dh']}.")
+
+
+def dh_xem(c, did):
+    o_ = lay_dh(c, did)
+    dong = dong_cua_dh(c, did)
+    tim = c.q.get("tim", "")
+    mo = o_["trang_thai"] != "huy"
+    ton = ton_theo_hang(ton_kho(c))
+    co_kho = bool(ton)
+
+    def o_ton(hh):
+        if not hh or not co_kho:
+            return '<td class="so mo">—</td>'
+        return f'<td class="so">{sl(ton.get(hh, 0))}</td>'
+
+    hang = ""
+    for i, d in enumerate(dong, 1):
+        khoa_gia = " readonly" if d["da_giao"] > 0 else ""
+        bo = "" if d["da_giao"] > 0 else f'<button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button>'
+        hang += (f'<tr><td class="so">{i}</td><td>{e(d["ten"])}<br><span class="mo">{e(d["ma"])} · {e(d["quy_cach"])}</span></td>'
+                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{d["id"]}" value="{so_o(d["so_luong"])}" aria-label="Số lượng"></td>'
+                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="gia_{d["id"]}" value="{so_o(d["don_gia"])}"{khoa_gia} aria-label="Đơn giá"></td>'
+                 f'<td class="so">{tien(d["so_luong"] * d["don_gia"])}</td><td class="so">{sl(d["da_giao"])}</td>'
+                 f'<td class="so">{sl(d["so_luong"] - d["da_giao"])}</td>{o_ton(d["hang_hoa_id"])}<td class="thao-tac">{bo}</td></tr>')
+    if dong:
+        bang = (f'<form method="post" action="/don-hang/{did}/dong">{an_csrf(c)}<button class="nut-an" tabindex="-1" aria-hidden="true"></button>'
+                '<div class="cuon"><table><thead><tr><th class="so">STT</th><th>Hàng hóa</th><th class="so">Số lượng</th><th class="so">Đơn giá (đ)</th>'
+                '<th class="so">Thành tiền</th><th class="so">Đã giao</th><th class="so">Còn lại</th><th class="so">Tồn kho</th><th></th></tr></thead>'
+                f'<tbody>{hang}<tr><td colspan="4" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(o_["gia_tri"])}</b></td>'
+                '<td colspan="4"></td></tr></tbody></table></div>'
+                '<div class="hang-nut"><button class="nut phu">Lưu số lượng và giá</button>'
+                '<span class="mo">Dòng đã giao hàng thì không đổi được đơn giá.</span></div></form>')
+    else:
+        bang = '<p class="mo">Chưa có hàng nào. Tìm hàng ở mục Thêm hàng bên dưới.</p>'
+
+    # giao hàng: mỗi lần giao là một phiếu xuất, sinh công nợ
+    con_giao = [d for d in dong if d["so_luong"] - d["da_giao"] > 1e-9]
+    giao = ""
+    if mo and con_giao:
+        dg = "".join(
+            f'<tr><td>{e(d["ten"])}<br><span class="mo">{e(d["ma"])}</span></td><td class="so">{sl(d["so_luong"] - d["da_giao"])}</td>'
+            f'{o_ton(d["hang_hoa_id"])}<td class="so"><input class="o-nho" type="number" min="0" step="any" max="{so_o(d["so_luong"] - d["da_giao"])}" '
+            f'name="sl_{d["id"]}" value="{so_o(d["so_luong"] - d["da_giao"])}" aria-label="Số lượng giao"></td></tr>' for d in con_giao)
+        han = o_["han_no"] if o_["han_no"] is not None else 30
+        giao = f"""<div class="the"><h2>Giao hàng</h2>
+          <form method="post" action="/don-hang/{did}/giao">{an_csrf(c)}<div class="luoi">
+            {o("Số phiếu xuất", "so_px", so_tiep(c, "phieu_xuat", "so_px", "PX"), bat_buoc=True)}
+            {o("Ngày giao", "ngay", date.today().isoformat(), "date", True)}
+            {o("Số hóa đơn VAT (nếu đã xuất)", "so_hoa_don")}{o("Ghi chú", "ghi_chu")}</div>
+            <div class="cuon cach-tren"><table><thead><tr><th>Hàng hóa</th><th class="so">Còn phải giao</th><th class="so">Tồn kho</th>
+              <th class="so">Giao lần này</th></tr></thead><tbody>{dg}</tbody></table></div>
+            <div class="hang-nut"><button class="nut">Lập phiếu giao hàng</button>
+              <span class="mo">Khách được nợ {han} ngày kể từ ngày giao. Kho tự xuất lô có hạn dùng gần nhất trước.</span></div></form></div>"""
+
+    # các phiếu đã giao
+    ph = {}
+    for r in dong_xuat(c, " AND o.id = ?", [did]):
+        p = ph.setdefault(r["px_id"], dict(r, hang=[], gia_tri=0))
+        p["gia_tri"] += r["so_luong"] * r["don_gia"]
+        lo = f' (lô {e(r["so_lo"])}{", HSD " + ngay(r["han_dung"]) if r["han_dung"] else ""})' if r["so_lo"] or r["han_dung"] else ""
+        p["hang"].append(f'{e(r["ma"] or r["ten"])} × {sl(r["so_luong"])}{lo}')
+    da_giao = ""
+    if ph:
+        dp = "".join(
+            f'<tr><td><b>{e(p["so_px"])}</b></td><td>{ngay(p["ngay"])}</td><td>{"<br>".join(p["hang"])}</td><td class="so">{tien(p["gia_tri"])}</td>'
+            f'<td>{ngay(p["han_tt"])}</td><td>{e(p["so_hoa_don"]) or "—"}</td><td class="thao-tac">'
+            + (nut_xoa(c, f'/phieu-xuat/{p["px_id"]}/xoa', f"Xóa phiếu giao {p['so_px']}? Công nợ và tồn kho của phiếu này sẽ được hoàn lại.")
+               if c.duoc_xoa else "") + '</td></tr>' for p in ph.values())
+        da_giao = ('<div class="the"><h2>Phiếu giao hàng <span class="dem">%d</span></h2><div class="cuon"><table><thead><tr><th>Số phiếu</th>'
+                   '<th>Ngày giao</th><th>Hàng</th><th class="so">Giá trị (đ)</th><th>Hạn thanh toán</th><th>Hóa đơn</th><th></th></tr></thead>'
+                   '<tbody>%s</tbody></table></div></div>' % (len(ph), dp))
+
+    # tìm hàng trong danh mục để thêm
+    kq_tim = ""
+    if tim:
+        dk, ts = dk_tim_hang(tim)
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 60", ts).fetchall()
+        if ds:
+            dh = "".join(
+                f'<tr><td>{e(h["ten_tm"] or h["ten"])}</td><td>{e(h["ma"])}</td><td>{e(h["nhan_hieu"])}</td><td>{e(h["quy_cach"])}</td>'
+                f'<td class="so">{tien(h["gia_ban"]) if h["gia_ban"] else ""}</td>{o_ton(h["id"])}'
+                f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{h["id"]}" aria-label="Số lượng đặt"></td></tr>' for h in ds)
+            kq_tim = (f'<form method="post" action="/don-hang/{did}/them">{an_csrf(c)}<div class="cuon"><table><thead><tr><th>Tên hàng</th>'
+                      '<th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Quy cách</th><th class="so">Giá bán (đ)</th><th class="so">Tồn kho</th>'
+                      f'<th class="so">Số lượng đặt</th></tr></thead><tbody>{dh}</tbody></table></div>'
+                      '<div class="hang-nut"><button class="nut">Thêm các hàng đã nhập số lượng</button></div></form>')
+        else:
+            kq_tim = '<p class="mo">Không có hàng nào khớp trong danh mục.</p>'
+    them = ""
+    if mo:
+        them = f"""<div class="the"><h2>Thêm hàng</h2>
+        <form class="bo-loc"><input type="search" name="tim" value="{e(tim)}" placeholder="Gõ tên, ký mã hiệu, nhãn hiệu… ví dụ: HIV khay" {"autofocus" if tim else ""}>
+          <button class="nut phu">Tìm</button></form>{kq_tim}</div>
+      <details class="the"><summary>Thêm hàng không có trong danh mục (không theo dõi tồn kho)</summary>
+        <form method="post" action="/don-hang/{did}/them-tay" class="luoi">{an_csrf(c)}
+          {o("Tên hàng", "ten", bat_buoc=True)}{o("Ký mã hiệu", "ma")}{o("Quy cách", "quy_cach")}
+          {o("Số lượng", "so_luong", kieu="number", bat_buoc=True, them='min="0" step="any"')}
+          {o("Đơn giá (đ)", "don_gia", kieu="number", them='min="0" step="any"')}
+          <div class="hang-nut"><button class="nut phu">Thêm dòng</button></div></form></details>"""
+    tu_bg = ""
+    if o_["bao_gia_id"]:
+        b = c.db.execute("SELECT so_bg FROM bao_gia WHERE id = ?", (o_["bao_gia_id"],)).fetchone()
+        tu_bg = f'<dt>Từ báo giá</dt><dd><a href="/bao-gia/{o_["bao_gia_id"]}">{e(b["so_bg"])}</a></dd>' if b else ""
+    xoa = nut_xoa(c, f"/don-hang/{did}/xoa", f"Xóa đơn hàng {o_['so_dh']}? Không khôi phục được.", "Xóa đơn hàng") if c.duoc_xoa and not ph else ""
+    return trang(c, f"Đơn hàng {o_['so_dh']}", f"""
+      <div class="dau-trang"><h1>Đơn hàng {e(o_["so_dh"])} {nhan_dh(o_)}</h1>
+        <a class="nut phu" href="/cong-no/{o_["khach_hang_id"]}">Công nợ của khách</a></div>
+      <div class="the"><dl class="thong-tin"><dt>Khách hàng</dt><dd><a href="/khach-hang/{o_["khach_hang_id"]}">{e(o_["khach"])}</a></dd>
+        <dt>Ngày đặt</dt><dd>{ngay(o_["ngay"])}</dd><dt>Phụ trách</dt><dd>{e(o_["phu_trach"] or "—")}</dd>
+        <dt>Giá trị / đã giao</dt><dd>{tien(o_["gia_tri"])} / {tien(o_["da_giao"])} đ</dd>{tu_bg}
+        {f'<dt>Ghi chú</dt><dd>{e(o_["ghi_chu"])}</dd>' if o_["ghi_chu"] else ""}</dl></div>
+      <div class="the"><h2>Hàng trong đơn <span class="dem">{len(dong)}</span></h2>{bang}</div>
+      {giao}{da_giao}{them}
+      <details class="the"><summary>Sửa thông tin, hủy đơn</summary>
+        <form method="post" action="/don-hang/{did}/sua" class="luoi">{an_csrf(c)}{o_dau_dh(c, o_)}
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>
+      {xoa}""", "dh")
+
+
+def dh_dong_luu(c, did):
+    lay_dh(c, did)
+    dong = dong_cua_dh(c, did)
+    xoa = c.form.get("xoa", "")
+    if xoa.isdigit():
+        if any(d["id"] == int(xoa) and d["da_giao"] > 0 for d in dong):
+            raise Loi(400, "Dòng này đã giao hàng nên không bỏ được.")
+        c.db.execute("DELETE FROM don_hang_dong WHERE id = ? AND don_hang_id = ?", (int(xoa), did))
+        c.db.commit()
+        return Chuyen(f"/don-hang/{did}", "Đã bỏ một dòng hàng.")
+    for d in dong:
+        n, gia = c.so(f"sl_{d['id']}", "Số lượng"), c.so(f"gia_{d['id']}", "Đơn giá")
+        if n < d["da_giao"] - 1e-9:
+            raise Loi(400, f"{d['ma'] or d['ten']}: đã giao {sl(d['da_giao'])}, số lượng đặt không thể nhỏ hơn.")
+        if d["da_giao"] > 0:
+            gia = d["don_gia"]
+        c.db.execute("UPDATE don_hang_dong SET so_luong = ?, don_gia = ? WHERE id = ?", (n, gia, d["id"]))
+    c.db.commit()
+    return Chuyen(f"/don-hang/{did}", "Đã lưu số lượng và giá.")
+
+
+def so_luong_theo_o(c, dau="sl_"):
+    """{id: số lượng} từ các ô sl_<id> có nhập số lớn hơn 0."""
+    kq = {}
+    for k in c.form:
+        if k.startswith(dau) and k[len(dau):].isdigit():
+            n = c.so(k, "Số lượng")
+            if n > 0:
+                kq[int(k[len(dau):])] = n
+    return kq
+
+
+def dh_them(c, did):
+    lay_dh(c, did)
+    sl_ = so_luong_theo_o(c)
+    if not sl_:
+        raise Loi(400, "Chưa nhập số lượng cho hàng nào.")
+    ids = list(sl_)[:200]
+    ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY id", ids).fetchall()
+    dh_them_dong(c, did, [dict(hang_hoa_id=h["id"], ma=h["ma"], ten=h["ten_tm"] or h["ten"], quy_cach=h["quy_cach"],
+                               so_luong=sl_[h["id"]], don_gia=h["gia_ban"] or 0) for h in ds])
+    c.db.commit()
+    return Chuyen(f"/don-hang/{did}", f"Đã thêm {len(ds)} hàng vào đơn, đơn giá lấy theo giá bán trong danh mục.")
+
+
+def dh_them_tay(c, did):
+    lay_dh(c, did)
+    dh_them_dong(c, did, [dict(hang_hoa_id=None, ma=c.chu("ma", "Ký mã hiệu", toi_da=200), ten=c.chu("ten", "Tên hàng", True),
+                               quy_cach=c.chu("quy_cach", "Quy cách", toi_da=200), so_luong=c.so("so_luong", "Số lượng", True),
+                               don_gia=c.so("don_gia", "Đơn giá"))])
+    c.db.commit()
+    return Chuyen(f"/don-hang/{did}", "Đã thêm một dòng hàng.")
+
+
+def dh_giao(c, did):
+    o_ = lay_dh(c, did)
+    if o_["trang_thai"] == "huy":
+        raise Loi(400, "Đơn hàng đã hủy.")
+    ng, so_px = c.ngay("ngay", "Ngày giao", True), c.chu("so_px", "Số phiếu xuất", True, 60)
+    ton = ton_kho(c)
+    co_kho = bool(ton)
+    them, thieu = [], []
+    for d in dong_cua_dh(c, did):
+        n = c.so(f"sl_{d['id']}", f"Số lượng {d['ma']}")
+        if n <= 0:
+            continue
+        con = d["so_luong"] - d["da_giao"]
+        if n > con + 1e-9:
+            raise Loi(400, f"{d['ma'] or d['ten']} chỉ còn {sl(con)} chưa giao, không thể giao {sl(n)}.")
+        if d["hang_hoa_id"]:
+            cac_lo, th = phan_lo(ton, d["hang_hoa_id"], n, ng)
+            them += [(d["id"], lo, hd, q) for lo, hd, q in cac_lo]
+            if th and co_kho:
+                thieu.append(f"{d['ma'] or d['ten']} (thiếu {sl(th)})")
+        else:
+            them.append((d["id"], "", "", n))
+    if not them:
+        raise Loi(400, "Chưa nhập số lượng giao cho hàng nào.")
+    han = o_["han_no"] if o_["han_no"] is not None else 30
+    han_tt = (date.fromisoformat(ng) + timedelta(days=han)).isoformat()
+    try:
+        pid = c.db.them("INSERT INTO phieu_xuat (so_px, don_hang_id, ngay, han_tt, so_hoa_don, ghi_chu, nguoi_nhap_id) VALUES (?,?,?,?,?,?,?)",
+                        (so_px, did, ng, han_tt, c.chu("so_hoa_don", "Số hóa đơn", toi_da=60), c.chu("ghi_chu", "Ghi chú"), c.user["id"]))
+    except LOI_TRUNG:
+        c.db.rollback()
+        raise Loi(400, f"Số phiếu xuất {so_px} đã có. Hãy đổi số khác.")
+    c.db.executemany("INSERT INTO phieu_xuat_dong (phieu_xuat_id, don_hang_dong_id, so_lo, han_dung, so_luong) VALUES (?,?,?,?,?)",
+                     [(pid,) + t for t in them])
+    c.db.commit()
+    tb = f"Đã lập phiếu giao {so_px}, hạn thanh toán {ngay(han_tt)}."
+    if thieu:
+        tb += " Lưu ý kho không đủ hàng còn hạn dùng: " + ", ".join(thieu) + " — phần thiếu được xuất không ghi lô."
+    return Chuyen(f"/don-hang/{did}", tb)
+
+
+def px_xoa(c, pid):
+    p = c.db.execute("SELECT * FROM phieu_xuat WHERE id = ?", (pid,)).fetchone()
+    if not p:
+        raise Loi(404, "Không tìm thấy phiếu giao hàng.")
+    lay_dh(c, p["don_hang_id"])
+    if not c.duoc_xoa:
+        raise Loi(403, "Bạn chưa được cấp quyền xóa. Hãy nhờ quản lý.")
+    c.db.execute("DELETE FROM phieu_xuat_dong WHERE phieu_xuat_id = ?", (pid,))
+    c.db.execute("DELETE FROM phieu_xuat WHERE id = ?", (pid,))
+    c.db.commit()
+    return Chuyen(f"/don-hang/{p['don_hang_id']}", f"Đã xóa phiếu giao {p['so_px']}.")
+
+
+# ───────────────────────── công nợ phải thu ─────────────────────────
+
+def dong_xuat(c, dk="", ts=()):
+    """Mọi dòng hàng đã giao kèm phiếu, đơn hàng — nền để tính công nợ và doanh số."""
+    return c.db.execute(
+        "SELECT x.so_luong, x.so_lo, x.han_dung, d.don_gia, d.hang_hoa_id, d.ma, d.ten, p.id AS px_id, p.so_px, p.ngay, p.han_tt, "
+        "p.so_hoa_don, o.id AS dh_id, o.so_dh, o.khach_hang_id, o.phu_trach_id "
+        "FROM phieu_xuat_dong x JOIN phieu_xuat p ON p.id = x.phieu_xuat_id JOIN don_hang_dong d ON d.id = x.don_hang_dong_id "
+        f"JOIN don_hang o ON o.id = p.don_hang_id WHERE 1=1{dk} ORDER BY p.ngay, p.id, x.id", ts).fetchall()
+
+
+def no_phai_thu(c, kid=None):
+    dk, ts = ("", []) if kid is None else (" AND o.khach_hang_id = ?", [kid])
+    nhom, ph = {}, {}
+    for r in dong_xuat(c, dk, ts):
+        if r["px_id"] not in ph:
+            ph[r["px_id"]] = dict(r, gia_tri=0)
+            nhom.setdefault(r["khach_hang_id"], {"phieu": [], "da_tra": 0})["phieu"].append(ph[r["px_id"]])
+        ph[r["px_id"]]["gia_tri"] += r["so_luong"] * r["don_gia"]
+    for t in c.db.execute("SELECT khach_hang_id, so_tien FROM thu_tien" + (" WHERE khach_hang_id = ?" if kid else ""), ts).fetchall():
+        nhom.setdefault(t["khach_hang_id"], {"phieu": [], "da_tra": 0})["da_tra"] += t["so_tien"]
+    return xep_no(nhom)
+
+
+def o_so_no(n, tu_tra="Đã thu"):
+    return f"""<div class="o-so">
+        <div class="the"><span>Còn nợ (đ)</span><b>{tien(n["con_no"])}</b></div>
+        <div class="the"><span>Trong đó quá hạn (đ)</span><b>{tien(n["qua_han"])}</b></div>
+        <div class="the"><span>Phát sinh (đ)</span><b>{tien(n["phat_sinh"])}</b></div>
+        <div class="the"><span>{tu_tra} (đ)</span><b>{tien(n["da_tra"])}</b></div></div>"""
+
+
+def cong_no(c):
+    nhom = no_phai_thu(c)
+    ten = {k["id"]: k["ten"] for k in c.db.execute("SELECT id, ten FROM khach_hang").fetchall()}
+    if not nhom:
+        than = '<div class="the trong">Chưa có công nợ. Công nợ phát sinh khi lập phiếu giao hàng trong đơn hàng.</div>'
+    else:
+        tong = dict(con_no=sum(n["con_no"] - n["tra_thua"] for n in nhom.values()), qua_han=sum(n["qua_han"] for n in nhom.values()),
+                    phat_sinh=sum(n["phat_sinh"] for n in nhom.values()), da_tra=sum(n["da_tra"] for n in nhom.values()))
+        than = o_so_no(tong) + '<h2>Theo khách hàng và tuổi nợ</h2>' + bang_no(nhom, ten, "/cong-no")
+    return trang(c, "Công nợ phải thu", f"""
+      <h1>Công nợ phải thu</h1>
+      <p class="mo">Bấm tên khách để xem từng phiếu giao và ghi phiếu thu. Tiền thu được trừ vào phiếu giao cũ nhất trước.</p>{than}""", "cn")
+
+
+def cong_no_xem(c, kid):
+    k = c.db.execute("SELECT * FROM khach_hang WHERE id = ?", (kid,)).fetchone()
+    if not k:
+        raise Loi(404, "Không tìm thấy khách hàng.")
+    n = no_phai_thu(c, kid).get(kid) or xep_no({0: {"phieu": [], "da_tra": 0}})[0]
+    dong = "".join(
+        f'<tr><td><b>{e(p["so_px"])}</b></td><td><a href="/don-hang/{p["dh_id"]}">{e(p["so_dh"])}</a></td><td>{ngay(p["ngay"])}</td>'
+        f'<td>{e(p["so_hoa_don"]) or "—"}</td><td class="so">{tien(p["gia_tri"])}</td><td class="so">{tien(p["con_lai"])}</td>'
+        f'<td>{ngay(p["han_tt"])}</td><td>{nhan_no(p)}</td></tr>' for p in reversed(n["phieu"]))
+    bang = ('<div class="cuon"><table><thead><tr><th>Phiếu giao</th><th>Đơn hàng</th><th>Ngày giao</th><th>Hóa đơn</th>'
+            '<th class="so">Giá trị (đ)</th><th class="so">Còn nợ</th><th>Hạn thanh toán</th><th>Tình trạng</th></tr></thead>'
+            f'<tbody>{dong}</tbody></table></div>') if n["phieu"] else '<p class="mo">Chưa có phiếu giao hàng nào.</p>'
+    thu = c.db.execute("SELECT * FROM thu_tien WHERE khach_hang_id = ? ORDER BY ngay DESC, id DESC", (kid,)).fetchall()
+    thua = f'<p class="thong-bao">Khách đang trả thừa {tien(n["tra_thua"])} đ, sẽ trừ vào lần giao hàng tới.</p>' if n["tra_thua"] else ""
+    return trang(c, f"Công nợ {k['ten']}", f"""
+      <div class="dau-trang"><h1>Công nợ: {e(k["ten"])}</h1><a class="nut phu" href="/don-hang?kh={kid}">Đơn hàng của khách</a></div>
+      <p class="mo">Khách được nợ {k["han_no"] if k["han_no"] is not None else 30} ngày kể từ ngày giao
+        (đổi ở <a href="/khach-hang/{kid}">thông tin khách hàng</a>).</p>
+      {o_so_no(n)}{thua}
+      <div class="the cach-tren"><h2>Ghi phiếu thu</h2><form method="post" action="/cong-no/{kid}/thu" class="luoi">{an_csrf(c)}
+        {o_tien(c, "PT", "thu_tien", "so_pt")}<div class="hang-nut"><button class="nut">Ghi thu tiền</button></div></form></div>
+      <div class="the"><h2>Phiếu giao hàng <span class="dem">{len(n["phieu"])}</span></h2>{bang}</div>
+      <div class="the"><h2>Phiếu thu <span class="dem">{len(thu)}</span></h2>{bang_tien(c, thu, "so_pt", "/thu-tien")}</div>""", "cn")
+
+
+def thu_tien_them(c, kid):
+    if not c.db.execute("SELECT 1 FROM khach_hang WHERE id = ?", (kid,)).fetchone():
+        raise Loi(404, "Không tìm thấy khách hàng.")
+    so, tien_ = luu_tien(c, "thu_tien", "so_pt", "khach_hang_id", kid)
+    return Chuyen(f"/cong-no/{kid}", f"Đã ghi phiếu thu {so}: {tien(tien_)} đ.")
+
+
+def thu_tien_xoa(c, tid):
+    t = c.db.execute("SELECT * FROM thu_tien WHERE id = ?", (tid,)).fetchone()
+    if not t:
+        raise Loi(404, "Không tìm thấy phiếu thu.")
+    c.db.execute("DELETE FROM thu_tien WHERE id = ?", (tid,))
+    c.db.commit()
+    return Chuyen(f"/cong-no/{t['khach_hang_id']}", f"Đã xóa phiếu thu {t['so_pt']}.")
+
+
+# ───────────────────────── nhà cung cấp, nhập kho, nợ phải trả ─────────────────────────
+
+COT_NCC = [("ten", "Tên nhà cung cấp", 300), ("ma_so_thue", "Mã số thuế", 20), ("dia_chi", "Địa chỉ", 500), ("lien_he", "Người liên hệ", 100),
+           ("dien_thoai", "Điện thoại", 50), ("email", "Email", 200), ("ghi_chu", "Ghi chú", 1000)]
+
+
+def o_ncc(n=None):
+    return "".join(o(nhan, t, n[t] if n else "", bat_buoc=(t == "ten")) for t, nhan, _ in COT_NCC)
+
+
+def doc_ncc(c):
+    return [c.chu(t, nhan, t == "ten", dai) for t, nhan, dai in COT_NCC]
+
+
+def nha_cung_cap(c):
+    if c.method == "POST":
+        try:
+            c.db.execute(f"INSERT INTO nha_cung_cap ({', '.join(t for t, _, _ in COT_NCC)}) VALUES ({', '.join('?' * len(COT_NCC))})", doc_ncc(c))
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, "Đã có nhà cung cấp trùng tên này.")
+        c.db.commit()
+        return Chuyen("/nha-cung-cap", "Đã thêm nhà cung cấp.")
+    ds = c.db.execute("SELECT * FROM nha_cung_cap ORDER BY ten").fetchall()
+    dong = "".join(f'<tr><td><a href="/nha-cung-cap/{n["id"]}">{e(n["ten"])}</a></td><td>{e(n["ma_so_thue"])}</td><td>{e(n["lien_he"])}</td>'
+                   f'<td>{e(n["dien_thoai"])}</td><td class="thao-tac"><a href="/phai-tra/{n["id"]}">Công nợ</a></td></tr>' for n in ds)
+    bang = ('<div class="the cuon"><table><thead><tr><th>Tên</th><th>Mã số thuế</th><th>Liên hệ</th><th>Điện thoại</th><th></th></tr></thead>'
+            f'<tbody>{dong}</tbody></table></div>') if ds else '<div class="the trong">Chưa có nhà cung cấp nào. Thêm ở bên dưới.</div>'
+    return trang(c, "Nhà cung cấp", f"""
+      <h1>Nhà cung cấp <span class="dem">{len(ds)}</span></h1>{bang}
+      <div class="the"><h2>Thêm nhà cung cấp</h2><form method="post" class="luoi">{an_csrf(c)}{o_ncc()}
+        <div class="hang-nut"><button class="nut">Thêm</button></div></form></div>""", "ncc")
+
+
+def lay_ncc(c, nid):
+    n = c.db.execute("SELECT * FROM nha_cung_cap WHERE id = ?", (nid,)).fetchone()
+    if not n:
+        raise Loi(404, "Không tìm thấy nhà cung cấp.")
+    return n
+
+
+def ncc_sua(c, nid):
+    n = lay_ncc(c, nid)
+    if c.method == "POST":
+        try:
+            c.db.execute(f"UPDATE nha_cung_cap SET {', '.join(t + ' = ?' for t, _, _ in COT_NCC)} WHERE id = ?", doc_ncc(c) + [nid])
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, "Đã có nhà cung cấp trùng tên này.")
+        c.db.commit()
+        return Chuyen("/nha-cung-cap", "Đã lưu.")
+    return trang(c, n["ten"], f"""
+      <div class="dau-trang"><h1>{e(n["ten"])}</h1><a class="nut phu" href="/phai-tra/{nid}">Công nợ</a></div>
+      <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_ncc(n)}
+        <div class="hang-nut"><button class="nut">Lưu</button><a href="/nha-cung-cap">Hủy</a></div></form></div>""", "ncc")
+
+
+SQL_PN = ("SELECT p.*, n.ten AS ncc, "
+          "(SELECT COUNT(*) FROM phieu_nhap_dong d WHERE d.phieu_nhap_id = p.id) AS so_dong, "
+          "COALESCE((SELECT SUM(d.so_luong * d.don_gia) FROM phieu_nhap_dong d WHERE d.phieu_nhap_id = p.id), 0) AS gia_tri "
+          "FROM phieu_nhap p LEFT JOIN nha_cung_cap n ON n.id = p.nha_cung_cap_id WHERE 1=1")
+
+
+def lay_pn(c, pid):
+    p = c.db.execute(SQL_PN + " AND p.id = ?", (pid,)).fetchone()
+    if not p:
+        raise Loi(404, "Không tìm thấy phiếu nhập.")
+    return p
+
+
+def ds_nhap_kho(c):
+    ds = c.db.execute(SQL_PN + " ORDER BY p.ngay DESC, p.id DESC").fetchall()
+    dong = "".join(
+        f'<tr><td><a href="/nhap-kho/{p["id"]}"><b>{e(p["so_pn"])}</b></a></td><td>{ngay(p["ngay"])}</td>'
+        f'<td>{e(p["ncc"]) if p["ncc"] else "<span class=mo>Tồn đầu kỳ / nhập khác</span>"}</td><td>{e(p["so_hoa_don"]) or "—"}</td>'
+        f'<td class="so">{p["so_dong"]}</td><td class="so">{tien(p["gia_tri"])}</td></tr>' for p in ds)
+    bang = ('<div class="the cuon"><table><thead><tr><th>Số phiếu</th><th>Ngày nhập</th><th>Nhà cung cấp</th><th>Hóa đơn</th>'
+            f'<th class="so">Mặt hàng</th><th class="so">Giá trị (đ)</th></tr></thead><tbody>{dong}</tbody></table></div>') if ds else (
+        '<div class="the trong">Chưa có phiếu nhập nào. Lập phiếu đầu tiên để ghi tồn đầu kỳ hoặc hàng mua về.</div>')
+    return trang(c, "Nhập kho", f"""
+      <div class="dau-trang"><h1>Nhập kho / mua hàng <span class="dem">{len(ds)}</span></h1><a class="nut" href="/nhap-kho/moi">Lập phiếu nhập</a></div>
+      {bang}""", "pn")
+
+
+def o_dau_pn(c, p=None):
+    g = (lambda k, md="": p[k] if p else md)
+    ncc = c.db.execute("SELECT id, ten FROM nha_cung_cap ORDER BY ten").fetchall()
+    return f"""
+      {o("Số phiếu nhập", "so_pn", g("so_pn", so_tiep(c, "phieu_nhap", "so_pn", "PN")), bat_buoc=True)}
+      {o("Ngày nhập", "ngay", g("ngay", date.today().isoformat()), "date", True)}
+      <label>Nhà cung cấp{chon("nha_cung_cap_id", [(n["id"], n["ten"]) for n in ncc], g("nha_cung_cap_id") or "", "Không có (tồn đầu kỳ / nhập khác)")}</label>
+      {o("Số hóa đơn mua", "so_hoa_don", g("so_hoa_don"))}{o("Hạn thanh toán", "han_tt", g("han_tt"), "date")}
+      {o("Ghi chú", "ghi_chu", g("ghi_chu"))}"""
+
+
+def doc_dau_pn(c, p=None):
+    gt = {"so_pn": c.chu("so_pn", "Số phiếu nhập", True, 60), "ngay": c.ngay("ngay", "Ngày nhập", True),
+          "so_hoa_don": c.chu("so_hoa_don", "Số hóa đơn", toi_da=60), "han_tt": c.ngay("han_tt", "Hạn thanh toán"),
+          "ghi_chu": c.chu("ghi_chu", "Ghi chú", toi_da=1000), "nha_cung_cap_id": None}
+    v = c.form.get("nha_cung_cap_id", "")
+    if v.isdigit():
+        gt["nha_cung_cap_id"] = lay_ncc(c, int(v))["id"]
+    trung = c.db.execute("SELECT id FROM phieu_nhap WHERE so_pn = ?", (gt["so_pn"],)).fetchone()
+    if trung and (not p or trung["id"] != p["id"]):
+        raise Loi(400, f"Số phiếu nhập {gt['so_pn']} đã có. Hãy đổi số khác.")
+    return gt
+
+
+def pn_moi(c):
+    if c.method == "POST":
+        gt = doc_dau_pn(c)
+        gt["nguoi_nhap_id"] = c.user["id"]
+        try:
+            pid = c.db.them(f"INSERT INTO phieu_nhap ({', '.join(gt)}) VALUES ({', '.join('?' * len(gt))})", list(gt.values()))
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, f"Số phiếu nhập {gt['so_pn']} đã có. Hãy đổi số khác.")
+        c.db.commit()
+        return Chuyen(f"/nhap-kho/{pid}", "Đã tạo phiếu nhập. Tìm hàng rồi nhập số lượng, số lô, hạn dùng bên dưới.")
+    return trang(c, "Lập phiếu nhập", f"""
+      <h1>Lập phiếu nhập kho</h1>
+      <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_dau_pn(c)}
+        <div class="hang-nut"><button class="nut">Tạo và chọn hàng</button><a href="/nhap-kho">Hủy</a></div></form></div>
+      <p class="mo">Chọn nhà cung cấp thì giá trị phiếu được tính vào nợ phải trả. Để trống khi nhập tồn đầu kỳ.
+        Chưa có nhà cung cấp trong danh sách? <a href="/nha-cung-cap">Thêm nhà cung cấp</a> trước.</p>""", "pn")
+
+
+def pn_xem(c, pid):
+    p = lay_pn(c, pid)
+    tim = c.q.get("tim", "")
+    dong = c.db.execute("SELECT d.*, h.ten, h.ten_tm, h.ma, h.quy_cach FROM phieu_nhap_dong d JOIN hang_hoa h ON h.id = d.hang_hoa_id "
+                        "WHERE d.phieu_nhap_id = ? ORDER BY d.id", (pid,)).fetchall()
+    hang = "".join(
+        f'<tr><td class="so">{i}</td><td>{e(d["ten_tm"] or d["ten"])}<br><span class="mo">{e(d["ma"])} · {e(d["quy_cach"])}</span></td>'
+        f'<td>{e(d["so_lo"]) or "—"}</td><td>{ngay(d["han_dung"]) or "—"}</td><td class="so">{sl(d["so_luong"])}</td>'
+        f'<td class="so">{tien(d["don_gia"])}</td><td class="so">{tien(d["so_luong"] * d["don_gia"])}</td>'
+        f'<td class="thao-tac"><button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button></td></tr>' for i, d in enumerate(dong, 1))
+    bang = (f'<form method="post" action="/nhap-kho/{pid}/dong">{an_csrf(c)}<div class="cuon"><table><thead><tr><th class="so">STT</th><th>Hàng hóa</th>'
+            '<th>Số lô</th><th>Hạn dùng</th><th class="so">Số lượng</th><th class="so">Giá nhập (đ)</th><th class="so">Thành tiền</th><th></th></tr></thead>'
+            f'<tbody>{hang}<tr><td colspan="6" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(p["gia_tri"])}</b></td><td></td></tr>'
+            '</tbody></table></div></form>') if dong else '<p class="mo">Chưa có hàng nào. Tìm hàng ở mục Thêm hàng bên dưới.</p>'
+    kq_tim = ""
+    if tim:
+        dk, ts = dk_tim_hang(tim)
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 40", ts).fetchall()
+        if ds:
+            dh = "".join(
+                f'<tr><td>{e(h["ten_tm"] or h["ten"])}<br><span class="mo">{e(h["ma"])} · {e(h["quy_cach"])}</span></td>'
+                f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{h["id"]}" aria-label="Số lượng"></td>'
+                f'<td><input class="o-nho" name="lo_{h["id"]}" maxlength="60" aria-label="Số lô"></td>'
+                f'<td><input type="date" name="hd_{h["id"]}" aria-label="Hạn dùng"></td>'
+                f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="gia_{h["id"]}" aria-label="Giá nhập"></td></tr>' for h in ds)
+            kq_tim = (f'<form method="post" action="/nhap-kho/{pid}/them">{an_csrf(c)}<div class="cuon"><table><thead><tr><th>Hàng hóa</th>'
+                      '<th class="so">Số lượng</th><th>Số lô</th><th>Hạn dùng</th><th class="so">Giá nhập (đ)</th></tr></thead>'
+                      f'<tbody>{dh}</tbody></table></div><div class="hang-nut"><button class="nut">Thêm các hàng đã nhập số lượng</button>'
+                      '<span class="mo">Một hàng có nhiều lô: thêm lô thứ nhất, rồi tìm lại và thêm lô tiếp theo.</span></div></form>')
+        else:
+            kq_tim = '<p class="mo">Không có hàng nào khớp trong danh mục. Hàng mới cần được thêm vào mục Hàng hóa trước.</p>'
+    return trang(c, f"Phiếu nhập {p['so_pn']}", f"""
+      <h1>Phiếu nhập {e(p["so_pn"])}</h1>
+      <div class="the"><dl class="thong-tin"><dt>Ngày nhập</dt><dd>{ngay(p["ngay"])}</dd>
+        <dt>Nhà cung cấp</dt><dd>{f'<a href="/phai-tra/{p["nha_cung_cap_id"]}">{e(p["ncc"])}</a>' if p["ncc"] else "Không có (tồn đầu kỳ / nhập khác)"}</dd>
+        <dt>Hóa đơn</dt><dd>{e(p["so_hoa_don"]) or "—"}</dd><dt>Hạn thanh toán</dt><dd>{ngay(p["han_tt"]) or "—"}</dd>
+        {f'<dt>Ghi chú</dt><dd>{e(p["ghi_chu"])}</dd>' if p["ghi_chu"] else ""}</dl></div>
+      <div class="the"><h2>Hàng nhập <span class="dem">{len(dong)}</span></h2>{bang}</div>
+      <div class="the"><h2>Thêm hàng</h2>
+        <form class="bo-loc"><input type="search" name="tim" value="{e(tim)}" placeholder="Gõ tên, ký mã hiệu, nhãn hiệu…" {"autofocus" if tim else ""}>
+          <button class="nut phu">Tìm</button></form>{kq_tim}</div>
+      <details class="the"><summary>Sửa thông tin phiếu</summary>
+        <form method="post" action="/nhap-kho/{pid}/sua" class="luoi">{an_csrf(c)}{o_dau_pn(c, p)}
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>
+      {nut_xoa(c, f"/nhap-kho/{pid}/xoa", f"Xóa phiếu nhập {p['so_pn']} cùng mọi dòng hàng? Tồn kho và nợ nhà cung cấp sẽ giảm theo.", "Xóa phiếu nhập")}""", "pn")
+
+
+def pn_them(c, pid):
+    lay_pn(c, pid)
+    sl_ = so_luong_theo_o(c)
+    if not sl_:
+        raise Loi(400, "Chưa nhập số lượng cho hàng nào.")
+    ids = list(sl_)[:200]
+    co = [h["id"] for h in c.db.execute(f"SELECT id FROM hang_hoa WHERE id IN ({', '.join('?' * len(ids))})", ids).fetchall()]
+    c.db.executemany("INSERT INTO phieu_nhap_dong (phieu_nhap_id, hang_hoa_id, so_lo, han_dung, so_luong, don_gia) VALUES (?,?,?,?,?,?)",
+                     [(pid, i, c.chu(f"lo_{i}", "Số lô", toi_da=60), c.ngay(f"hd_{i}", "Hạn dùng"), sl_[i], c.so(f"gia_{i}", "Giá nhập")) for i in co])
+    c.db.commit()
+    return Chuyen(f"/nhap-kho/{pid}", f"Đã thêm {len(co)} dòng hàng vào phiếu nhập.")
+
+
+def pn_dong_xoa(c, pid):
+    lay_pn(c, pid)
+    xoa = c.form.get("xoa", "")
+    if xoa.isdigit():
+        c.db.execute("DELETE FROM phieu_nhap_dong WHERE id = ? AND phieu_nhap_id = ?", (int(xoa), pid))
+        c.db.commit()
+    return Chuyen(f"/nhap-kho/{pid}", "Đã bỏ một dòng hàng.")
+
+
+def pn_sua(c, pid):
+    p = lay_pn(c, pid)
+    gt = doc_dau_pn(c, p)
+    c.db.execute(f"UPDATE phieu_nhap SET {', '.join(k + ' = ?' for k in gt)} WHERE id = ?", list(gt.values()) + [pid])
+    c.db.commit()
+    return Chuyen(f"/nhap-kho/{pid}", "Đã lưu thông tin phiếu nhập.")
+
+
+def pn_xoa(c, pid):
+    p = lay_pn(c, pid)
+    c.db.execute("DELETE FROM phieu_nhap_dong WHERE phieu_nhap_id = ?", (pid,))
+    c.db.execute("DELETE FROM phieu_nhap WHERE id = ?", (pid,))
+    c.db.commit()
+    return Chuyen("/nhap-kho", f"Đã xóa phiếu nhập {p['so_pn']}.")
+
+
+def no_phai_tra(c, nid=None):
+    dk, ts = ("", []) if nid is None else (" AND p.nha_cung_cap_id = ?", [nid])
+    nhom = {}
+    for p in c.db.execute(SQL_PN + " AND p.nha_cung_cap_id IS NOT NULL" + dk + " ORDER BY p.ngay, p.id", ts).fetchall():
+        nhom.setdefault(p["nha_cung_cap_id"], {"phieu": [], "da_tra": 0})["phieu"].append(dict(p))
+    for t in c.db.execute("SELECT nha_cung_cap_id, so_tien FROM chi_tien" + (" WHERE nha_cung_cap_id = ?" if nid else ""), ts).fetchall():
+        nhom.setdefault(t["nha_cung_cap_id"], {"phieu": [], "da_tra": 0})["da_tra"] += t["so_tien"]
+    return xep_no(nhom)
+
+
+def phai_tra(c):
+    nhom = no_phai_tra(c)
+    ten = {n["id"]: n["ten"] for n in c.db.execute("SELECT id, ten FROM nha_cung_cap").fetchall()}
+    if not nhom:
+        than = '<div class="the trong">Chưa có nợ nhà cung cấp. Nợ phát sinh khi lập phiếu nhập kho có chọn nhà cung cấp.</div>'
+    else:
+        tong = dict(con_no=sum(n["con_no"] - n["tra_thua"] for n in nhom.values()), qua_han=sum(n["qua_han"] for n in nhom.values()),
+                    phat_sinh=sum(n["phat_sinh"] for n in nhom.values()), da_tra=sum(n["da_tra"] for n in nhom.values()))
+        than = o_so_no(tong, "Đã trả") + '<h2>Theo nhà cung cấp và tuổi nợ</h2>' + bang_no(nhom, ten, "/phai-tra")
+    return trang(c, "Nợ nhà cung cấp", f"""
+      <h1>Nợ nhà cung cấp</h1>
+      <p class="mo">Bấm tên nhà cung cấp để xem từng phiếu nhập và ghi phiếu chi. Phiếu không ghi hạn thanh toán thì tính hạn là ngày nhập.</p>{than}""", "pt")
+
+
+def phai_tra_xem(c, nid):
+    ncc = lay_ncc(c, nid)
+    n = no_phai_tra(c, nid).get(nid) or xep_no({0: {"phieu": [], "da_tra": 0}})[0]
+    dong = "".join(
+        f'<tr><td><a href="/nhap-kho/{p["id"]}"><b>{e(p["so_pn"])}</b></a></td><td>{ngay(p["ngay"])}</td><td>{e(p["so_hoa_don"]) or "—"}</td>'
+        f'<td class="so">{tien(p["gia_tri"])}</td><td class="so">{tien(p["con_lai"])}</td><td>{ngay(p["han_tt"] or p["ngay"])}</td>'
+        f'<td>{nhan_no(p)}</td></tr>' for p in reversed(n["phieu"]))
+    bang = ('<div class="cuon"><table><thead><tr><th>Phiếu nhập</th><th>Ngày nhập</th><th>Hóa đơn</th><th class="so">Giá trị (đ)</th>'
+            f'<th class="so">Còn nợ</th><th>Hạn thanh toán</th><th>Tình trạng</th></tr></thead><tbody>{dong}</tbody></table></div>'
+            ) if n["phieu"] else '<p class="mo">Chưa có phiếu nhập nào của nhà cung cấp này.</p>'
+    chi = c.db.execute("SELECT * FROM chi_tien WHERE nha_cung_cap_id = ? ORDER BY ngay DESC, id DESC", (nid,)).fetchall()
+    thua = f'<p class="thong-bao">Đang trả trước {tien(n["tra_thua"])} đ cho nhà cung cấp này.</p>' if n["tra_thua"] else ""
+    return trang(c, f"Nợ {ncc['ten']}", f"""
+      <div class="dau-trang"><h1>Nợ nhà cung cấp: {e(ncc["ten"])}</h1><a class="nut phu" href="/nha-cung-cap/{nid}">Thông tin</a></div>
+      {o_so_no(n, "Đã trả")}{thua}
+      <div class="the cach-tren"><h2>Ghi phiếu chi</h2><form method="post" action="/phai-tra/{nid}/chi" class="luoi">{an_csrf(c)}
+        {o_tien(c, "PC", "chi_tien", "so_pc")}<div class="hang-nut"><button class="nut">Ghi chi tiền</button></div></form></div>
+      <div class="the"><h2>Phiếu nhập <span class="dem">{len(n["phieu"])}</span></h2>{bang}</div>
+      <div class="the"><h2>Phiếu chi <span class="dem">{len(chi)}</span></h2>{bang_tien(c, chi, "so_pc", "/chi-tien")}</div>""", "pt")
+
+
+def chi_tien_them(c, nid):
+    lay_ncc(c, nid)
+    so, tien_ = luu_tien(c, "chi_tien", "so_pc", "nha_cung_cap_id", nid)
+    return Chuyen(f"/phai-tra/{nid}", f"Đã ghi phiếu chi {so}: {tien(tien_)} đ.")
+
+
+def chi_tien_xoa(c, tid):
+    t = c.db.execute("SELECT * FROM chi_tien WHERE id = ?", (tid,)).fetchone()
+    if not t:
+        raise Loi(404, "Không tìm thấy phiếu chi.")
+    c.db.execute("DELETE FROM chi_tien WHERE id = ?", (tid,))
+    c.db.commit()
+    return Chuyen(f"/phai-tra/{t['nha_cung_cap_id']}", f"Đã xóa phiếu chi {t['so_pc']}.")
+
+
+# ───────────────────────── báo cáo doanh số ─────────────────────────
+
+def bang_xep(tieu_de, cot, so_lieu, toi_da=None):
+    """Bảng xếp hạng: so_lieu = [(nhãn đã escape, giá trị)]."""
+    if not so_lieu:
+        return ""
+    lon = max(v for _, v in so_lieu) or 1
+    dong = "".join(f'<tr><td>{nhan}</td><td class="so">{tien(v)}</td><td><progress max="100" value="{round(100 * v / lon)}"></progress></td></tr>'
+                   for nhan, v in so_lieu[:toi_da])
+    an = f'<p class="mo">Hiện {toi_da} / {len(so_lieu)} dòng lớn nhất.</p>' if toi_da and len(so_lieu) > toi_da else ""
+    return (f'<div class="the"><h2>{tieu_de}</h2><div class="cuon"><table><thead><tr><th>{cot}</th><th class="so">Doanh số (đ)</th><th></th></tr></thead>'
+            f'<tbody>{dong}</tbody></table></div>{an}</div>')
+
+
+def doanh_so(c):
+    hom_nay = date.today()
+    try:
+        tu = date.fromisoformat(c.q.get("tu", "")).isoformat()
+    except ValueError:
+        tu = hom_nay.replace(month=1, day=1).isoformat()
+    try:
+        den = date.fromisoformat(c.q.get("den", "")).isoformat()
+    except ValueError:
+        den = hom_nay.isoformat()
+    dk, ts = " AND p.ngay >= ? AND p.ngay <= ?", [tu, den]
+    if not c.ql:
+        dk += " AND o.phu_trach_id = ?"
+        ts.append(c.user["id"])
+    ds = dong_xuat(c, dk, ts)
+    thang, nv, kh, hh, phieu = {}, {}, {}, {}, set()
+    for r in ds:
+        v = r["so_luong"] * r["don_gia"]
+        cong(thang, r["ngay"][:7], v)
+        cong(nv, r["phu_trach_id"], v)
+        cong(kh, r["khach_hang_id"], v)
+        cong(hh, (r["ma"], r["ten"]), v)
+        phieu.add(r["px_id"])
+    tong = sum(thang.values())
+    if not ds:
+        than = '<div class="the trong">Không có phiếu giao hàng nào trong khoảng thời gian này.</div>'
+    else:
+        ten_nv = {u["id"]: u["ho_ten"] for u in c.db.execute("SELECT id, ho_ten FROM nguoi_dung").fetchall()}
+        ten_kh = {k["id"]: k["ten"] for k in c.db.execute("SELECT id, ten FROM khach_hang").fetchall()}
+        giam = (lambda d: sorted(d.items(), key=lambda x: -x[1]))
+        than = f"""<div class="o-so">
+            <div class="the"><span>Doanh số (đ)</span><b>{tien(tong)}</b></div>
+            <div class="the"><span>Số phiếu giao</span><b>{len(phieu)}</b></div>
+            <div class="the"><span>Số khách mua</span><b>{len(kh)}</b></div>
+            <div class="the"><span>Bình quân mỗi phiếu (đ)</span><b>{tien(tong / len(phieu))}</b></div></div>
+          <div class="cach-tren">{bang_xep("Theo tháng", "Tháng", [(f"{k[5:]}/{k[:4]}", v) for k, v in sorted(thang.items())])}
+          {bang_xep("Theo nhân viên phụ trách", "Nhân viên", [(e(ten_nv.get(k, "Chưa phân công")), v) for k, v in giam(nv)]) if c.ql else ""}
+          {bang_xep("Theo khách hàng", "Khách hàng", [(f'<a href="/don-hang?kh={k}">{e(ten_kh.get(k, "?"))}</a>', v) for k, v in giam(kh)], 20)}
+          {bang_xep("Theo sản phẩm", "Sản phẩm", [(f'{e(k[1])} <span class="mo">{e(k[0])}</span>', v) for k, v in giam(hh)], 20)}</div>"""
+    return trang(c, "Báo cáo doanh số", f"""
+      <h1>Báo cáo doanh số</h1>
+      <p class="mo">Doanh số tính theo hàng đã giao (phiếu giao hàng), giá đã gồm VAT.
+        {"" if c.ql else "Bạn đang xem doanh số các đơn hàng mình phụ trách."}</p>
+      <form class="bo-loc"><label>Từ ngày <input type="date" name="tu" value="{tu}"></label>
+        <label>Đến ngày <input type="date" name="den" value="{den}"></label>
+        <button class="nut phu">Xem</button></form>
+      {than}""", "ds")
+
+
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
@@ -2375,7 +3466,7 @@ TUYEN = [
     ("GET|POST", r"/doi-mat-khau", doi_mat_khau, "nd"),
     ("GET", r"/", trang_chu, "nd"),
     ("GET", r"/tong-quan", tong_quan, "nd"),
-    ("GET", r"/muc/(hop-dong|bao-gia)", trang_muc, "nd"),
+    ("GET", r"/muc/(hop-dong|bao-gia|ban-hang|kho)", trang_muc, "nd"),
     ("GET", r"/hop-dong", ds_hop_dong, "nd"),
     ("GET|POST", r"/hop-dong/moi", hd_moi, "nd"),
     ("GET", r"/hop-dong/(\d+)", hd_xem, "nd"),
@@ -2403,6 +3494,35 @@ TUYEN = [
     ("GET", r"/bao-gia/(\d+)/tai", bg_tai, "nd"),
     ("POST", r"/bao-gia/(\d+)/google-doc", bg_google, "nd"),
     ("GET", r"/hang-hoa", hang_hoa, "nd"),
+    ("GET", r"/don-hang", ds_don_hang, "nd"),
+    ("GET|POST", r"/don-hang/moi", dh_moi, "nd"),
+    ("GET", r"/don-hang/(\d+)", dh_xem, "nd"),
+    ("POST", r"/don-hang/(\d+)/sua", dh_sua, "nd"),
+    ("POST", r"/don-hang/(\d+)/xoa", dh_xoa, "nd"),
+    ("POST", r"/don-hang/(\d+)/dong", dh_dong_luu, "nd"),
+    ("POST", r"/don-hang/(\d+)/them", dh_them, "nd"),
+    ("POST", r"/don-hang/(\d+)/them-tay", dh_them_tay, "nd"),
+    ("POST", r"/don-hang/(\d+)/giao", dh_giao, "nd"),
+    ("POST", r"/phieu-xuat/(\d+)/xoa", px_xoa, "nd"),
+    ("GET", r"/cong-no", cong_no, "nd"),
+    ("GET", r"/cong-no/(\d+)", cong_no_xem, "nd"),
+    ("POST", r"/cong-no/(\d+)/thu", thu_tien_them, "nd"),
+    ("POST", r"/thu-tien/(\d+)/xoa", thu_tien_xoa, "ql"),
+    ("GET", r"/doanh-so", doanh_so, "nd"),
+    ("GET", r"/kho", kho, "nd"),
+    ("GET", r"/nhap-kho", ds_nhap_kho, "ql"),
+    ("GET|POST", r"/nhap-kho/moi", pn_moi, "ql"),
+    ("GET", r"/nhap-kho/(\d+)", pn_xem, "ql"),
+    ("POST", r"/nhap-kho/(\d+)/sua", pn_sua, "ql"),
+    ("POST", r"/nhap-kho/(\d+)/xoa", pn_xoa, "ql"),
+    ("POST", r"/nhap-kho/(\d+)/them", pn_them, "ql"),
+    ("POST", r"/nhap-kho/(\d+)/dong", pn_dong_xoa, "ql"),
+    ("GET|POST", r"/nha-cung-cap", nha_cung_cap, "ql"),
+    ("GET|POST", r"/nha-cung-cap/(\d+)", ncc_sua, "ql"),
+    ("GET", r"/phai-tra", phai_tra, "ql"),
+    ("GET", r"/phai-tra/(\d+)", phai_tra_xem, "ql"),
+    ("POST", r"/phai-tra/(\d+)/chi", chi_tien_them, "ql"),
+    ("POST", r"/chi-tien/(\d+)/xoa", chi_tien_xoa, "ql"),
     ("GET|POST", r"/hang-hoa/nhap", nhap_hang, "ql"),
     ("GET|POST", r"/mau-hop-dong", mau_hop_dong, "ql"),
     ("GET", r"/mau-hop-dong/tai", mau_tai, "ql"),
