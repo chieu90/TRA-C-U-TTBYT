@@ -49,6 +49,12 @@ function layMau_(url) {
     });
     if (r.getResponseCode() !== 200) throw new Error('Không xuất được file Word từ Google Docs (mã ' + r.getResponseCode() + ').');
     blob = r.getBlob();
+  } else if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {      // bảng giá: xuất cả file ra Excel
+    const r = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx', {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true
+    });
+    if (r.getResponseCode() !== 200) throw new Error('Không xuất được file Excel từ Google Sheet (mã ' + r.getResponseCode() + ').');
+    blob = r.getBlob();
   } else {
     blob = f.getBlob();
   }

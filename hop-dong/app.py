@@ -1880,11 +1880,51 @@ def khoa_hang(h):
     return gap(h["ma"]) or gap(h["ten_tm"]) or gap(h["ten"])
 
 
+ID_GOOGLE_RE = re.compile(r"/d/([\w-]{20,})|[?&]id=([\w-]{20,})")
+
+
+def tai_bang_tu_link(c, url):
+    """Lấy file Excel của một Google Sheet / file trên Drive: qua Apps Script (file riêng tư), không được thì thử link công khai."""
+    m = ID_GOOGLE_RE.search(url)
+    if not re.match(r"https://(docs|drive)\.google\.com/", url) or not m:
+        raise Loi(400, "Hãy dán link Google Sheet hoặc Google Drive (bắt đầu bằng https://docs.google.com/ …).")
+    fid, ban_cu = m.group(1) or m.group(2), False
+    if da_ket_noi(c):
+        kq = goi_google(c, "lay_mau", url=url)
+        try:
+            dl = base64.b64decode(kq.get("docx") or "")
+        except ValueError:
+            dl = b""
+        if dl[:2] == b"PK":
+            return dl
+        ban_cu = kq.get("loai") == "application/vnd.google-apps.spreadsheet"
+    for u in (f"https://docs.google.com/spreadsheets/d/{fid}/export?format=xlsx",
+              f"https://drive.google.com/uc?export=download&id={fid}"):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "hop-dong-app"}), timeout=30) as r:
+                dl = r.read(8_000_000)
+        except (urllib.error.URLError, TimeoutError, OSError):
+            continue
+        if dl[:2] == b"PK":
+            return dl
+    if ban_cu:
+        raise Loi(400, "Đoạn mã Apps Script đang chạy là bản cũ, chưa đọc được Google Sheet. Vào mục Mẫu hợp đồng chép đoạn mã "
+                       "mới, dán đè trong Apps Script, bấm Lưu, rồi Triển khai → Quản lý các lần triển khai → bút chì → "
+                       "Phiên bản: Phiên bản mới → Triển khai. Link /exec giữ nguyên. Sau đó quay lại bấm Nhập từ link.")
+    raise Loi(400, "Không đọc được file ở link. Link cần là Google Sheet hoặc file Excel trên Drive của tài khoản đã kết nối "
+                   "với app (mục Mẫu hợp đồng), hoặc được chia sẻ \"Bất kỳ ai có đường liên kết\".")
+
+
 def nhap_hang(c):
+    link_cu = doc_cd(c, "hang_link")
     if c.method == "POST":
         ten_tep, dl = c.tep.get("tep", ("", b""))
+        link = c.link("link", "Link Google Sheet")
+        if not dl and not link:
+            raise Loi(400, "Chưa dán link và chưa chọn file.")
         if not dl:
-            raise Loi(400, "Chưa chọn file.")
+            dl, ten_tep = tai_bang_tu_link(c, link), "bang-gia.xlsx"
+            ghi_cd(c, "hang_link", link)
         try:
             trang_tinh = [("", doc_csv(dl))] if ten_tep.lower().endswith(".csv") else doc_xlsx(dl, moi_trang=True)
         except (zipfile.BadZipFile, KeyError, ET.ParseError, StopIteration, ValueError, IndexError):
@@ -1932,13 +1972,16 @@ def nhap_hang(c):
     return trang(c, "Nhập hàng hóa", f"""
       <h1>Nhập danh mục hàng hóa</h1>
       <div class="the"><form method="post" enctype="multipart/form-data" class="luoi-1">{an_csrf(c)}
-        <label>File Excel (.xlsx) hoặc .csv<input type="file" name="tep" accept=".xlsx,.csv" required></label>
-        <label class="o-tich"><input type="checkbox" name="thay_het" value="1"> Thay toàn bộ danh mục bằng file này
+        <label>Link Google Sheet (hoặc file Excel trên Google Drive)<input type="url" name="link" value="{e(link_cu)}"
+          placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+        <label>Hoặc chọn file Excel (.xlsx) / .csv từ máy<input type="file" name="tep" accept=".xlsx,.csv"></label>
+        <label class="o-tich"><input type="checkbox" name="thay_het" value="1"> Thay toàn bộ danh mục bằng bảng này
           (xóa hàng không còn trong file; báo giá đã soạn không bị ảnh hưởng)</label>
         <div class="hang-nut"><button class="nut">Nhập</button><a href="/hang-hoa">Hủy</a></div></form></div>
-      <div class="the"><h2>File cần có</h2>
-        <p>Từ Google Sheet: <b>Tệp → Tải xuống → Microsoft Excel (.xlsx)</b> rồi chọn file đó ở trên.
-        App tự tìm trang tính có bảng giá (ưu tiên trang tên "BÁO GIÁ") và hàng tiêu đề.</p>
+      <div class="the"><h2>Bảng cần có</h2>
+        <p>Dán link Google Sheet bảng giá rồi bấm Nhập. App đọc sheet bằng tài khoản Google đã kết nối ở mục Mẫu hợp đồng,
+        nên sheet không cần chia sẻ công khai. App nhớ link này: khi giá đổi chỉ cần vào đây bấm Nhập lại.</p>
+        <p>App tự tìm trang tính có bảng giá (ưu tiên trang tên "BÁO GIÁ") và hàng tiêu đề.</p>
         <p>Các cột nhận theo tiêu đề: Tên TTBYT, Tên thương mại, Ký mã hiệu, Nhãn hiệu, Nước sản xuất, Phân loại TBYT, HSD,
         Quy cách, Giá bán, Giá Min, Giá Max. Cột khác bị bỏ qua.</p>
         <p class="mo">Hàng trùng ký mã hiệu với hàng đã có thì được cập nhật thông tin và giá mới, không tạo dòng thứ hai.</p></div>""", "hh")
@@ -1991,8 +2034,8 @@ def hang_hoa(c):
         bang = '<div class="the trong">Không có hàng nào khớp.</div>'
     else:
         bang = ('<div class="the trong">Chưa có danh mục hàng hóa. '
-                + ('Bấm <b>Nhập từ Excel</b> để đưa bảng giá vào.' if c.ql else 'Quản lý cần nhập bảng giá từ Excel.') + '</div>')
-    nhap = '<a class="nut phu" href="/hang-hoa/nhap">Nhập từ Excel</a>' if c.ql else ""
+                + ('Bấm <b>Nhập từ link / Excel</b> để đưa bảng giá vào.' if c.ql else 'Quản lý cần nhập bảng giá.') + '</div>')
+    nhap = '<a class="nut phu" href="/hang-hoa/nhap">Nhập từ link / Excel</a>' if c.ql else ""
     return trang(c, "Hàng hóa", f"""
       <div class="dau-trang"><h1>Hàng hóa <span class="dem">{n}</span></h1>{nhap}</div>
       <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Tên, tên thương mại, ký mã hiệu…">
