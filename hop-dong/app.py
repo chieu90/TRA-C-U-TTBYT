@@ -468,6 +468,8 @@ def trang(c, tieu_de, than, muc=""):
             ten_muc = f'<a class="ten-muc" href="/muc/{ud[0]}">{e(ud[1])}</a>'
             lk = "".join(f'<a href="{u}"{" class=chon" if m == muc else ""}>{t}</a>'
                          for u, t, m, _, chi_ql in ud[3] if c.ql or not chi_ql)
+            if muc.startswith("muc:"):                   # trang thư mục đã có các ô icon, không lặp lại menu
+                lk = ""
         elif muc == "nd":
             ten_muc = '<a class="ten-muc" href="/nguoi-dung">Người dùng</a>'
         nav = (f'<header><div class="khung dau"><a class="ten-app" href="/" title="Trang chủ" aria-label="Trang chủ">{ICON_LUOI}</a>'

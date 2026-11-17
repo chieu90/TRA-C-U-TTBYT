@@ -124,3 +124,11 @@ label.o-tich { font-weight: normal; }
 .o-app.lon .hinh svg { width: 66px; height: 66px; }
 .o-app.lon .ten { font-size: 17px; font-weight: 600; }
 .luoi-app:has(.lon) { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); max-width: 760px; margin: 0 auto; padding-top: 48px; }
+nav a { white-space: nowrap; }
+@media (max-width: 760px) {
+  .dau { gap: 8px 14px; }
+  .ten-muc { margin-left: 0; }
+  .tk { margin-left: auto; }
+  nav { order: 3; flex: 0 0 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }
+  nav:empty { display: none; }
+}
