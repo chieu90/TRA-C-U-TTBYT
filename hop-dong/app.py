@@ -392,15 +392,86 @@ class Ctx:
 
 # ───────────────────────── khung trang ─────────────────────────
 
+def _svg(than):
+    return f'<svg viewBox="0 0 48 48" aria-hidden="true">{than}</svg>'
+
+
+_DONG = '<rect x="{x}" y="{y}" width="{w}" height="3" rx="1.5" fill="#fff"/>'
+ICON = {k: _svg(v) for k, v in {
+    "hop_dong": '<rect x="9" y="5" width="26" height="36" rx="4" fill="#8f4f86"/><path d="M27 5h4a4 4 0 0 1 4 4v4h-8z" fill="#1fc7b0"/>'
+                + _DONG.format(x=14, y=18, w=16) + _DONG.format(x=14, y=25, w=11) + '<circle cx="33" cy="35" r="8" fill="#f58220"/>'
+                '<path d="M29.5 35l2.5 2.5 4.5-5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    "bao_gia": '<path d="M6 22 22 6h16a4 4 0 0 1 4 4v16L26 42a4 4 0 0 1-5.6 0L6 27.6a4 4 0 0 1 0-5.6z" fill="#1fc7b0"/>'
+               '<path d="M22 6h16a4 4 0 0 1 4 4v16z" fill="#fbb945"/><circle cx="33" cy="15" r="4" fill="#fff"/>'
+               '<path d="M14 26l8 8M19 21l8 8" stroke="#1d5b79" stroke-width="3.2" stroke-linecap="round"/>',
+    "tong_quan": '<rect x="6" y="6" width="20" height="20" rx="4" fill="#8f4f86"/><rect x="30" y="6" width="12" height="9" rx="3" fill="#f98b8b"/>'
+                 '<rect x="30" y="18" width="12" height="8" rx="3" fill="#f58220"/><rect x="6" y="30" width="14" height="12" rx="3" fill="#2ea8f5"/>'
+                 '<rect x="24" y="30" width="18" height="12" rx="3" fill="#1fc7b0"/>',
+    "ds_hd": '<rect x="14" y="6" width="26" height="30" rx="4" fill="#fbb945"/><rect x="8" y="12" width="26" height="30" rx="4" fill="#2ea8f5"/>'
+             + _DONG.format(x=13, y=20, w=16) + _DONG.format(x=13, y=27, w=16) + _DONG.format(x=13, y=34, w=9),
+    "hdnt": '<rect x="7" y="8" width="28" height="34" rx="4" fill="#1fc7b0"/>' + _DONG.format(x=12, y=16, w=14) + _DONG.format(x=12, y=23, w=10)
+            + '<path d="M22 36l3-9L38 8l6 4-13 19z" fill="#1d5b79"/><path d="M22 36l3-9 6 4z" fill="#fbb945"/>',
+    "khach": '<rect x="10" y="12" width="34" height="30" rx="5" fill="#f98b8b"/><rect x="5" y="7" width="34" height="30" rx="5" fill="#1d7a6b"/>'
+             '<circle cx="22" cy="18" r="5.5" fill="#fff"/><path d="M12 33a10 8 0 0 1 20 0z" fill="#fff"/>',
+    "mau": '<rect x="6" y="6" width="36" height="36" rx="5" fill="#2ea8f5"/><rect x="11" y="11" width="26" height="8" rx="2" fill="#fff"/>'
+           '<rect x="11" y="23" width="11" height="14" rx="2" fill="#fbb945"/><rect x="26" y="23" width="11" height="6" rx="2" fill="#fff"/>'
+           '<rect x="26" y="31" width="11" height="6" rx="2" fill="#fff"/>',
+    "ds_bg": '<rect x="6" y="7" width="36" height="34" rx="5" fill="#8f4f86"/>'
+             + "".join(f'<circle cx="14" cy="{y + 1.5}" r="2.5" fill="{m}"/>' + _DONG.format(x=20, y=y, w=17)
+                       for y, m in ((15, "#1fc7b0"), (22.5, "#fbb945"), (30, "#f98b8b"))),
+    "soan": '<rect x="8" y="6" width="26" height="34" rx="4" fill="#fbb945"/>' + _DONG.format(x=13, y=14, w=16) + _DONG.format(x=13, y=21, w=11)
+            + '<circle cx="33" cy="33" r="10" fill="#f58220"/><path d="M33 28v10M28 33h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+    "hang_hoa": '<path d="M24 5l17 9.5v19L24 43 7 33.5v-19z" fill="#f58220"/><path d="M24 24l17-9.5v19L24 43z" fill="#8f4f86"/>'
+                '<path d="M24 24L7 14.5v19L24 43z" fill="#fbb945"/>',
+    "nguoi_dung": '<circle cx="17" cy="16" r="7" fill="#f98b8b"/><path d="M5 40a12 12 0 0 1 24 0z" fill="#f98b8b"/>'
+                  '<circle cx="32" cy="18" r="6" fill="#8f4f86"/><path d="M21 40a11 11 0 0 1 22 0z" fill="#8f4f86"/>',
+}.items()}
+ICON_LUOI = ('<svg viewBox="0 0 18 18" aria-hidden="true">'
+             + "".join(f'<rect x="{x}" y="{y}" width="4" height="4" rx="1" fill="currentColor"/>' for y in (1, 7, 13) for x in (1, 7, 13)) + '</svg>')
+
+# hai thư mục lớn và các mục con: (đường dẫn, tên, mã mục, icon, chỉ quản lý)
+UNG_DUNG = [
+    ("hop-dong", "Hợp đồng", "hop_dong", [
+        ("/tong-quan", "Tổng quan", "tq", "tong_quan", False), ("/hop-dong", "Danh sách hợp đồng", "hd", "ds_hd", False),
+        ("/hdnt/moi", "Làm HĐ nguyên tắc", "hdnt", "hdnt", False), ("/khach-hang", "Khách hàng", "kh", "khach", False),
+        ("/mau-hop-dong", "Mẫu hợp đồng", "mau", "mau", True)]),
+    ("bao-gia", "Báo giá", "bao_gia", [
+        ("/bao-gia", "Danh sách báo giá", "bg", "ds_bg", False), ("/bao-gia/moi", "Soạn báo giá", "bgm", "soan", False),
+        ("/hang-hoa", "Hàng hóa", "hh", "hang_hoa", False)]),
+]
+
+
+def o_icon(url, nhan, icon, lon=False):
+    return (f'<a class="o-app{" lon" if lon else ""}" href="{url}"><span class="hinh">{ICON[icon]}</span>'
+            f'<span class="ten">{e(nhan)}</span></a>')
+
+
+def trang_chu(c):
+    o_ = "".join(o_icon(f"/muc/{ma}", ten, icon, True) for ma, ten, icon, _ in UNG_DUNG)
+    if c.ql:
+        o_ += o_icon("/nguoi-dung", "Người dùng", "nguoi_dung", True)
+    return trang(c, "Trang chủ", f'<div class="luoi-app">{o_}</div>')
+
+
+def trang_muc(c, ma):
+    ten, _, cac_muc = next((t, i, m) for k, t, i, m in UNG_DUNG if k == ma)
+    o_ = "".join(o_icon(u, t, icon) for u, t, _, icon, chi_ql in cac_muc if c.ql or not chi_ql)
+    return trang(c, ten, f'<h1>{e(ten)}</h1><div class="luoi-app">{o_}</div>', "muc:" + ma)
+
+
 def trang(c, tieu_de, than, muc=""):
     nav = ""
     if c.user:
-        cac_muc = [("/", "Tổng quan", "tq"), ("/hop-dong", "Hợp đồng", "hd"), ("/hdnt/moi", "Làm HĐ nguyên tắc", "hdnt"),
-                   ("/bao-gia", "Báo giá", "bg"), ("/khach-hang", "Khách hàng", "kh"), ("/hang-hoa", "Hàng hóa", "hh")]
-        if c.ql:
-            cac_muc += [("/mau-hop-dong", "Mẫu HĐ", "mau"), ("/nguoi-dung", "Người dùng", "nd")]
-        lk = "".join(f'<a href="{u}"{" class=chon" if m == muc else ""}>{t}</a>' for u, t, m in cac_muc)
-        nav = (f'<header><div class="khung dau"><a class="ten-app" href="/">Hợp đồng</a><nav>{lk}</nav>'
+        ud = next((u for u in UNG_DUNG if muc == "muc:" + u[0] or any(m[2] == muc for m in u[3])), None)
+        lk, ten_muc = "", ""
+        if ud:
+            ten_muc = f'<a class="ten-muc" href="/muc/{ud[0]}">{e(ud[1])}</a>'
+            lk = "".join(f'<a href="{u}"{" class=chon" if m == muc else ""}>{t}</a>'
+                         for u, t, m, _, chi_ql in ud[3] if c.ql or not chi_ql)
+        elif muc == "nd":
+            ten_muc = '<a class="ten-muc" href="/nguoi-dung">Người dùng</a>'
+        nav = (f'<header><div class="khung dau"><a class="ten-app" href="/" title="Trang chủ" aria-label="Trang chủ">{ICON_LUOI}</a>'
+               f'{ten_muc}<nav>{lk}</nav>'
                f'<div class="tk"><a href="/doi-mat-khau">{e(c.user["ho_ten"])}</a>'
                f'<form method="post" action="/dang-xuat"><input type="hidden" name="csrf" value="{e(c.csrf)}">'
                f'<button class="nut-chu">Đăng xuất</button></form></div></div></header>')
@@ -2068,7 +2139,7 @@ def bg_moi(c):
     return trang(c, "Soạn báo giá", f"""
       <h1>Soạn báo giá</h1>
       <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_dau_bg(c)}
-        <div class="hang-nut"><button class="nut">Tạo và chọn hàng</button><a href="/bao-gia">Hủy</a></div></form></div>""", "bg")
+        <div class="hang-nut"><button class="nut">Tạo và chọn hàng</button><a href="/bao-gia">Hủy</a></div></form></div>""", "bgm")
 
 
 def bg_sua(c, bid):
@@ -2257,7 +2328,9 @@ TUYEN = [
     ("GET|POST", r"/dang-nhap", dang_nhap, "khach"),
     ("POST", r"/dang-xuat", dang_xuat, "nd"),
     ("GET|POST", r"/doi-mat-khau", doi_mat_khau, "nd"),
-    ("GET", r"/", tong_quan, "nd"),
+    ("GET", r"/", trang_chu, "nd"),
+    ("GET", r"/tong-quan", tong_quan, "nd"),
+    ("GET", r"/muc/(hop-dong|bao-gia)", trang_muc, "nd"),
     ("GET", r"/hop-dong", ds_hop_dong, "nd"),
     ("GET|POST", r"/hop-dong/moi", hd_moi, "nd"),
     ("GET", r"/hop-dong/(\d+)", hd_xem, "nd"),
@@ -2315,7 +2388,7 @@ def dieu_huong(c):
                 raise Loi(403, "Chỉ quản lý mới dùng được chức năng này.")
             if c.method == "POST" and not hmac.compare_digest(c.form.get("csrf", ""), c.csrf):
                 raise Loi(403, "Phiên làm việc đã hết hạn. Hãy tải lại trang rồi thử lại.")
-        return ham(c, *[int(x) for x in m.groups()])
+        return ham(c, *[int(x) if x.isdigit() else x for x in m.groups()])
     raise Loi(404, "Không tìm thấy trang.")
 
 
