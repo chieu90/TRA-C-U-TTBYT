@@ -132,3 +132,8 @@ nav a { white-space: nowrap; }
   nav { order: 3; flex: 0 0 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }
   nav:empty { display: none; }
 }
+
+/* bảng danh mục ủy quyền: sửa thẳng trong ô */
+td input.o-bang { width: 100%; min-width: 4.5rem; margin: 0; padding: 5px 6px; }
+td input.o-bang.rong { min-width: 14rem; }
+.bang-uq td { padding: 5px 4px; }

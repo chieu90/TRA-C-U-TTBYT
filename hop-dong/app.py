@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import docx_bao_gia, docx_mau
+import docx_bao_gia, docx_mau, docx_uq
 
 PORT = int(os.environ.get("PORT", 8770))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS phieu_nhap_dong (
   id INTEGER PRIMARY KEY, phieu_nhap_id INTEGER NOT NULL REFERENCES phieu_nhap(id) ON DELETE CASCADE,
   hang_hoa_id INTEGER NOT NULL REFERENCES hang_hoa(id), so_lo TEXT DEFAULT '', han_dung TEXT DEFAULT '',
   so_luong REAL NOT NULL, don_gia REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS uy_quyen (
+  id INTEGER PRIMARY KEY, so_uq TEXT DEFAULT '', ngay TEXT NOT NULL, chu_dau_tu TEXT NOT NULL, nha_thau TEXT NOT NULL,
+  dia_chi_nt TEXT DEFAULT '', goi_thau TEXT DEFAULT '', hieu_luc_den TEXT DEFAULT '', hang TEXT DEFAULT '',
+  phu_trach_id INTEGER REFERENCES nguoi_dung(id), link_file TEXT DEFAULT '', ghi_chu TEXT DEFAULT '', tao_luc TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS uy_quyen_dong (
+  id INTEGER PRIMARY KEY, uy_quyen_id INTEGER NOT NULL REFERENCES uy_quyen(id) ON DELETE CASCADE, tt INTEGER DEFAULT 0,
+  stt_mt TEXT DEFAULT '', ma TEXT DEFAULT '', ten_tm TEXT DEFAULT '', quy_cach TEXT DEFAULT '', nha_sx TEXT DEFAULT '',
+  xuat_xu TEXT DEFAULT '', dvt TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS chi_tien (
   id INTEGER PRIMARY KEY, so_pc TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
   nha_cung_cap_id INTEGER NOT NULL REFERENCES nha_cung_cap(id), so_tien REAL NOT NULL, hinh_thuc TEXT DEFAULT '',
@@ -262,7 +270,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("chi_tien", "so_tien")).fetchone():
+                                        "AND column_name = ?", ("uy_quyen_dong", "dvt")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -3456,6 +3464,319 @@ def doanh_so(c):
       {than}""", "ds")
 
 
+# ───────────────────────── ủy quyền bán hàng (UQ) ─────────────────────────
+# Thư ủy quyền của nhà phân phối cho nhà thầu (khách mua lại) chào hàng vào gói thầu của chủ đầu tư, kèm danh mục hàng.
+
+COT_UQ = [("stt_mt", "STT MT", 30), ("ma", "Ký mã hiệu", 200), ("ten_tm", "Tên thương mại", 500), ("quy_cach", "Quy cách", 200),
+          ("nha_sx", "Nhà sản xuất", 200), ("xuat_xu", "Xuất xứ", 100), ("dvt", "ĐVT", 30)]
+SQL_UQ = ("SELECT q.*, u.ho_ten AS phu_trach, (SELECT COUNT(*) FROM uy_quyen_dong d WHERE d.uy_quyen_id = q.id) AS so_dong "
+          "FROM uy_quyen q LEFT JOIN nguoi_dung u ON u.id = q.phu_trach_id WHERE 1=1")
+
+ICON["uq"] = _svg('<rect x="7" y="5" width="28" height="36" rx="4" fill="#2ea8f5"/>' + _DONG.format(x=12, y=13, w=18)
+                  + _DONG.format(x=12, y=20, w=12) + '<circle cx="33" cy="33" r="10" fill="#1fc7b0"/>'
+                  '<path d="M28.5 33.5l3 3 6-6.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>')
+next(u for u in UNG_DUNG if u[0] == "hop-dong")[3].insert(3, ("/uy-quyen", "Ủy quyền bán hàng", "uq", "uq", False))
+
+
+def nhan_uq(q):
+    return f'{q["so_uq"]}{docx_uq.HAU_TO}' if q["so_uq"] else f'UQ chưa số · {ngay(q["ngay"])}'
+
+
+def lay_uq(c, qid):
+    q = c.db.execute(SQL_UQ + " AND q.id = ?", (qid,)).fetchone()
+    if not q:
+        raise Loi(404, "Không tìm thấy ủy quyền.")
+    if not c.ql and q["phu_trach_id"] != c.user["id"]:
+        raise Loi(403, "Bạn không phụ trách ủy quyền này.")
+    return q
+
+
+def dong_cua_uq(c, qid):
+    return c.db.execute("SELECT * FROM uy_quyen_dong WHERE uy_quyen_id = ? ORDER BY tt, id", (qid,)).fetchall()
+
+
+def ds_uy_quyen(c):
+    dk, ts = loc_quyen(c)
+    tu = c.q.get("q", "")
+    if tu:
+        dk += (" AND (q.so_uq LIKE ? OR q.chu_dau_tu LIKE ? OR q.nha_thau LIKE ? OR q.goi_thau LIKE ? OR q.id IN "
+               "(SELECT uy_quyen_id FROM uy_quyen_dong WHERE ma LIKE ? OR ten_tm LIKE ?))")
+        ts += [f"%{tu}%"] * 6
+    ds = c.db.execute(SQL_UQ + dk + " ORDER BY q.ngay DESC, q.id DESC", ts).fetchall()
+    dong = ""
+    for q in ds:
+        link = f' <a href="{e(q["link_file"])}" target="_blank" rel="noopener noreferrer">Docs</a>' if q["link_file"] else ""
+        dong += (f'<tr><td><a href="/uy-quyen/{q["id"]}"><b>{e(nhan_uq(q))}</b></a>{link}</td><td>{ngay(q["ngay"])}</td>'
+                 f'<td>{e(q["chu_dau_tu"])}</td><td>{e(q["nha_thau"])}</td><td>{e(q["goi_thau"] or "—")}</td>'
+                 f'<td class="so">{q["so_dong"] or "—"}</td><td>{e(q["phu_trach"] or "—")}</td></tr>')
+    if ds:
+        bang = ('<div class="the cuon"><table><thead><tr><th>Số UQ</th><th>Ngày</th><th>Chủ đầu tư</th><th>Nhà thầu</th>'
+                f'<th>Gói thầu</th><th class="so">Mặt hàng</th><th>Phụ trách</th></tr></thead><tbody>{dong}</tbody></table></div>')
+    else:
+        bang = f'<div class="the trong">{"Không có ủy quyền nào khớp." if tu else "Chưa có ủy quyền nào. Bấm Làm ủy quyền để bắt đầu."}</div>'
+    return trang(c, "Ủy quyền bán hàng", f"""
+      <div class="dau-trang"><h1>Ủy quyền bán hàng <span class="dem">{len(ds)}</span></h1><a class="nut" href="/uy-quyen/moi">Làm ủy quyền</a></div>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Số UQ, chủ đầu tư, nhà thầu, gói thầu, mã hàng…">
+        <button class="nut phu">Lọc</button>{'<a href="/uy-quyen">Bỏ lọc</a>' if tu else ""}</form>
+      {bang}""", "uq")
+
+
+def o_dau_uq(c, q=None):
+    g = (lambda k, md="": q[k] if q else md)
+    chon_hang = [h for h in (g("hang") or "").split(",") if h] or docx_uq.HANG_MAC_DINH
+    hang = "".join(f'<label class="o-tich"><input type="checkbox" name="hang_{ma}" value="1"{" checked" if ma in chon_hang else ""}> {e(ten)}</label>'
+                   for ma, ten, _, _, _ in docx_uq.HANG)
+    pt = ""
+    if c.ql:
+        nd = c.db.execute("SELECT id, ho_ten FROM nguoi_dung WHERE hoat_dong = 1 ORDER BY ho_ten").fetchall()
+        pt = f'<label>Người phụ trách{chon("phu_trach_id", [(u["id"], u["ho_ten"]) for u in nd], g("phu_trach_id", c.user["id"]))}</label>'
+    return f"""
+      {o("Số UQ (phần trước /UQ-ADC)", "so_uq", g("so_uq"), them='placeholder="Để trống nếu văn thư cấp số sau"')}
+      {o("Ngày", "ngay", g("ngay", date.today().isoformat()), "date", True)}
+      <label class="rong">Kính gửi — chủ đầu tư <b class="sao">*</b><input name="chu_dau_tu" value="{e(g("chu_dau_tu"))}" list="ds-khach" required
+        placeholder="Ví dụ: Bệnh viện đa khoa Phú Xuyên"></label>
+      <label class="rong">Nhà thầu được ủy quyền <b class="sao">*</b><input name="nha_thau" value="{e(g("nha_thau"))}" list="ds-khach" required
+        placeholder="Ví dụ: Công ty TNHH Phát triển công nghệ NDK"></label>{goi_y_khach(c)}
+      <label class="rong">Địa chỉ nhà thầu (chỉ khi chủ đầu tư yêu cầu ghi)<input name="dia_chi_nt" value="{e(g("dia_chi_nt"))}"></label>
+      <label class="rong">Tên gói thầu<textarea name="goi_thau" rows="2"
+        placeholder="Để trống thì thư ghi: …chào giá cung cấp hàng hóa cho [chủ đầu tư].">{e(g("goi_thau"))}</textarea></label>
+      {o("Hiệu lực đến ngày (nếu cần ghi)", "hieu_luc_den", g("hieu_luc_den"), "date")}{pt}
+      <div class="rong"><b>Hãng nêu trong thư</b><div class="bo-loc">{hang}</div></div>
+      <label class="rong">Ghi chú nội bộ (không in)<input name="ghi_chu" value="{e(g("ghi_chu"))}"></label>"""
+
+
+def doc_dau_uq(c, q=None):
+    so = re.sub(r"\s*/?\s*UQ-ADC\s*$", "", c.chu("so_uq", "Số UQ", toi_da=40), flags=re.I).strip()
+    gt = {"so_uq": so, "ngay": c.ngay("ngay", "Ngày", True), "chu_dau_tu": c.chu("chu_dau_tu", "Chủ đầu tư", True, 300),
+          "nha_thau": c.chu("nha_thau", "Nhà thầu", True, 300), "dia_chi_nt": c.chu("dia_chi_nt", "Địa chỉ nhà thầu"),
+          "goi_thau": c.chu("goi_thau", "Tên gói thầu", toi_da=1000), "hieu_luc_den": c.ngay("hieu_luc_den", "Hiệu lực đến ngày"),
+          "hang": ",".join(ma for ma, *_ in docx_uq.HANG if c.form.get(f"hang_{ma}") == "1"),
+          "ghi_chu": c.chu("ghi_chu", "Ghi chú", toi_da=1000)}
+    if not gt["hang"]:
+        raise Loi(400, "Chưa chọn hãng nào để nêu trong thư ủy quyền.")
+    gt["phu_trach_id"] = q["phu_trach_id"] if q else c.user["id"]
+    if c.ql:
+        v = c.form.get("phu_trach_id", "")
+        if not (v.isdigit() and c.db.execute("SELECT 1 FROM nguoi_dung WHERE id = ?", (int(v),)).fetchone()):
+            raise Loi(400, "Chưa chọn người phụ trách.")
+        gt["phu_trach_id"] = int(v)
+    if so:
+        trung = c.db.execute("SELECT id FROM uy_quyen WHERE so_uq = ?", (so,)).fetchone()
+        if trung and (not q or trung["id"] != q["id"]):
+            raise Loi(400, f"Số UQ {so}{docx_uq.HAU_TO} đã dùng cho ủy quyền khác.")
+    return gt
+
+
+def uq_them_dong(c, qid, cac_dong):
+    tt = c.db.execute("SELECT COALESCE(MAX(tt), 0) AS m FROM uy_quyen_dong WHERE uy_quyen_id = ?", (qid,)).fetchone()["m"] or 0
+    c.db.executemany(f"INSERT INTO uy_quyen_dong (uy_quyen_id, tt, {', '.join(k for k, _, _ in COT_UQ)}) VALUES (?, ?{', ?' * len(COT_UQ)})",
+                     [[qid, tt + i] + [(d.get(k) or "")[:dai] for k, _, dai in COT_UQ] for i, d in enumerate(cac_dong, 1)])
+
+
+def dong_tu_hang(h, stt_mt=""):
+    """Một dòng danh mục UQ lấy từ hàng hóa trong danh mục."""
+    return {"stt_mt": stt_mt, "ma": h["ma"], "ten_tm": h["ten_tm"] or h["ten"], "quy_cach": h["quy_cach"],
+            "nha_sx": docx_uq.nha_sx_mac_dinh(docx_uq.nhan_dien_hang(h["nhan_hieu"], h["ten_tm"])),
+            "xuat_xu": h["nuoc_sx"], "dvt": docx_uq.dvt_tu_quy_cach(h["quy_cach"])}
+
+
+def uq_moi(c):
+    goc = lay_uq(c, int(c.q["tu"])) if c.q.get("tu", "").isdigit() else None
+    if c.method == "POST":
+        gt = doc_dau_uq(c)
+        qid = c.db.them(f"INSERT INTO uy_quyen ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
+                        list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
+        tu = c.form.get("tu", "")
+        if tu.isdigit():
+            uq_them_dong(c, qid, [dict(d) for d in dong_cua_uq(c, lay_uq(c, int(tu))["id"])])
+        c.db.commit()
+        return Chuyen(f"/uy-quyen/{qid}", "Đã tạo ủy quyền." + ("" if tu.isdigit() else " Thêm hàng vào danh mục đính kèm ở bên dưới."))
+    mau = dict(goc, so_uq="", ngay=date.today().isoformat(), link_file="") if goc else None
+    an = f'<input type="hidden" name="tu" value="{goc["id"]}">' if goc else ""
+    ghi = (f'<p class="mo">Sao chép từ <a href="/uy-quyen/{goc["id"]}">{e(nhan_uq(goc))}</a> — gồm cả {goc["so_dong"]} dòng danh mục. '
+           'Sửa chủ đầu tư, nhà thầu, gói thầu cho đúng trước khi tạo.</p>') if goc else ""
+    return trang(c, "Làm ủy quyền", f"""
+      <h1>Làm ủy quyền bán hàng</h1>{ghi}
+      <div class="the"><form method="post" action="/uy-quyen/moi" class="luoi">{an_csrf(c)}{an}{o_dau_uq(c, mau)}
+        <div class="hang-nut"><button class="nut">{"Tạo bản sao" if goc else "Tạo và thêm hàng"}</button><a href="/uy-quyen">Hủy</a></div></form></div>""", "uq")
+
+
+def uq_sua(c, qid):
+    q = lay_uq(c, qid)
+    gt = doc_dau_uq(c, q)
+    c.db.execute(f"UPDATE uy_quyen SET {', '.join(k + ' = ?' for k in gt)} WHERE id = ?", list(gt.values()) + [qid])
+    c.db.commit()
+    return Chuyen(f"/uy-quyen/{qid}", "Đã lưu thông tin ủy quyền.")
+
+
+def uq_xoa(c, qid):
+    q = lay_uq(c, qid)
+    if not c.duoc_xoa:
+        raise Loi(403, "Bạn chưa được cấp quyền xóa. Hãy nhờ quản lý.")
+    c.db.execute("DELETE FROM uy_quyen_dong WHERE uy_quyen_id = ?", (qid,))
+    c.db.execute("DELETE FROM uy_quyen WHERE id = ?", (qid,))
+    c.db.commit()
+    return Chuyen("/uy-quyen", f"Đã xóa {nhan_uq(q)}.")
+
+
+def uq_xem(c, qid):
+    q = lay_uq(c, qid)
+    dong = dong_cua_uq(c, qid)
+    tim = c.q.get("tim", "")
+    hang = ""
+    for i, d in enumerate(dong, 1):
+        hang += (f'<tr><td class="so">{i}</td>'
+                 + "".join(f'<td><input class="o-bang{" rong" if k == "ten_tm" else ""}" name="{k}_{d["id"]}" value="{e(d[k])}" '
+                           f'maxlength="{dai}" aria-label="{nhan}"></td>' for k, nhan, dai in COT_UQ)
+                 + f'<td class="thao-tac"><button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button></td></tr>')
+    if dong:
+        bang = (f'<form method="post" action="/uy-quyen/{qid}/dong">{an_csrf(c)}<button class="nut-an" tabindex="-1" aria-hidden="true"></button>'
+                '<div class="cuon"><table class="bang-uq"><thead><tr><th class="so">STT</th>'
+                + "".join(f'<th>{nhan}</th>' for _, nhan, _ in COT_UQ) + f'<th></th></tr></thead><tbody>{hang}</tbody></table></div>'
+                '<div class="hang-nut"><button class="nut">Lưu danh mục</button>'
+                '<span class="mo">Sửa thẳng trong bảng; STT MT là số thứ tự mặt hàng trong gói thầu của chủ đầu tư.</span></div></form>')
+    else:
+        bang = '<p class="mo">Chưa có hàng nào — thư sẽ không có trang danh mục đính kèm. Thêm hàng ở bên dưới.</p>'
+    kq_tim = ""
+    if tim:
+        dk, ts = dk_tim_hang(tim)
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 80", ts).fetchall()
+        da_co = {gap(d["ma"]) for d in dong if d["ma"]}
+        if ds:
+            dh = "".join(
+                f'<tr><td><input type="checkbox" name="hh_{h["id"]}" value="1" aria-label="Chọn"></td>'
+                f'<td><input class="o-nho" name="mt_{h["id"]}" maxlength="30" placeholder="STT MT" aria-label="STT MT"></td>'
+                f'<td>{e(h["ten_tm"] or h["ten"])}</td><td>{e(h["ma"])}{" <span class=mo>(đã có)</span>" if gap(h["ma"]) in da_co else ""}</td>'
+                f'<td>{e(h["nhan_hieu"])}</td><td>{e(h["quy_cach"])}</td></tr>' for h in ds)
+            kq_tim = (f'<form method="post" action="/uy-quyen/{qid}/them">{an_csrf(c)}<div class="cuon"><table><thead><tr><th></th>'
+                      '<th>STT MT</th><th>Tên thương mại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Quy cách</th></tr></thead>'
+                      f'<tbody>{dh}</tbody></table></div><div class="hang-nut"><button class="nut">Thêm các hàng đã chọn</button>'
+                      '<span class="mo">Nhập STT MT thì không cần tích chọn.</span></div></form>')
+        else:
+            kq_tim = '<p class="mo">Không có hàng nào khớp trong danh mục.</p>'
+    nut_google = ""
+    if da_ket_noi(c):
+        nut_google = (f'<form method="post" action="/uy-quyen/{qid}/google-doc" class="trong-dong">{an_csrf(c)}'
+                      f'<button class="nut phu">{"Tạo lại" if q["link_file"] else "Tạo"} link Google Docs</button></form>')
+    link = (f'<dt>Link Google Docs</dt><dd><a href="{e(q["link_file"])}" target="_blank" rel="noopener noreferrer">{e(q["link_file"])}</a></dd>'
+            if q["link_file"] else "")
+    ten_hang = ", ".join(t for m, t, *_ in docx_uq.HANG if m in (q["hang"] or "").split(","))
+    xoa = nut_xoa(c, f"/uy-quyen/{qid}/xoa", f"Xóa {nhan_uq(q)}? Không khôi phục được.", "Xóa ủy quyền") if c.duoc_xoa else ""
+    tay = "".join(o(nhan, k, bat_buoc=(k == "ten_tm")) for k, nhan, _ in COT_UQ)
+    return trang(c, nhan_uq(q), f"""
+      <div class="dau-trang"><h1>Ủy quyền {e(nhan_uq(q))}</h1>
+        <div class="hang-nut"><a class="nut" href="/uy-quyen/{qid}/tai">Tải file Word</a>{nut_google}
+          <a class="nut phu" href="/uy-quyen/moi?tu={qid}">Sao chép thành UQ mới</a></div></div>
+      <div class="the"><dl class="thong-tin"><dt>Kính gửi (chủ đầu tư)</dt><dd>{e(q["chu_dau_tu"])}</dd>
+        <dt>Nhà thầu</dt><dd>{e(q["nha_thau"])}{" — " + e(q["dia_chi_nt"]) if q["dia_chi_nt"] else ""}</dd>
+        <dt>Gói thầu</dt><dd>{e(q["goi_thau"]) or "<span class=mo>Không ghi — thư ghi chào giá cho chủ đầu tư</span>"}</dd>
+        <dt>Ngày</dt><dd>{ngay(q["ngay"])}</dd><dt>Hiệu lực đến</dt><dd>{ngay(q["hieu_luc_den"]) or "Không ghi"}</dd>
+        <dt>Hãng</dt><dd>{e(ten_hang)}</dd><dt>Phụ trách</dt><dd>{e(q["phu_trach"] or "—")}</dd>{link}
+        {f'<dt>Ghi chú</dt><dd>{e(q["ghi_chu"])}</dd>' if q["ghi_chu"] else ""}</dl></div>
+      <div class="the"><h2>Danh mục đính kèm <span class="dem">{len(dong)}</span></h2>{bang}</div>
+      <div class="the"><h2>Thêm hàng</h2>
+        <form class="bo-loc"><input type="search" name="tim" value="{e(tim)}" placeholder="Gõ tên, ký mã hiệu, nhãn hiệu… ví dụ: HBsAg" {"autofocus" if tim else ""}>
+          <button class="nut phu">Tìm</button></form>{kq_tim}</div>
+      <details class="the"><summary>Dán danh mục từ Excel (STT MT và ký mã hiệu)</summary>
+        <form method="post" action="/uy-quyen/{qid}/dan" class="luoi-1">{an_csrf(c)}
+          <p class="mo">Chép các dòng từ bảng của chủ đầu tư rồi dán vào đây, mỗi dòng một mặt hàng, có cột STT MT và cột ký mã hiệu
+            (các cột khác bỏ qua). App tìm ký mã hiệu trong danh mục hàng hóa để điền tên, quy cách, nhà sản xuất, xuất xứ.</p>
+          <textarea name="dan" rows="6" placeholder="1.3&#9;ITP01003-DS50&#10;1.4&#9;ITP01102-DS50"></textarea>
+          <div class="hang-nut"><button class="nut phu">Thêm vào danh mục</button></div></form></details>
+      <details class="the"><summary>Thêm hàng không có trong danh mục</summary>
+        <form method="post" action="/uy-quyen/{qid}/them-tay" class="luoi">{an_csrf(c)}{tay}
+          <div class="hang-nut"><button class="nut phu">Thêm dòng</button></div></form></details>
+      <details class="the"><summary>Sửa thông tin thư ủy quyền</summary>
+        <form method="post" action="/uy-quyen/{qid}/sua" class="luoi">{an_csrf(c)}{o_dau_uq(c, q)}
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>
+      {xoa}""", "uq")
+
+
+def uq_dong_luu(c, qid):
+    lay_uq(c, qid)
+    xoa = c.form.get("xoa", "")
+    if xoa.isdigit():
+        c.db.execute("DELETE FROM uy_quyen_dong WHERE id = ? AND uy_quyen_id = ?", (int(xoa), qid))
+        c.db.commit()
+        return Chuyen(f"/uy-quyen/{qid}", "Đã bỏ một dòng hàng.")
+    for d in dong_cua_uq(c, qid):
+        c.db.execute(f"UPDATE uy_quyen_dong SET {', '.join(k + ' = ?' for k, _, _ in COT_UQ)} WHERE id = ?",
+                     [c.chu(f"{k}_{d['id']}", nhan, toi_da=dai) for k, nhan, dai in COT_UQ] + [d["id"]])
+    c.db.commit()
+    return Chuyen(f"/uy-quyen/{qid}", "Đã lưu danh mục.")
+
+
+def uq_them(c, qid):
+    lay_uq(c, qid)
+    ids = sorted({int(k[3:]) for k, v in c.form.items() if k[:3] in ("hh_", "mt_") and k[3:].isdigit() and v.strip()})[:200]
+    if not ids:
+        raise Loi(400, "Chưa tích chọn hoặc nhập STT MT cho hàng nào.")
+    ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY id", ids).fetchall()
+    uq_them_dong(c, qid, [dong_tu_hang(h, c.chu(f"mt_{h['id']}", "STT MT", toi_da=30)) for h in ds])
+    c.db.commit()
+    return Chuyen(f"/uy-quyen/{qid}", f"Đã thêm {len(ds)} hàng vào danh mục. Kiểm tra lại nhà sản xuất, xuất xứ, ĐVT.")
+
+
+def uq_dan(c, qid):
+    lay_uq(c, qid)
+    theo_ma = {}
+    for h in c.db.execute("SELECT * FROM hang_hoa WHERE ma <> '' ORDER BY id DESC").fetchall():
+        theo_ma[re.sub(r"\s+", "", gap(h["ma"]))] = h
+    them, la = [], []
+    for dong in (c.form.get("dan") or "").splitlines()[:300]:
+        o_ = [gon(x) for x in dong.split("\t")] if "\t" in dong else [gon(x) for x in re.split(r"\s{2,}|;", dong)]
+        o_ = [x for x in o_ if x]
+        if not o_:
+            continue
+        vi_tri = next((i for i, x in enumerate(o_) if re.sub(r"\s+", "", gap(x)) in theo_ma), None)
+        if vi_tri is not None:
+            h = theo_ma[re.sub(r"\s+", "", gap(o_[vi_tri]))]
+            stt = o_[0] if vi_tri > 0 and re.fullmatch(r"[\d.,\-a-zA-Z]{1,12}", o_[0]) else ""
+            them.append(dong_tu_hang(h, stt))
+        else:
+            la.append(o_[1] if len(o_) > 1 and re.fullmatch(r"[\d.,]{1,12}", o_[0]) else o_[0])
+            stt = o_[0] if len(o_) > 1 and re.fullmatch(r"[\d.,]{1,12}", o_[0]) else ""
+            them.append({"stt_mt": stt, "ma": la[-1], "ten_tm": " ".join(o_[2:]) if stt else " ".join(o_[1:]), "dvt": ""})
+    if not them:
+        raise Loi(400, "Chưa dán dòng nào.")
+    uq_them_dong(c, qid, them)
+    c.db.commit()
+    tb = f"Đã thêm {len(them)} dòng."
+    if la:
+        tb += f" {len(la)} mã không có trong danh mục hàng hóa ({', '.join(la[:5])}{'…' if len(la) > 5 else ''}) — cần điền tay tên, quy cách, nhà sản xuất."
+    return Chuyen(f"/uy-quyen/{qid}", tb)
+
+
+def uq_them_tay(c, qid):
+    lay_uq(c, qid)
+    uq_them_dong(c, qid, [{k: c.chu(k, nhan, k == "ten_tm", dai) for k, nhan, dai in COT_UQ}])
+    c.db.commit()
+    return Chuyen(f"/uy-quyen/{qid}", "Đã thêm một dòng hàng.")
+
+
+def tao_file_uq(c, q):
+    ten = ten_tep_an_toan(f"UQ {q['so_uq'] or 'chua so'} - {q['chu_dau_tu']} - {q['nha_thau']}")
+    return ten, docx_uq.tao(dict(q), [dict(d) for d in dong_cua_uq(c, q["id"])])
+
+
+def uq_tai(c, qid):
+    ten, dl = tao_file_uq(c, lay_uq(c, qid))
+    return Tep(ten + ".docx", dl, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+
+def uq_google(c, qid):
+    q = lay_uq(c, qid)
+    ten, dl = tao_file_uq(c, q)
+    kq = goi_google(c, "tao_doc", ten=ten, docx=base64.b64encode(dl).decode(),
+                    quyen=doc_cd(c, "quyen_link", "xem"), thu_muc="Ủy quyền bán hàng")
+    url = kq.get("url") or ""
+    if not url.startswith("https://docs.google.com/"):
+        raise Loi(502, "Google không trả về link ủy quyền.")
+    c.db.execute("UPDATE uy_quyen SET link_file = ? WHERE id = ?", (url, qid))
+    c.db.commit()
+    return Chuyen(f"/uy-quyen/{qid}", "Đã tạo link Google Docs (thư mục Ủy quyền bán hàng trong Drive).")
+
+
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
@@ -3494,6 +3815,17 @@ TUYEN = [
     ("GET", r"/bao-gia/(\d+)/tai", bg_tai, "nd"),
     ("POST", r"/bao-gia/(\d+)/google-doc", bg_google, "nd"),
     ("GET", r"/hang-hoa", hang_hoa, "nd"),
+    ("GET", r"/uy-quyen", ds_uy_quyen, "nd"),
+    ("GET|POST", r"/uy-quyen/moi", uq_moi, "nd"),
+    ("GET", r"/uy-quyen/(\d+)", uq_xem, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/sua", uq_sua, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/xoa", uq_xoa, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/dong", uq_dong_luu, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/them", uq_them, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/dan", uq_dan, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/them-tay", uq_them_tay, "nd"),
+    ("GET", r"/uy-quyen/(\d+)/tai", uq_tai, "nd"),
+    ("POST", r"/uy-quyen/(\d+)/google-doc", uq_google, "nd"),
     ("GET", r"/don-hang", ds_don_hang, "nd"),
     ("GET|POST", r"/don-hang/moi", dh_moi, "nd"),
     ("GET", r"/don-hang/(\d+)", dh_xem, "nd"),
