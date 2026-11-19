@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đăng nhập – Muasamcong ADC</title>
+<meta name="theme-color" content="#0b5cad">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #f3f6fa; --surface: #fff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0;
+  --brand: #0b5cad; --brand-2: #0e9f9a; --ok: #15803d; --ok-bg: #e8f7ee; --bad: #c2410c; --bad-bg: #fdeee6;
+  --shadow: 0 1px 2px rgba(16,35,70,.06), 0 6px 20px rgba(16,35,70,.06); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1420; --surface: #141d2b; --text: #e5ebf3; --muted: #93a3b8; --line: #243145;
+  --brand: #3b8bdb; --brand-2: #22b3ad; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a2113; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif;
+  display: flex; flex-direction: column; }
+.hero { background: linear-gradient(120deg, var(--brand) 0%, #0a4a8c 45%, var(--brand-2) 100%); color: #fff; padding: 36px 16px 96px; text-align: center; }
+.hero h1 { margin: 0 0 6px; font-size: 24px; }
+.hero p { margin: 0; opacity: .85; font-size: 14px; }
+.card { width: min(420px, calc(100% - 32px)); margin: -64px auto 32px; background: var(--surface); border-radius: 16px;
+  box-shadow: var(--shadow); padding: 22px; }
+.tabs { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 12px; margin-bottom: 18px; }
+.tabs button { flex: 1; border: 0; background: none; padding: 9px; border-radius: 9px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+input { width: 100%; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text);
+  font: inherit; font-size: 15px; outline: none; }
+input:focus { border-color: var(--brand); }
+button.go { width: 100%; margin-top: 18px; padding: 12px; border: 0; border-radius: 11px; color: #fff; font: inherit; font-weight: 600; font-size: 15px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); cursor: pointer; }
+button.go:disabled { opacity: .6; cursor: default; }
+.msg { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 14px; display: none; }
+.msg.ok { display: block; background: var(--ok-bg); color: var(--ok); }
+.msg.bad { display: block; background: var(--bad-bg); color: var(--bad); }
+.note { color: var(--muted); font-size: 12.5px; margin-top: 14px; line-height: 1.5; }
+form[hidden] { display: none; }
+</style>
+</head>
+<body>
+<header class="hero"><h1>Muasamcong ADC</h1><p>Gói thầu · Báo giá · Kết quả trúng thầu test nhanh</p></header>
+<main class="card">
+  <div class="tabs" role="tablist"><button type="button" class="on" data-t="in">Đăng nhập</button><button type="button" data-t="up">Đăng ký</button></div>
+  <form id="in" autocomplete="on">
+    <label for="e1">Email</label><input id="e1" type="email" autocomplete="username" required>
+    <label for="p1">Mật khẩu</label><input id="p1" type="password" autocomplete="current-password" required>
+    <button class="go" type="submit">Đăng nhập</button>
+  </form>
+  <form id="up" hidden>
+    <label for="n2">Họ tên</label><input id="n2" autocomplete="name" required>
+    <label for="e2">Email</label><input id="e2" type="email" autocomplete="email" required>
+    <label for="s2">Số điện thoại</label><input id="s2" type="tel" autocomplete="tel">
+    <label for="p2">Mật khẩu (tối thiểu 8 ký tự)</label><input id="p2" type="password" autocomplete="new-password" minlength="8" required>
+    <button class="go" type="submit">Gửi đăng ký</button>
+    <p class="note">Tài khoản mới cần admin duyệt và phân quyền trước khi đăng nhập được.</p>
+  </form>
+  <div class="msg" id="msg" role="status"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const show = (t, ok) => { const m = $('#msg'); m.textContent = t; m.className = 'msg ' + (ok ? 'ok' : 'bad'); };
+const tiep = new URLSearchParams(location.search).get('tiep');
+const go = () => location.replace(tiep && tiep.startsWith('/') && !tiep.startsWith('//') ? tiep : '/');
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('#in').hidden = b.dataset.t !== 'in'; $('#up').hidden = b.dataset.t !== 'up'; $('#msg').className = 'msg';
+});
+async function call(action, data) {
+  const r = await fetch('/api/auth?action=' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  return [r.ok, await r.json().catch(() => ({ loi: 'Lỗi kết nối' }))];
+}
+$('#in').onsubmit = async e => {
+  e.preventDefault(); const btn = e.target.querySelector('button'); btn.disabled = true;
+  const [ok, d] = await call('dang-nhap', { email: $('#e1').value, mat_khau: $('#p1').value });
+  btn.disabled = false; if (ok) go(); else show(d.loi);
+};
+$('#up').onsubmit = async e => {
+  e.preventDefault(); const btn = e.target.querySelector('button'); btn.disabled = true;
+  const [ok, d] = await call('dang-ky', { ten: $('#n2').value, email: $('#e2').value, sdt: $('#s2').value, mat_khau: $('#p2').value });
+  btn.disabled = false; show(ok ? d.thong_bao : d.loi, ok);
+  if (ok) { $('#e1').value = $('#e2').value; e.target.reset(); }
+};
+fetch('/api/auth?action=toi').then(r => { if (r.ok) go(); }).catch(() => {});
+</script>
+</body>
+</html>

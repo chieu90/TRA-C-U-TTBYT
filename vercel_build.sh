@@ -19,6 +19,13 @@ sed 's#<a href="/">Tra cứu TBYT</a>##' goi_thau.html > public/goi-thau.html
 sed 's#<a href="/">Tra cứu TBYT</a>##' bao_gia.html > public/bao-gia.html
 sed 's#<a href="/">Tra cứu TBYT</a>##' co_so_y_te.html > public/co-so-y-te.html
 sed 's#<a href="/">Tra cứu TBYT</a>##' trung_thau.html > public/trung-thau.html
+# đăng nhập / phân quyền (middleware.js + api/auth.js): trang đăng nhập, quản trị, nút tài khoản trên mọi trang
+cp dang_nhap.html public/dang-nhap.html
+cp quan_tri.html public/quan-tri.html
+cp tai_khoan.js public/tai-khoan.js
+for f in goi-thau bao-gia co-so-y-te trung-thau; do
+  sed -i.bak 's#</body>#<script src="/tai-khoan.js" defer></script>\n</body>#' public/$f.html && rm public/$f.html.bak
+done
 # KQ Đường Huyết dùng chung giao diện với KQ Test (trang tự nhận theo đường dẫn)
 cp public/trung-thau.html public/duong-huyet.html
 # trang So sánh 2025–2026 (nút So sánh trên KQ Test / KQ Đường Huyết)
