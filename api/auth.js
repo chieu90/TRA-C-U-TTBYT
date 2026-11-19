@@ -7,7 +7,7 @@
 //   POST /api/auth?action=dang-xuat
 //   POST /api/auth?action=doi-mat-khau     {cu, moi}
 //   GET  /api/auth?action=khach-nv         -> khách hàng theo nhân viên (người đã đăng nhập)
-//   Admin: POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
+//   Admin: POST link-khach-nv {link} (Google Sheet, tự đọc lại mỗi 15 phút) | POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
 
 const ROLES = {
@@ -46,6 +46,7 @@ async function ensure() {
   await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS tabs TEXT");
   // khách hàng (nhà thầu) theo nhân viên bán hàng: bộ lọc "Nhân viên" trên KQ Test / KQ Đường huyết
   await sql("CREATE TABLE IF NOT EXISTS mc_khach_nv (ten TEXT NOT NULL, nv TEXT NOT NULL)");
+  await sql("CREATE TABLE IF NOT EXISTS mc_cau_hinh (k TEXT PRIMARY KEY, v TEXT)");
   ready = true;
 }
 
@@ -90,6 +91,53 @@ function body(req) {
 const send = (res, code, data) => { res.statusCode = code; res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store"); res.end(JSON.stringify(data)); };
 const cleanEmail = e => String(e || "").trim().toLowerCase();
+
+// ---- danh sách khách hàng theo nhân viên đọc từ Google Sheet (link Drive, chia sẻ "ai có link đều xem được") ----
+const SYNC_MIN = 15;  // phút: tự đọc lại sheet khi danh sách cũ hơn mức này
+const cfg = async k => ((await sql("SELECT v FROM mc_cau_hinh WHERE k=$1", [k]))[0] || {}).v || "";
+const setCfg = (k, v) => sql("INSERT INTO mc_cau_hinh (k, v) VALUES ($1,$2) ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v", [k, v]);
+function parseCsv(t) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && t[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+function sheetUrl(link) {
+  const id = (String(link).match(/\/d\/([a-zA-Z0-9_-]{20,})/) || String(link).match(/[?&]id=([a-zA-Z0-9_-]{20,})/) || [])[1];
+  const gid = (String(link).match(/[#&?]gid=(\d+)/) || [])[1];
+  return id ? `https://docs.google.com/spreadsheets/d/${id}/export?format=csv${gid ? "&gid=" + gid : ""}` : "";
+}
+async function syncKhach(link) {
+  const url = sheetUrl(link);
+  if (!url) throw new Error("Link không phải Google Sheet.");
+  const r = await fetch(url, { redirect: "follow" });
+  const t = await r.text();
+  if (!r.ok || /^\s*<(!doctype|html)/i.test(t))
+    throw new Error("Không đọc được sheet. Mở chia sẻ \"Bất kỳ ai có đường liên kết – Người xem\" rồi thử lại.");
+  const rows = parseCsv(t), low = v => String(v).toLowerCase();
+  const h = rows.findIndex(r => r.some(c => /tên khách|khách hàng/.test(low(c))) && r.some(c => /nhân viên|nvbh/.test(low(c))));
+  if (h < 0) throw new Error("Sheet thiếu dòng tiêu đề có cột \"Tên khách hàng\" và \"Nhân viên\".");
+  const ci = rows[h].findIndex(c => /tên khách|khách hàng/.test(low(c))), ni = rows[h].findIndex(c => /nhân viên|nvbh/.test(low(c)));
+  const ds = rows.slice(h + 1).map(r => ({ ten: String(r[ci] || "").trim(), nv: String(r[ni] || "").trim() }))
+    .filter(x => x.ten && x.nv && !/^tổng/i.test(x.ten));
+  if (!ds.length) throw new Error("Sheet chưa có khách hàng nào có nhân viên.");
+  await saveKhach(ds);
+  await setCfg("khach_nv_luc", new Date().toISOString());
+  return ds.length;
+}
+async function saveKhach(ds) {
+  await sql("DELETE FROM mc_khach_nv");
+  for (let i = 0; i < ds.length; i += 500)
+    await sql("INSERT INTO mc_khach_nv (ten, nv) SELECT ten, nv FROM json_to_recordset($1::json) AS x(ten text, nv text)",
+      [JSON.stringify(ds.slice(i, i + 500))]);
+}
 
 module.exports = async (req, res) => {
   if (!dbUrl()) return send(res, 503, { loi: "Chưa nối database cho trang này (thiếu DATABASE_URL trên Vercel)." });
@@ -143,8 +191,13 @@ module.exports = async (req, res) => {
     }
 
     if (action === "khach-nv") {
+      const link = await cfg("khach_nv_link"), luc = await cfg("khach_nv_luc");
+      let loi = "";
+      if (link && (!luc || Date.now() - Date.parse(luc) > SYNC_MIN * 60000)) {
+        try { await syncKhach(link); } catch (e) { loi = e.message; }  // lỗi thì dùng danh sách lần trước
+      }
       const ds = await sql("SELECT ten, nv FROM mc_khach_nv ORDER BY ten");
-      return send(res, 200, { ds });
+      return send(res, 200, { ds, link: me.vai_tro === "admin" ? link : undefined, luc: await cfg("khach_nv_luc"), loi: loi || undefined });
     }
 
     if (action === "doi-mat-khau" && req.method === "POST") {
@@ -160,11 +213,16 @@ module.exports = async (req, res) => {
       const ds = (Array.isArray(b.ds) ? b.ds : []).map(x => ({ ten: String(x.ten || "").trim(), nv: String(x.nv || "").trim() }))
         .filter(x => x.ten && x.nv);
       if (!ds.length) return send(res, 400, { loi: "Danh sách trống." });
-      await sql("DELETE FROM mc_khach_nv");
-      for (let i = 0; i < ds.length; i += 500)
-        await sql("INSERT INTO mc_khach_nv (ten, nv) SELECT ten, nv FROM json_to_recordset($1::json) AS x(ten text, nv text)",
-          [JSON.stringify(ds.slice(i, i + 500))]);
+      await saveKhach(ds);
+      await setCfg("khach_nv_link", "");  // tải file tay thì thôi đồng bộ theo link
+      await setCfg("khach_nv_luc", new Date().toISOString());
       return send(res, 200, { ok: true, so: ds.length });
+    }
+    if (action === "link-khach-nv" && req.method === "POST") {  // lưu link Google Sheet và đọc ngay
+      const link = String(b.link || "").trim();
+      if (!link) { await setCfg("khach_nv_link", ""); return send(res, 200, { ok: true, so: 0 }); }
+      try { const so = await syncKhach(link); await setCfg("khach_nv_link", link); return send(res, 200, { ok: true, so }); }
+      catch (e) { return send(res, 400, { loi: e.message }); }
     }
 
     if (action === "ds") {

@@ -53,6 +53,7 @@ button.del { color: var(--bad); }
 tr.dirty td { background: var(--warn-bg); }
 .up .btn { display: inline-block; font-size: 13px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 .btn.pri { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; }
+.up .btn:not(.pri) { border: 1px solid var(--line); background: var(--surface); }
 .msg { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--surface);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; display: none; z-index: 60; }
 @media (max-width: 760px) {
@@ -73,8 +74,11 @@ tr.dirty td { background: var(--warn-bg); }
     <thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Vai trò và tab được xem</th><th>Đăng ký / đăng nhập cuối</th><th>Thao tác</th></tr></thead>
     <tbody id="rows"><tr><td colspan="5">Đang tải…</td></tr></tbody></table></div></section>
   <section class="card"><h2>Khách hàng theo nhân viên</h2>
-    <p class="cap">Dùng cho bộ lọc "Nhân viên" trên KQ Test và KQ Đường huyết: lọc các dòng mà nhà thầu trúng là khách của nhân viên đó. Tải lên file Excel có cột <b>Tên khách hàng</b> và cột <b>Nhân viên BH</b>; một khách nhiều nhân viên thì ghi cách nhau bằng dấu phẩy. Tải file mới sẽ thay toàn bộ danh sách cũ.</p>
-    <div class="acts"><label class="up"><input type="file" id="khFile" accept=".xlsx,.xls,.csv" hidden><span class="btn pri">Tải lên file Excel</span></label>
+    <p class="cap">Dùng cho bộ lọc "Nhân viên" trên KQ Test và KQ Đường huyết: lọc các dòng mà nhà thầu trúng là khách của nhân viên đó. Dán link Google Sheet (Drive) có cột <b>Tên khách hàng</b> và cột <b>Nhân viên BH</b>; một khách nhiều nhân viên thì ghi cách nhau bằng dấu phẩy. Sheet phải chia sẻ "Bất kỳ ai có đường liên kết – Người xem". Trang tự đọc lại sheet mỗi 15 phút, sửa trên Drive là xong.</p>
+    <div class="acts" style="align-items:center"><input id="khLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:240px">
+      <button type="button" class="pri" id="khSave">Lưu link và đọc ngay</button></div>
+    <p class="cap" id="khInfo" style="margin:8px 0 0"></p>
+    <div class="acts" style="margin-top:8px"><label class="up"><input type="file" id="khFile" accept=".xlsx,.xls,.csv" hidden><span class="btn">Hoặc tải lên file Excel</span></label>
       <button type="button" id="khDown">Tải danh sách hiện tại</button></div>
     <div class="roles" id="khSum" style="margin-top:12px"></div></section>
 </main>
@@ -152,7 +156,18 @@ function khSummary() {
   $('#khSum').innerHTML = KH.length ? Object.entries(c).sort((a, b) => b[1] - a[1]).map(([n, k]) => `<div class="role"><b>${esc(n)}</b>${k} khách</div>`).join('')
     : '<div class="role">Chưa có danh sách.</div>';
 }
-async function khLoad() { const r = await fetch('/api/auth?action=khach-nv'); if (r.ok) { KH = (await r.json()).ds; khSummary(); } }
+async function khLoad() {
+  const r = await fetch('/api/auth?action=khach-nv'); if (!r.ok) return;
+  const d = await r.json(); KH = d.ds; khSummary();
+  if (d.link !== undefined && document.activeElement !== $('#khLink')) $('#khLink').value = d.link || '';
+  $('#khInfo').textContent = (d.link ? 'Đang đồng bộ theo link Drive. ' : 'Chưa gắn link Drive. ') +
+    (d.luc ? 'Cập nhật lần cuối: ' + when(d.luc) + '. ' : '') + (d.loi ? 'Lỗi lần đọc gần nhất: ' + d.loi : '');
+}
+$('#khSave').onclick = async () => {
+  const b = $('#khSave'); b.disabled = true;
+  try { const d = await post('link-khach-nv', { link: $('#khLink').value }); toast(d.so ? `Đã đọc ${d.so} khách hàng từ Drive` : 'Đã bỏ link'); khLoad(); }
+  catch (err) { toast(err.message); } finally { b.disabled = false; }
+};
 $('#khFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return; e.target.value = '';
   try {
