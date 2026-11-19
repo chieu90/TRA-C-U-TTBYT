@@ -51,6 +51,8 @@ button.del { color: var(--bad); }
 .tabs input { margin: 0; accent-color: var(--brand); }
 .tabs.off { opacity: .55; pointer-events: none; }
 tr.dirty td { background: var(--warn-bg); }
+.up .btn { display: inline-block; font-size: 13px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.btn.pri { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; }
 .msg { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--surface);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; display: none; z-index: 60; }
 @media (max-width: 760px) {
@@ -70,6 +72,11 @@ tr.dirty td { background: var(--warn-bg); }
   <section class="card"><h2>Tài khoản</h2><p class="cap" id="cap"></p><div class="scroll"><table>
     <thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Vai trò và tab được xem</th><th>Đăng ký / đăng nhập cuối</th><th>Thao tác</th></tr></thead>
     <tbody id="rows"><tr><td colspan="5">Đang tải…</td></tr></tbody></table></div></section>
+  <section class="card"><h2>Khách hàng theo nhân viên</h2>
+    <p class="cap">Dùng cho bộ lọc "Nhân viên" trên KQ Test và KQ Đường huyết: lọc các dòng mà nhà thầu trúng là khách của nhân viên đó. Tải lên file Excel có cột <b>Tên khách hàng</b> và cột <b>Nhân viên BH</b>; một khách nhiều nhân viên thì ghi cách nhau bằng dấu phẩy. Tải file mới sẽ thay toàn bộ danh sách cũ.</p>
+    <div class="acts"><label class="up"><input type="file" id="khFile" accept=".xlsx,.xls,.csv" hidden><span class="btn pri">Tải lên file Excel</span></label>
+      <button type="button" id="khDown">Tải danh sách hiện tại</button></div>
+    <div class="roles" id="khSum" style="margin-top:12px"></div></section>
 </main>
 <div class="msg" id="msg"></div>
 <script>
@@ -134,6 +141,38 @@ $('#rows').addEventListener('change', e => {
   box.querySelectorAll('input').forEach(i => i.checked = r.tabs.includes(i.value));
 });
 load();
+
+// ---- khách hàng theo nhân viên ----
+let KH = [];
+const xlsxLib = () => window.XLSX ? Promise.resolve() : new Promise((ok, no) => { const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+const nvList = v => String(v).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean);
+function khSummary() {
+  const c = {}; KH.forEach(k => nvList(k.nv).forEach(n => c[n] = (c[n] || 0) + 1));
+  $('#khSum').innerHTML = KH.length ? Object.entries(c).sort((a, b) => b[1] - a[1]).map(([n, k]) => `<div class="role"><b>${esc(n)}</b>${k} khách</div>`).join('')
+    : '<div class="role">Chưa có danh sách.</div>';
+}
+async function khLoad() { const r = await fetch('/api/auth?action=khach-nv'); if (r.ok) { KH = (await r.json()).ds; khSummary(); } }
+$('#khFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  try {
+    await xlsxLib();
+    const wb = XLSX.read(await f.arrayBuffer()), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const low = v => String(v).toLowerCase();
+    const h = rows.findIndex(r => r.some(c => /tên khách|khách hàng/.test(low(c))) && r.some(c => /nhân viên|nvbh/.test(low(c))));
+    if (h < 0) return toast('Không thấy dòng tiêu đề có cột "Tên khách hàng" và "Nhân viên".');
+    const ci = rows[h].findIndex(c => /tên khách|khách hàng/.test(low(c))), ni = rows[h].findIndex(c => /nhân viên|nvbh/.test(low(c)));
+    const ds = rows.slice(h + 1).map(r => ({ ten: String(r[ci]).trim(), nv: String(r[ni]).trim() }))
+      .filter(x => x.ten && x.nv && !/^tổng/i.test(x.ten));
+    if (!confirm(`File có ${ds.length} khách hàng. Thay toàn bộ danh sách cũ (${KH.length} khách)?`)) return;
+    const d = await post('luu-khach-nv', { ds }); toast(`Đã lưu ${d.so} khách hàng`); khLoad();
+  } catch (err) { toast(err.message || 'Không đọc được file'); }
+});
+$('#khDown').onclick = async () => {
+  await xlsxLib(); const ws = XLSX.utils.aoa_to_sheet([['Tên khách hàng', 'Nhân viên BH'], ...KH.map(k => [k.ten, k.nv])]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Khach hang'); XLSX.writeFile(wb, 'khach-hang-theo-nhan-vien.xlsx');
+};
+khLoad();
 </script>
 <script src="/tai-khoan.js" defer></script>
 </body>

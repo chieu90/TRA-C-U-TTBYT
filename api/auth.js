@@ -6,7 +6,8 @@
 //   POST /api/auth?action=dang-nhap        {email, mat_khau}
 //   POST /api/auth?action=dang-xuat
 //   POST /api/auth?action=doi-mat-khau     {cu, moi}
-//   Admin: GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
+//   GET  /api/auth?action=khach-nv         -> khách hàng theo nhân viên (người đã đăng nhập)
+//   Admin: POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
 
 const ROLES = {
@@ -43,6 +44,8 @@ async function ensure() {
     mat_khau TEXT NOT NULL, vai_tro TEXT NOT NULL DEFAULT 'nhan_vien', trang_thai TEXT NOT NULL DEFAULT 'cho_duyet',
     tao_luc TIMESTAMPTZ DEFAULT now(), duyet_luc TIMESTAMPTZ, dang_nhap_cuoi TIMESTAMPTZ)`);
   await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS tabs TEXT");
+  // khách hàng (nhà thầu) theo nhân viên bán hàng: bộ lọc "Nhân viên" trên KQ Test / KQ Đường huyết
+  await sql("CREATE TABLE IF NOT EXISTS mc_khach_nv (ten TEXT NOT NULL, nv TEXT NOT NULL)");
   ready = true;
 }
 
@@ -139,6 +142,11 @@ module.exports = async (req, res) => {
       return send(res, 200, { tai_khoan: pub(me), cho_duyet: cho });
     }
 
+    if (action === "khach-nv") {
+      const ds = await sql("SELECT ten, nv FROM mc_khach_nv ORDER BY ten");
+      return send(res, 200, { ds });
+    }
+
     if (action === "doi-mat-khau" && req.method === "POST") {
       if (!checkPw(String(b.cu || ""), me.mat_khau)) return send(res, 400, { loi: "Mật khẩu hiện tại không đúng." });
       if (String(b.moi || "").length < 8) return send(res, 400, { loi: "Mật khẩu mới tối thiểu 8 ký tự." });
@@ -147,6 +155,17 @@ module.exports = async (req, res) => {
     }
 
     if (me.vai_tro !== "admin") return send(res, 403, { loi: "Chỉ admin được làm việc này." });
+
+    if (action === "luu-khach-nv" && req.method === "POST") {  // thay toàn bộ danh sách
+      const ds = (Array.isArray(b.ds) ? b.ds : []).map(x => ({ ten: String(x.ten || "").trim(), nv: String(x.nv || "").trim() }))
+        .filter(x => x.ten && x.nv);
+      if (!ds.length) return send(res, 400, { loi: "Danh sách trống." });
+      await sql("DELETE FROM mc_khach_nv");
+      for (let i = 0; i < ds.length; i += 500)
+        await sql("INSERT INTO mc_khach_nv (ten, nv) SELECT ten, nv FROM json_to_recordset($1::json) AS x(ten text, nv text)",
+          [JSON.stringify(ds.slice(i, i + 500))]);
+      return send(res, 200, { ok: true, so: ds.length });
+    }
 
     if (action === "ds") {
       const rows = await sql("SELECT * FROM mc_tai_khoan ORDER BY (trang_thai='cho_duyet') DESC, tao_luc DESC");

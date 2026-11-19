@@ -381,6 +381,9 @@ font[style] { background: none !important; box-shadow: none !important; }
       <span class="sl">Hãng sản xuất</span>
       <div class="ms" id="hangBox"><button type="button" id="hangBtn" aria-haspopup="true">Tất cả hãng ▾</button>
         <div class="dd"><input type="search" id="hangQ" placeholder="Tìm hãng…" autocomplete="off"><div class="act"><button type="button" data-a="all">Chọn tất cả</button><button type="button" data-a="none">Bỏ chọn</button></div><div id="hangList"></div></div></div>
+      <span class="sl" id="nvLbl" hidden>Nhân viên</span>
+      <div class="ms" id="nvBox" hidden><button type="button" id="nvBtn" aria-haspopup="true">Tất cả nhân viên ▾</button>
+        <div class="dd"><div class="act"><button type="button" data-a="all">Chọn tất cả</button><button type="button" data-a="none">Bỏ chọn</button></div><div id="nvList"></div></div></div>
       <button id="reset" type="button">Bỏ lọc</button>
     </div>
     <div class="active" id="active"></div>
@@ -521,17 +524,42 @@ function load(d) {
   $('#sub').textContent = `Mặt hàng ${PG.what} trong kết quả lựa chọn nhà thầu ${CMP ? `năm ${NAM_CU} và ${NAM_MOI}` : 'năm ' + d.nam} trên muasamcong.mof.gov.vn · cập nhật ${day(d.cap_nhat.slice(0, 10))} ${d.cap_nhat.slice(11)}`;
   if (CMP) $('#ky').options[0].textContent = `Cùng kỳ (01/01 – ${CUT.split('-').reverse().join('/')})`;
   fromUrl();
+  if (KHNV) initNV();
   apply();
 }
+
+// ---- bộ lọc Nhân viên: nhà thầu trúng là khách của nhân viên nào (danh sách admin tải lên ở /quan-tri) ----
+const NV_NONE = '(Khách chưa gán nhân viên)';
+const kfold = s => fold(s).replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|thuong mai|va|dich vu|xuat nhap khau|tm|dv|xnk|chi nhanh)\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+let KHNV = null;
+fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).then(d => {
+  if (!d || !d.ds || !d.ds.length) return;
+  KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)));
+  if (R.length && !R[0]._nv) { initNV(); apply(); }
+}).catch(() => {});
+function initNV() {
+  const cnt = {};
+  R.forEach(r => { const s = new Set(); r.nha_thau.split('; ').filter(Boolean).forEach(n => (KHNV.get(kfold(n)) || []).forEach(v => s.add(v)));
+    r._nv = s.size ? [...s] : [NV_NONE]; r._nv.forEach(v => cnt[v] = (cnt[v] || 0) + 1); });
+  const cur = [...document.querySelectorAll('#nvList input:checked')].map(i => i.value);  // giữ lựa chọn đang có
+  const want = new Set(cur.length ? cur : (new URLSearchParams(location.search).get('nv') || '').split('|').filter(Boolean));
+  $('#nvList').innerHTML = Object.entries(cnt).sort((a, b) => (a[0] === NV_NONE) - (b[0] === NV_NONE) || b[1] - a[1])
+    .map(([k, n]) => `<label><input type="checkbox" value="${esc(k)}"${want.has(k) ? ' checked' : ''}> ${esc(k)}<b>${n}</b></label>`).join('');
+  $('#nvLbl').hidden = $('#nvBox').hidden = false;
+}
+function setNV(on) { document.querySelectorAll('#nvList input').forEach(i => i.checked = on); }
 
 function apply() {
   const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
   const hang = new Set([...document.querySelectorAll('#hangList input:checked')].map(i => i.value)), hn1 = document.querySelector('#hangList input:checked');
+  const nvs = new Set([...document.querySelectorAll('#nvList input:checked')].map(i => i.value));
+  $('#nvBtn').innerHTML = `<span>${esc(!nvs.size ? 'Tất cả nhân viên' : nvs.size === 1 ? [...nvs][0] : nvs.size + ' nhân viên')}</span><span class="car">▼</span>`;
   $('#hangBtn').innerHTML = `<span>${esc(!hang.size ? 'Tất cả hãng' : hang.size === 1 ? hn1.dataset.n : hang.size + ' hãng')}</span><span class="car">▼</span>`;
   $('#nhomBtn').innerHTML = `<span>${esc(!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : nhom.size + ' nhóm test')}</span><span class="car">▼</span>`;
   const ck = CMP && $('#ky').value === 'ck', mo = r => CMP ? r.ngay.slice(5, 7) : r.ngay.slice(0, 7);
   const base = r => mo(r) >= f && mo(r) <= t && (!ck || r.y === NAM_MOI || r.ngay.slice(5) <= CUT) && (!nhom.size || nhom.has(r.nhom))
-    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!hang.size || hang.has(r.hk)) && (!pick.cdt || r.cdt === pick.cdt);
+    && (!q || r.s.includes(q)) && (!pick.nt || r.nha_thau.split('; ').includes(pick.nt)) && (!hang.size || hang.has(r.hk)) && (!nvs.size || (r._nv || []).some(v => nvs.has(v))) && (!pick.cdt || r.cdt === pick.cdt);
   mapView = R.filter(base);  // bản đồ luôn hiện đủ các tỉnh, tỉnh đang lọc được viền đậm
   view = mapView.filter(r => !tinh || r.tinh === tinh);
   page = 0;
@@ -785,6 +813,7 @@ function state() {
   [['q', $('#q').value], ['from', $('#from').value], ['to', $('#to').value], ['metric', M()], ['tinh', $('#tinh').value],
    ['nhom', [...document.querySelectorAll('#nhomList input:checked')].map(i => i.value).join('|')],
    ['hang', [...document.querySelectorAll('#hangList input:checked')].map(i => i.value).join('|')],
+   ['nv', [...document.querySelectorAll('#nvList input:checked')].map(i => i.value).join('|')],
    ['nt', pick.nt], ['cdt', pick.cdt], ['ky', CMP && $('#ky').value !== 'ck' && $('#ky').value], ['sx', CMP && $('#sx').value !== 'abs' && $('#sx').value]].forEach(([k, v]) => { if (v) p.set(k, v); });
   return p;
 }
@@ -879,7 +908,7 @@ let tmr;
 $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(apply, 250); });
 ['#from', '#to', '#tinh', '#metric', '#ky', '#sx'].forEach(s => $(s).addEventListener('change', apply));
 $('#active').addEventListener('click', e => { const k = e.target.dataset.k; if (k) { delete pick[k]; apply(); } });
-$('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; setNhom(false); $('#hangQ').value = ''; $('#hangQ').dispatchEvent(new Event('input')); setHang(false); $('#tinh').value = '';
+$('#reset').addEventListener('click', () => { pick = {}; $('#q').value = ''; setNhom(false); $('#hangQ').value = ''; $('#hangQ').dispatchEvent(new Event('input')); setHang(false); setNV(false); $('#tinh').value = '';
   $('#from').selectedIndex = 0; $('#to').selectedIndex = $('#to').options.length - 1; apply(); });
 $('#prev').onclick = () => { page--; rows(); }; $('#next').onclick = () => { page++; rows(); };
 $('#csv').addEventListener('click', csv);
@@ -900,7 +929,11 @@ $('#hangBox').addEventListener('click', e => e.stopPropagation());
 $('#hangList').addEventListener('change', apply);
 $('#hangQ').addEventListener('input', () => { const q = fold($('#hangQ').value.trim()); document.querySelectorAll('#hangList label').forEach(l => l.hidden = !!q && !l.dataset.f.includes(q)); });
 $('#hangBox .act').addEventListener('click', e => { const a = e.target.dataset.a; if (a) { setHang(a === 'all'); apply(); } });
-document.addEventListener('click', () => { if (!wide()) { $('#nhomBox').classList.remove('open'); $('#hangBox').classList.remove('open'); } });
+$('#nvBtn').addEventListener('click', e => { e.stopPropagation(); $('#nvBox').classList.toggle('open'); });
+$('#nvBox').addEventListener('click', e => e.stopPropagation());
+$('#nvList').addEventListener('change', apply);
+$('#nvBox .act').addEventListener('click', e => { const a = e.target.dataset.a; if (a) { setNV(a === 'all'); apply(); } });
+document.addEventListener('click', () => { if (!wide()) { $('#nhomBox').classList.remove('open'); $('#hangBox').classList.remove('open'); $('#nvBox').classList.remove('open'); } });
 if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => { if (r.ok) navigator.serviceWorker.register('/sw.js'); }).catch(() => {});
 </script>
 <nav class="tabbar"><a href="/goi-thau"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Gói thầu</span></a><a href="/bao-gia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg><span>Báo giá</span></a><a href="/co-so-y-te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/></svg><span>Cơ sở</span></a><a href="/trung-thau" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>KQ Test</span></a><a href="/duong-huyet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/></svg><span>Đường huyết</span></a></nav>
