@@ -93,7 +93,12 @@ const send = (res, code, data) => { res.statusCode = code; res.setHeader("Conten
 const cleanEmail = e => String(e || "").trim().toLowerCase();
 
 // ---- danh sách khách hàng theo nhân viên đọc từ Google Sheet (link Drive, chia sẻ "ai có link đều xem được") ----
-const SYNC_MIN = 15;  // phút: tự đọc lại sheet khi danh sách cũ hơn mức này
+const SYNC_MIN = 15;
+// khách ghi chung "CSS" và "Nguyễn Đình Chiểu" -> tính hết cho Nguyễn Đình Chiểu (yêu cầu 19/11/2026)
+const fixNv = nv => {
+  const ds = String(nv).split(/[,;/]+/).map(x => x.trim()).filter(Boolean);
+  return ds.includes("CSS") && ds.includes("Nguyễn Đình Chiểu") ? ds.filter(x => x !== "CSS").join(", ") : ds.join(", ");
+};  // phút: tự đọc lại sheet khi danh sách cũ hơn mức này
 const cfg = async k => ((await sql("SELECT v FROM mc_cau_hinh WHERE k=$1", [k]))[0] || {}).v || "";
 const setCfg = (k, v) => sql("INSERT INTO mc_cau_hinh (k, v) VALUES ($1,$2) ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v", [k, v]);
 function parseCsv(t) {
@@ -196,7 +201,7 @@ module.exports = async (req, res) => {
       if (link && (!luc || Date.now() - Date.parse(luc) > SYNC_MIN * 60000)) {
         try { await syncKhach(link); } catch (e) { loi = e.message; }  // lỗi thì dùng danh sách lần trước
       }
-      const ds = await sql("SELECT ten, nv FROM mc_khach_nv ORDER BY ten");
+      const ds = (await sql("SELECT ten, nv FROM mc_khach_nv ORDER BY ten")).map(x => ({ ten: x.ten, nv: fixNv(x.nv) }));
       return send(res, 200, { ds, link: me.vai_tro === "admin" ? link : undefined, luc: await cfg("khach_nv_luc"), loi: loi || undefined });
     }
 
