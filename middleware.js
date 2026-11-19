@@ -14,7 +14,7 @@ const TABS = {
   "duong-huyet": ["/duong-huyet", "/duong_huyet", "/api/duong-huyet"],
   "so-sanh": ["/so-sanh"],
 };
-// vai trò -> tab được xem. Sửa ở đây và ở tai-khoan.js / api/auth.js nếu đổi vai trò.
+// vai trò mẫu -> tab mặc định (khi admin chưa tick riêng). Sửa cùng ROLES trong api/auth.js.
 const ROLES = {
   admin: Object.keys(TABS),
   quan_ly: Object.keys(TABS),
@@ -57,14 +57,15 @@ export default async function middleware(req) {
     if (isData(path)) return new Response(JSON.stringify({ loi: "Chưa đăng nhập" }), { status: 401, headers: { "content-type": "application/json" } });
     return Response.redirect(new URL("/dang-nhap?tiep=" + encodeURIComponent(path + url.search), url), 302);
   }
-  const allowed = ROLES[s.r] || [];
-  const home = "/" + (allowed[0] || "dang-nhap");
+  // quyền từng tab nằm trong phiên (s.t, admin tick ở /quan-tri); admin luôn xem tất cả
+  const allowed = s.r === "admin" ? ROLES.admin : (Array.isArray(s.t) ? s.t.filter(x => TABS[x]) : ROLES[s.r] || []);
+  const home = allowed.length ? "/" + allowed[0] : "/dang-nhap?chua-co-tab=1";  // chưa được tick tab nào
   if (path === "/") return Response.redirect(new URL(home, url), 302);
   if (path === "/quan-tri") return s.r === "admin" ? pass() : Response.redirect(new URL(home, url), 302);
   const tab = tabOf(path);
   if (tab && !allowed.includes(tab)) {
     if (isData(path)) return new Response(JSON.stringify({ loi: "Không có quyền" }), { status: 403, headers: { "content-type": "application/json" } });
-    return Response.redirect(new URL(home + "?khong-quyen=1", url), 302);
+    return Response.redirect(new URL(home + (allowed.length ? "?khong-quyen=1" : ""), url), 302);
   }
   return pass();
 }

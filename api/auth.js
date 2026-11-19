@@ -6,7 +6,7 @@
 //   POST /api/auth?action=dang-nhap        {email, mat_khau}
 //   POST /api/auth?action=dang-xuat
 //   POST /api/auth?action=doi-mat-khau     {cu, moi}
-//   Admin: GET ds | POST sua {id, vai_tro, trang_thai} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
+//   Admin: GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
 
 const ROLES = {
@@ -14,7 +14,11 @@ const ROLES = {
   quan_ly: { ten: "Quản lý", tabs: ["goi-thau", "bao-gia", "co-so-y-te", "trung-thau", "duong-huyet", "so-sanh"] },
   nhan_vien: { ten: "Nhân viên", tabs: ["goi-thau", "bao-gia", "co-so-y-te"] },
 };
+const ALL_TABS = ROLES.admin.tabs;
 const STATUS = ["cho_duyet", "hoat_dong", "khoa"];
+// quyền xem thực tế: admin xem tất cả; người khác theo cột tabs (admin tick từng tab), chưa tick thì theo vai trò mẫu
+const tabsOf = u => u.vai_tro === "admin" ? ALL_TABS
+  : (u.tabs != null ? String(u.tabs).split(",").filter(t => ALL_TABS.includes(t)) : (ROLES[u.vai_tro] || {}).tabs || []);
 const SESSION_DAYS = 7;
 
 const dbUrl = () => process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || "";
@@ -38,13 +42,14 @@ async function ensure() {
     id SERIAL PRIMARY KEY, ten TEXT NOT NULL, email TEXT UNIQUE NOT NULL, sdt TEXT DEFAULT '',
     mat_khau TEXT NOT NULL, vai_tro TEXT NOT NULL DEFAULT 'nhan_vien', trang_thai TEXT NOT NULL DEFAULT 'cho_duyet',
     tao_luc TIMESTAMPTZ DEFAULT now(), duyet_luc TIMESTAMPTZ, dang_nhap_cuoi TIMESTAMPTZ)`);
+  await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS tabs TEXT");
   ready = true;
 }
 
 const b64u = b => Buffer.from(b).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const sessionKey = () => crypto.createHash("sha256").update("muasamcong-auth|" + dbUrl()).digest();
 function makeToken(u) {
-  const body = b64u(JSON.stringify({ i: u.id, r: u.vai_tro, exp: Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400 }));
+  const body = b64u(JSON.stringify({ i: u.id, r: u.vai_tro, t: tabsOf(u), exp: Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400 }));
   return body + "." + b64u(crypto.createHmac("sha256", sessionKey()).update(body).digest());
 }
 function readToken(req) {
@@ -72,7 +77,7 @@ function checkPw(pw, stored) {
 }
 
 const pub = u => ({ id: u.id, ten: u.ten, email: u.email, sdt: u.sdt, vai_tro: u.vai_tro,
-  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: (ROLES[u.vai_tro] || {}).tabs || [],
+  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: tabsOf(u),
   tao_luc: u.tao_luc, duyet_luc: u.duyet_luc, dang_nhap_cuoi: u.dang_nhap_cuoi });
 
 function body(req) {
@@ -126,7 +131,8 @@ module.exports = async (req, res) => {
     const s = readToken(req);
     const [me] = s ? await sql("SELECT * FROM mc_tai_khoan WHERE id=$1", [s.i]) : [];
     if (!me || me.trang_thai !== "hoat_dong") { if (s) setCookie(res, "", 0); return send(res, 401, { loi: "Chưa đăng nhập." }); }
-    if (me.vai_tro !== s.r) setCookie(res, makeToken(me), SESSION_DAYS * 86400); // vai trò vừa đổi -> cấp phiên mới
+    if (me.vai_tro !== s.r || tabsOf(me).join(",") !== (s.t || []).join(","))  // vai trò / quyền tab vừa đổi -> cấp phiên mới
+      setCookie(res, makeToken(me), SESSION_DAYS * 86400);
 
     if (action === "toi") {
       const cho = me.vai_tro === "admin" ? (await sql("SELECT count(*)::int AS n FROM mc_tai_khoan WHERE trang_thai='cho_duyet'"))[0].n : 0;
@@ -155,8 +161,9 @@ module.exports = async (req, res) => {
       const vt = ROLES[b.vai_tro] ? b.vai_tro : u.vai_tro, tt = STATUS.includes(b.trang_thai) ? b.trang_thai : u.trang_thai;
       if (u.vai_tro === "admin" && u.trang_thai === "hoat_dong" && (vt !== "admin" || tt !== "hoat_dong") && (await admins()) <= 1)
         return send(res, 400, { loi: "Phải còn ít nhất 1 admin đang hoạt động." });
-      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2,
-                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id]);
+      const tabs = Array.isArray(b.tabs) ? b.tabs.filter(t => ALL_TABS.includes(t)).join(",") : u.tabs;
+      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4,
+                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs]);
       return send(res, 200, { ok: true });
     }
     if (action === "xoa" && req.method === "POST") {

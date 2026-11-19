@@ -44,6 +44,13 @@ button.del { color: var(--bad); }
 .tag.hoat_dong { background: var(--ok-bg); color: var(--ok); }
 .tag.khoa { background: var(--bad-bg); color: var(--bad); }
 .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; max-width: 360px; }
+.tabs label { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 3px 8px; border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer; user-select: none; }
+.tabs label:has(input:checked) { background: var(--accent-soft); border-color: var(--brand); }
+.tabs input { margin: 0; accent-color: var(--brand); }
+.tabs.off { opacity: .55; pointer-events: none; }
+tr.dirty td { background: var(--warn-bg); }
 .msg { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--surface);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; display: none; z-index: 60; }
 @media (max-width: 760px) {
@@ -59,9 +66,9 @@ button.del { color: var(--bad); }
   <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a></nav>
 </div></div></header>
 <main class="wrap">
-  <section class="card"><h2>Vai trò</h2><p class="cap">Mỗi tài khoản thuộc một vai trò. Đổi vai trò có hiệu lực ngay ở lần tải trang kế tiếp của người đó.</p><div class="roles" id="roles"></div></section>
+  <section class="card"><h2>Phân quyền</h2><p class="cap">Tick từng tab mỗi người được xem rồi bấm Lưu. Chọn vai trò sẽ tick sẵn các tab mẫu, sau đó vẫn sửa được. Admin luôn xem mọi tab và quản trị tài khoản. Thay đổi có hiệu lực ở lần tải trang kế tiếp của người đó.</p><div class="roles" id="roles"></div></section>
   <section class="card"><h2>Tài khoản</h2><p class="cap" id="cap"></p><div class="scroll"><table>
-    <thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Vai trò</th><th>Đăng ký / đăng nhập cuối</th><th>Thao tác</th></tr></thead>
+    <thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Vai trò và tab được xem</th><th>Đăng ký / đăng nhập cuối</th><th>Thao tác</th></tr></thead>
     <tbody id="rows"><tr><td colspan="5">Đang tải…</td></tr></tbody></table></div></section>
 </main>
 <div class="msg" id="msg"></div>
@@ -82,18 +89,20 @@ async function load() {
   ME = me.tai_khoan; const d = await r.json();
   if (!r.ok) { $('#rows').innerHTML = `<tr><td colspan="5">${esc(d.loi)}</td></tr>`; return; }
   ROLES = d.vai_tro;
-  $('#roles').innerHTML = Object.entries(ROLES).map(([k, v]) => `<div class="role"><b>${esc(v.ten)}</b>${v.tabs.map(t => TAB_NAME[t]).join(', ')}${k === 'admin' ? ', quản trị tài khoản' : ''}</div>`).join('');
+  $('#roles').innerHTML = Object.entries(ROLES).map(([k, v]) => `<div class="role"><b>${esc(v.ten)}</b>${k === 'admin' ? 'Mọi tab, quản trị tài khoản' : 'Mẫu: ' + v.tabs.map(t => TAB_NAME[t]).join(', ')}</div>`).join('');
   const cho = d.ds.filter(u => u.trang_thai === 'cho_duyet').length;
   $('#cap').textContent = `${d.ds.length} tài khoản` + (cho ? `, ${cho} đang chờ duyệt` : '');
+  const tabBox = u => `<div class="tabs${u.vai_tro === 'admin' ? ' off' : ''}">${Object.keys(TAB_NAME).map(t =>
+    `<label><input type="checkbox" value="${t}"${u.tabs.includes(t) ? ' checked' : ''}>${TAB_NAME[t]}</label>`).join('')}</div>`;
   const roleSel = u => `<select data-k="vai_tro">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === u.vai_tro ? ' selected' : ''}>${esc(v.ten)}</option>`).join('')}</select>`;
   $('#rows').innerHTML = d.ds.map(u => `<tr data-id="${u.id}">
     <td data-l="Người dùng"><div><b>${esc(u.ten)}</b>${u.id === ME.id ? ' (bạn)' : ''}<div class="sub">${esc(u.email)}${u.sdt ? ' · ' + esc(u.sdt) : ''}</div></div></td>
     <td data-l="Trạng thái"><span class="tag ${u.trang_thai}">${ST_NAME[u.trang_thai] || u.trang_thai}</span></td>
-    <td data-l="Vai trò">${roleSel(u)}</td>
+    <td data-l="Quyền"><div>${roleSel(u)}${tabBox(u)}</div></td>
     <td data-l="Đăng ký / đăng nhập"><div class="sub">${when(u.tao_luc)}<br>${when(u.dang_nhap_cuoi)}</div></td>
     <td data-l="Thao tác"><div class="acts">
       ${u.trang_thai === 'cho_duyet' ? '<button class="pri" data-a="duyet">Duyệt</button>' : ''}
-      ${u.trang_thai !== 'cho_duyet' ? '<button data-a="luu">Lưu vai trò</button>' : ''}
+      ${u.trang_thai !== 'cho_duyet' ? '<button data-a="luu">Lưu quyền</button>' : ''}
       ${u.trang_thai === 'hoat_dong' && u.id !== ME.id ? '<button data-a="khoa">Khóa</button>' : ''}
       ${u.trang_thai === 'khoa' ? '<button data-a="mo">Mở khóa</button>' : ''}
       <button data-a="mk">Đặt mật khẩu</button>
@@ -103,16 +112,26 @@ async function load() {
 $('#rows').addEventListener('click', async e => {
   const a = e.target.dataset.a; if (!a) return;
   const tr = e.target.closest('tr'), id = +tr.dataset.id, vai_tro = tr.querySelector('[data-k=vai_tro]').value;
+  const tabs = [...tr.querySelectorAll('.tabs input:checked')].map(i => i.value);
   const name = tr.querySelector('b').textContent;
   try {
-    if (a === 'duyet') { await post('sua', { id, vai_tro, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name} (${ROLES[vai_tro].ten})`); }
-    if (a === 'luu') { await post('sua', { id, vai_tro }); toast('Đã lưu vai trò'); }
+    if ((a === 'duyet' || a === 'luu') && vai_tro !== 'admin' && !tabs.length && !confirm(`${name} chưa được tick tab nào, sẽ không xem được trang nào. Vẫn lưu?`)) return;
+    if (a === 'duyet') { await post('sua', { id, vai_tro, tabs, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name}`); }
+    if (a === 'luu') { await post('sua', { id, vai_tro, tabs }); toast(`Đã lưu quyền của ${name}`); }
     if (a === 'khoa') { if (!confirm(`Khóa tài khoản ${name}?`)) return; await post('sua', { id, trang_thai: 'khoa' }); toast('Đã khóa'); }
     if (a === 'mo') { await post('sua', { id, trang_thai: 'hoat_dong' }); toast('Đã mở khóa'); }
     if (a === 'xoa') { if (!confirm(`Xóa tài khoản ${name}? Không hoàn tác được.`)) return; await post('xoa', { id }); toast('Đã xóa'); }
     if (a === 'mk') { const p = prompt(`Mật khẩu mới cho ${name} (tối thiểu 8 ký tự):`); if (!p) return; await post('dat-mat-khau', { id, mat_khau: p }); toast('Đã đặt mật khẩu mới'); }
     load();
   } catch (err) { toast(err.message); }
+});
+// chọn vai trò -> tick sẵn tab mẫu; admin thì khóa ô tick (luôn xem tất cả)
+$('#rows').addEventListener('change', e => {
+  const tr = e.target.closest('tr'); if (!tr) return; tr.classList.add('dirty');
+  if (e.target.dataset.k !== 'vai_tro') return;
+  const r = ROLES[e.target.value], box = tr.querySelector('.tabs');
+  box.classList.toggle('off', e.target.value === 'admin');
+  box.querySelectorAll('input').forEach(i => i.checked = r.tabs.includes(i.value));
 });
 load();
 </script>

@@ -82,7 +82,10 @@ $('#up').onsubmit = async e => {
   btn.disabled = false; show(ok ? d.thong_bao : d.loi, ok);
   if (ok) { $('#e1').value = $('#e2').value; e.target.reset(); }
 };
-fetch('/api/auth?action=toi').then(r => { if (r.ok) go(); }).catch(() => {});
+if (new URLSearchParams(location.search).get('chua-co-tab')) {
+  show('Tài khoản của bạn chưa được admin cấp quyền xem tab nào. Liên hệ admin, hoặc đăng nhập tài khoản khác.');
+  fetch('/api/auth?action=dang-xuat', { method: 'POST' });
+} else fetch('/api/auth?action=toi').then(r => { if (r.ok) go(); }).catch(() => {});
 </script>
 </body>
 </html>
