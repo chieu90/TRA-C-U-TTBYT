@@ -44,6 +44,13 @@ async function readSession(req) {
   } catch (e) { return null; }
 }
 
+// file dữ liệu KQ (lọc theo khách của nhân viên nếu tài khoản bị giới hạn)
+const KQ_FILE = { "/api/trung-thau": "/trung_thau.json", "/api/duong-huyet": "/duong_huyet.json" };
+const kqFile = path => KQ_FILE[path] || (/^\/(trung_thau|duong_huyet)(_\d{4})?\.json$/.test(path) ? path : "");
+async function internalKey() {
+  const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("muasamcong-noibo|" + dbUrl()));
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
 const tabOf = path => Object.keys(TABS).find(t => TABS[t].some(p => path === p || path.startsWith(p)));
 const isData = path => path.startsWith("/api/") || /\.(json|csv)$/.test(path);
 
@@ -52,6 +59,7 @@ export default async function middleware(req) {
   const url = new URL(req.url);
   const path = url.pathname;
   if (PUBLIC.some(p => path === p || path.startsWith(p))) return pass();
+  if (req.headers.get("x-mc-noi-bo") && req.headers.get("x-mc-noi-bo") === await internalKey()) return pass();
   const s = await readSession(req);
   if (!s) {
     if (isData(path)) return new Response(JSON.stringify({ loi: "Chưa đăng nhập" }), { status: 401, headers: { "content-type": "application/json" } });
@@ -67,5 +75,8 @@ export default async function middleware(req) {
     if (isData(path)) return new Response(JSON.stringify({ loi: "Không có quyền" }), { status: 403, headers: { "content-type": "application/json" } });
     return Response.redirect(new URL(home + (allowed.length ? "?khong-quyen=1" : ""), url), 302);
   }
+  // tài khoản chỉ xem KQ khách của mình: chuyển file KQ sang /api/auth?action=kq để máy chủ lọc
+  const kf = s.k && s.r !== "admin" ? kqFile(path) : "";
+  if (kf) return new Response(null, { headers: { "x-middleware-rewrite": new URL("/api/auth?action=kq&f=" + encodeURIComponent(kf), url).toString() } });
   return pass();
 }

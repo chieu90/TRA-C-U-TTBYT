@@ -29,6 +29,9 @@
       const t = TAB_OF[a.getAttribute('href')]; if (t && !u.tabs.includes(t)) a.remove();
     });
     if (new URLSearchParams(location.search).get('khong-quyen')) toast('Tài khoản của bạn chưa được cấp quyền xem trang đó.');
+    if (u.kq_nv && ['trung-thau', 'duong-huyet', 'so-sanh'].includes(tab)) {  // nhắc 1 lần mỗi phiên
+      try { if (!sessionStorage.getItem('kq_nhac')) { toast(`Bạn đang xem kết quả các khách do ${u.kq_nv} phụ trách.`); sessionStorage.setItem('kq_nhac', '1'); } } catch (e) {}
+    }
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
     const box = document.createElement('div'); box.className = 'acct notranslate'; box.setAttribute('translate', 'no');
     box.innerHTML = `<button type="button" aria-haspopup="true">👤 ${esc(u.ten.split(' ').slice(-1)[0])}${cho ? `<span class="dot">${cho}</span>` : ''}</button>

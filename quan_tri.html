@@ -50,6 +50,8 @@ button.del { color: var(--bad); }
 .tabs label:has(input:checked) { background: var(--accent-soft); border-color: var(--brand); }
 .tabs input { margin: 0; accent-color: var(--brand); }
 .tabs.off { opacity: .55; pointer-events: none; }
+.kq { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.kq select { margin-left: 4px; max-width: 230px; }
 tr.dirty td { background: var(--warn-bg); }
 .up .btn { display: inline-block; font-size: 13px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 .btn.pri { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; }
@@ -105,11 +107,15 @@ async function load() {
   $('#cap').textContent = `${d.ds.length} tài khoản` + (cho ? `, ${cho} đang chờ duyệt` : '');
   const tabBox = u => `<div class="tabs${u.vai_tro === 'admin' ? ' off' : ''}">${Object.keys(TAB_NAME).map(t =>
     `<label><input type="checkbox" value="${t}"${u.tabs.includes(t) ? ' checked' : ''}>${TAB_NAME[t]}</label>`).join('')}</div>`;
+  const nvs = [...new Set(KH.flatMap(k => nvList(k.nv)))].sort((a, b) => a.localeCompare(b, 'vi'));
+  const kqSel = u => u.vai_tro === 'admin' ? '' : `<div class="kq">KQ Test / Đường huyết: <select data-k="kq_nv">
+    <option value="">Xem tất cả khách</option>${[...new Set([...nvs, u.kq_nv].filter(Boolean))].map(n =>
+    `<option value="${esc(n)}"${n === u.kq_nv ? ' selected' : ''}>Chỉ khách của ${esc(n)}</option>`).join('')}</select></div>`;
   const roleSel = u => `<select data-k="vai_tro">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === u.vai_tro ? ' selected' : ''}>${esc(v.ten)}</option>`).join('')}</select>`;
   $('#rows').innerHTML = d.ds.map(u => `<tr data-id="${u.id}">
     <td data-l="Người dùng"><div><b>${esc(u.ten)}</b>${u.id === ME.id ? ' (bạn)' : ''}<div class="sub">${esc(u.email)}${u.sdt ? ' · ' + esc(u.sdt) : ''}</div></div></td>
     <td data-l="Trạng thái"><span class="tag ${u.trang_thai}">${ST_NAME[u.trang_thai] || u.trang_thai}</span></td>
-    <td data-l="Quyền"><div>${roleSel(u)}${tabBox(u)}</div></td>
+    <td data-l="Quyền"><div>${roleSel(u)}${tabBox(u)}${kqSel(u)}</div></td>
     <td data-l="Đăng ký / đăng nhập"><div class="sub">${when(u.tao_luc)}<br>${when(u.dang_nhap_cuoi)}</div></td>
     <td data-l="Thao tác"><div class="acts">
       ${u.trang_thai === 'cho_duyet' ? '<button class="pri" data-a="duyet">Duyệt</button>' : ''}
@@ -124,11 +130,12 @@ $('#rows').addEventListener('click', async e => {
   const a = e.target.dataset.a; if (!a) return;
   const tr = e.target.closest('tr'), id = +tr.dataset.id, vai_tro = tr.querySelector('[data-k=vai_tro]').value;
   const tabs = [...tr.querySelectorAll('.tabs input:checked')].map(i => i.value);
+  const kqEl = tr.querySelector('[data-k=kq_nv]'), kq_nv = kqEl ? kqEl.value : '';
   const name = tr.querySelector('b').textContent;
   try {
     if ((a === 'duyet' || a === 'luu') && vai_tro !== 'admin' && !tabs.length && !confirm(`${name} chưa được tick tab nào, sẽ không xem được trang nào. Vẫn lưu?`)) return;
-    if (a === 'duyet') { await post('sua', { id, vai_tro, tabs, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name}`); }
-    if (a === 'luu') { await post('sua', { id, vai_tro, tabs }); toast(`Đã lưu quyền của ${name}`); }
+    if (a === 'duyet') { await post('sua', { id, vai_tro, tabs, kq_nv, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name}`); }
+    if (a === 'luu') { await post('sua', { id, vai_tro, tabs, kq_nv }); toast(`Đã lưu quyền của ${name}`); }
     if (a === 'khoa') { if (!confirm(`Khóa tài khoản ${name}?`)) return; await post('sua', { id, trang_thai: 'khoa' }); toast('Đã khóa'); }
     if (a === 'mo') { await post('sua', { id, trang_thai: 'hoat_dong' }); toast('Đã mở khóa'); }
     if (a === 'xoa') { if (!confirm(`Xóa tài khoản ${name}? Không hoàn tác được.`)) return; await post('xoa', { id }); toast('Đã xóa'); }
@@ -144,8 +151,6 @@ $('#rows').addEventListener('change', e => {
   box.classList.toggle('off', e.target.value === 'admin');
   box.querySelectorAll('input').forEach(i => i.checked = r.tabs.includes(i.value));
 });
-load();
-
 // ---- khách hàng theo nhân viên ----
 let KH = [];
 const xlsxLib = () => window.XLSX ? Promise.resolve() : new Promise((ok, no) => { const s = document.createElement('script');
@@ -187,7 +192,7 @@ $('#khDown').onclick = async () => {
   await xlsxLib(); const ws = XLSX.utils.aoa_to_sheet([['Tên khách hàng', 'Nhân viên BH'], ...KH.map(k => [k.ten, k.nv])]);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Khach hang'); XLSX.writeFile(wb, 'khach-hang-theo-nhan-vien.xlsx');
 };
-khLoad();
+khLoad().then(load);
 </script>
 <script src="/tai-khoan.js" defer></script>
 </body>

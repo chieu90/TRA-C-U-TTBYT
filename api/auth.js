@@ -17,6 +17,7 @@ const ROLES = {
 };
 const ALL_TABS = ROLES.admin.tabs;
 const STATUS = ["cho_duyet", "hoat_dong", "khoa"];
+const kqOf = u => u.vai_tro === "admin" ? "" : String(u.kq_nv || "");
 // quyền xem thực tế: admin xem tất cả; người khác theo cột tabs (admin tick từng tab), chưa tick thì theo vai trò mẫu
 const tabsOf = u => u.vai_tro === "admin" ? ALL_TABS
   : (u.tabs != null ? String(u.tabs).split(",").filter(t => ALL_TABS.includes(t)) : (ROLES[u.vai_tro] || {}).tabs || []);
@@ -47,13 +48,15 @@ async function ensure() {
   // khách hàng (nhà thầu) theo nhân viên bán hàng: bộ lọc "Nhân viên" trên KQ Test / KQ Đường huyết
   await sql("CREATE TABLE IF NOT EXISTS mc_khach_nv (ten TEXT NOT NULL, nv TEXT NOT NULL)");
   await sql("CREATE TABLE IF NOT EXISTS mc_cau_hinh (k TEXT PRIMARY KEY, v TEXT)");
+  // KQ Test / KQ Đường huyết: chỉ xem kết quả của khách do nhân viên này phụ trách ('' = xem tất cả)
+  await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS kq_nv TEXT DEFAULT ''");
   ready = true;
 }
 
 const b64u = b => Buffer.from(b).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const sessionKey = () => crypto.createHash("sha256").update("muasamcong-auth|" + dbUrl()).digest();
 function makeToken(u) {
-  const body = b64u(JSON.stringify({ i: u.id, r: u.vai_tro, t: tabsOf(u), exp: Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400 }));
+  const body = b64u(JSON.stringify({ i: u.id, r: u.vai_tro, t: tabsOf(u), k: kqOf(u), exp: Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400 }));
   return body + "." + b64u(crypto.createHmac("sha256", sessionKey()).update(body).digest());
 }
 function readToken(req) {
@@ -81,7 +84,7 @@ function checkPw(pw, stored) {
 }
 
 const pub = u => ({ id: u.id, ten: u.ten, email: u.email, sdt: u.sdt, vai_tro: u.vai_tro,
-  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: tabsOf(u),
+  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: tabsOf(u), kq_nv: kqOf(u),
   tao_luc: u.tao_luc, duyet_luc: u.duyet_luc, dang_nhap_cuoi: u.dang_nhap_cuoi });
 
 function body(req) {
@@ -137,6 +140,12 @@ async function syncKhach(link) {
   await setCfg("khach_nv_luc", new Date().toISOString());
   return ds.length;
 }
+// so khớp tên nhà thầu với tên khách hàng (bỏ dấu, bỏ "công ty", "TNHH"...), giống bộ lọc trên trang
+const kfold = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
+  .replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|thuong mai|va|dich vu|xuat nhap khau|tm|dv|xnk|chi nhanh)\b/g, " ")
+  .replace(/[^a-z0-9]+/g, " ").trim();
+// khóa nội bộ để hàm này đọc file KQ gốc qua middleware (không cần cookie)
+const internalKey = () => crypto.createHash("sha256").update("muasamcong-noibo|" + dbUrl()).digest("hex");
 async function saveKhach(ds) {
   await sql("DELETE FROM mc_khach_nv");
   for (let i = 0; i < ds.length; i += 500)
@@ -187,7 +196,7 @@ module.exports = async (req, res) => {
     const s = readToken(req);
     const [me] = s ? await sql("SELECT * FROM mc_tai_khoan WHERE id=$1", [s.i]) : [];
     if (!me || me.trang_thai !== "hoat_dong") { if (s) setCookie(res, "", 0); return send(res, 401, { loi: "Chưa đăng nhập." }); }
-    if (me.vai_tro !== s.r || tabsOf(me).join(",") !== (s.t || []).join(","))  // vai trò / quyền tab vừa đổi -> cấp phiên mới
+    if (me.vai_tro !== s.r || tabsOf(me).join(",") !== (s.t || []).join(",") || kqOf(me) !== (s.k || ""))  // quyền vừa đổi -> cấp phiên mới
       setCookie(res, makeToken(me), SESSION_DAYS * 86400);
 
     if (action === "toi") {
@@ -203,6 +212,22 @@ module.exports = async (req, res) => {
       }
       const ds = (await sql("SELECT ten, nv FROM mc_khach_nv ORDER BY ten")).map(x => ({ ten: x.ten, nv: fixNv(x.nv) }));
       return send(res, 200, { ds, link: me.vai_tro === "admin" ? link : undefined, luc: await cfg("khach_nv_luc"), loi: loi || undefined });
+    }
+
+    // dữ liệu KQ đã lọc theo khách của nhân viên (middleware chuyển yêu cầu file KQ về đây)
+    if (action === "kq") {
+      const f = new URL(req.url, "http://x").searchParams.get("f") || "";
+      if (!/^\/(trung_thau|duong_huyet)(_\d{4})?\.json$/.test(f)) return send(res, 400, { loi: "Sai tệp." });
+      const r = await fetch(`https://${req.headers.host}${f}`, { headers: { "x-mc-noi-bo": internalKey() } });
+      if (!r.ok) return send(res, r.status, { loi: "Không đọc được dữ liệu." });
+      const d = await r.json(), nv = kqOf(me);
+      if (nv) {
+        const mine = new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").includes(nv)).map(x => kfold(x.ten)));
+        const ci = d.cot.indexOf("nha_thau");
+        d.rows = d.rows.filter(row => String(row[ci] || "").split("; ").some(n => mine.has(kfold(n))));
+        d.chi_khach_cua = nv;
+      }
+      return send(res, 200, d);
     }
 
     if (action === "doi-mat-khau" && req.method === "POST") {
@@ -244,8 +269,9 @@ module.exports = async (req, res) => {
       if (u.vai_tro === "admin" && u.trang_thai === "hoat_dong" && (vt !== "admin" || tt !== "hoat_dong") && (await admins()) <= 1)
         return send(res, 400, { loi: "Phải còn ít nhất 1 admin đang hoạt động." });
       const tabs = Array.isArray(b.tabs) ? b.tabs.filter(t => ALL_TABS.includes(t)).join(",") : u.tabs;
-      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4,
-                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs]);
+      const kq = typeof b.kq_nv === "string" ? b.kq_nv.trim().slice(0, 100) : (u.kq_nv || "");
+      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4, kq_nv=$5,
+                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs, kq]);
       return send(res, 200, { ok: true });
     }
     if (action === "xoa" && req.method === "POST") {
