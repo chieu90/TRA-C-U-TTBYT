@@ -215,6 +215,8 @@ button.pri { color: #fff; border: 0; background: linear-gradient(135deg, var(--b
 .ms .dd input[type=search] { width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 7px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); font: inherit; font-size: 13.5px; }
 @media (max-width: 760px) { .ms, .ms > button { width: 100%; max-width: none; } .ms .dd { width: 100%; } }
 .sl { display: none; }
+.side .sl[hidden], .ms[hidden], .ms .dd .act[hidden] { display: none !important; }
+.nv-empty { padding: 8px; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .more-link { float: right; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; margin-left: 8px; }
 .more-link:hover { text-decoration: underline; }
 #back { float: none; align-self: center; white-space: nowrap; }
@@ -534,7 +536,13 @@ const kfold = s => fold(s).replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh
   .replace(/[^a-z0-9]+/g, ' ').trim();
 let KHNV = null;
 fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).then(d => {
-  if (!d || !d.ds || !d.ds.length) return;
+  if (!d) return;  // chưa bật đăng nhập
+  if (!d.ds || !d.ds.length) {  // admin chưa tải danh sách khách hàng
+    $('#nvBox .act').hidden = true;
+    $('#nvList').innerHTML = '<div class="nv-empty">Chưa có danh sách khách hàng theo nhân viên. Admin tải file Excel ở <a href="/quan-tri">Quản trị tài khoản</a> → mục "Khách hàng theo nhân viên".</div>';
+    $('#nvBtn').innerHTML = '<span>Chưa có danh sách</span><span class="car">▼</span>';
+    $('#nvLbl').hidden = $('#nvBox').hidden = false; return;
+  }
   KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)));
   if (R.length && !R[0]._nv) { initNV(); apply(); }
 }).catch(() => {});
@@ -554,7 +562,7 @@ function apply() {
   const q = fold($('#q').value.trim()), f = $('#from').value, t = $('#to').value, nhom = new Set([...document.querySelectorAll('#nhomList input:checked')].map(i => i.value)), tinh = $('#tinh').value;
   const hang = new Set([...document.querySelectorAll('#hangList input:checked')].map(i => i.value)), hn1 = document.querySelector('#hangList input:checked');
   const nvs = new Set([...document.querySelectorAll('#nvList input:checked')].map(i => i.value));
-  $('#nvBtn').innerHTML = `<span>${esc(!nvs.size ? 'Tất cả nhân viên' : nvs.size === 1 ? [...nvs][0] : nvs.size + ' nhân viên')}</span><span class="car">▼</span>`;
+  if (KHNV) $('#nvBtn').innerHTML = `<span>${esc(!nvs.size ? 'Tất cả nhân viên' : nvs.size === 1 ? [...nvs][0] : nvs.size + ' nhân viên')}</span><span class="car">▼</span>`;
   $('#hangBtn').innerHTML = `<span>${esc(!hang.size ? 'Tất cả hãng' : hang.size === 1 ? hn1.dataset.n : hang.size + ' hãng')}</span><span class="car">▼</span>`;
   $('#nhomBtn').innerHTML = `<span>${esc(!nhom.size ? 'Tất cả nhóm test' : nhom.size === 1 ? [...nhom][0] : nhom.size + ' nhóm test')}</span><span class="car">▼</span>`;
   const ck = CMP && $('#ky').value === 'ck', mo = r => CMP ? r.ngay.slice(5, 7) : r.ngay.slice(0, 7);
