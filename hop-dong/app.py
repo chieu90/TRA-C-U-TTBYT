@@ -471,6 +471,9 @@ ICON = {k: _svg(v) for k, v in {
     "nguoi_dung": '<circle cx="17" cy="16" r="7" fill="#f98b8b"/><path d="M5 40a12 12 0 0 1 24 0z" fill="#f98b8b"/>'
                   '<circle cx="32" cy="18" r="6" fill="#8f4f86"/><path d="M21 40a11 11 0 0 1 22 0z" fill="#8f4f86"/>',
 }.items()}
+ICON["chat"] = _svg('<path d="M6 10a5 5 0 0 1 5-5h20a5 5 0 0 1 5 5v13a5 5 0 0 1-5 5H17l-8 7v-7.5A5 5 0 0 1 6 23z" fill="#2ea8f5"/>'
+                   '<path d="M24 20a4 4 0 0 1 4-4h11a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4v6l-7-6h-4a4 4 0 0 1-4-4z" fill="#1fc7b0"/>'
+                   + "".join(f'<circle cx="{x}" cy="16.5" r="2.2" fill="#fff"/>' for x in (14, 21)))
 ICON_LUOI = ('<svg viewBox="0 0 18 18" aria-hidden="true">'
              + "".join(f'<rect x="{x}" y="{y}" width="4" height="4" rx="1" fill="currentColor"/>' for y in (1, 7, 13) for x in (1, 7, 13)) + '</svg>')
 
@@ -482,6 +485,7 @@ UNG_DUNG = [
         ("/mau-hop-dong", "Mẫu hợp đồng", "mau", "mau", True)]),
     ("bao-gia", "Báo giá", "bao_gia", [
         ("/bao-gia", "Danh sách báo giá", "bg", "ds_bg", False), ("/bao-gia/moi", "Soạn báo giá", "bgm", "soan", False),
+        ("/bao-gia/nhanh", "Soạn bằng chat", "bgn", "chat", False),
         ("/hang-hoa", "Hàng hóa", "hh", "hang_hoa", False)]),
 ]
 
@@ -2180,7 +2184,7 @@ def ds_bao_gia(c):
     else:
         bang = f'<div class="the trong">{"Không có báo giá nào khớp." if c.q else "Chưa có báo giá nào. Bấm Soạn báo giá để bắt đầu."}</div>'
     return trang(c, "Báo giá", f"""
-      <div class="dau-trang"><h1>Báo giá <span class="dem">{len(ds)}</span></h1><a class="nut" href="/bao-gia/moi">Soạn báo giá</a></div>
+      <div class="dau-trang"><h1>Báo giá <span class="dem">{len(ds)}</span></h1><div class="hang-nut"><a class="nut" href="/bao-gia/nhanh">Soạn bằng chat</a><a class="nut phu" href="/bao-gia/moi">Soạn báo giá</a></div></div>
       <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Số báo giá, khách, mã hàng…">
         {chon("tt", TT_BG, tt, "Mọi tình trạng")}{loc_pt}
         <button class="nut phu">Lọc</button>{'<a href="/bao-gia">Bỏ lọc</a>' if c.q else ""}</form>
@@ -2421,6 +2425,228 @@ def bg_google(c, bid):
     c.db.execute("UPDATE bao_gia SET link_file = ? WHERE id = ?", (url, bid))
     c.db.commit()
     return Chuyen(f"/bao-gia/{bid}", "Đã tạo link Google Docs cho báo giá (thư mục Báo giá trong Drive).")
+
+
+# ───────────────────────── soạn báo giá bằng chat (không dùng AI) ─────────────────────────
+# Mỗi dòng (hoặc mỗi đoạn cách nhau bởi dấu ; ,) là một ý: khách hàng, một mặt hàng, giảm giá, hiệu lực, ghi chú.
+
+DV_SL = r"(?:hop|test|que|khay|cai|bo|lo|kit|chiec|thung|tui|goi|vi)"
+MAU_KHACH = re.compile(r"^(?:kh[aá]ch\s*h[aà]ng|kh[aá]ch|kh|k[ií]nh\s*g[uử]i|g[uử]i|b[aá]o\s*gi[aá]\s*cho|b[aá]o\s*gi[aá]|cho)"
+                       r"(?:\s*[:\-]\s*|\s+)(.+)$", re.I)
+MAU_GHI_CHU = re.compile(r"^(?:ghi\s*ch[uú]|gc|l[uư]u\s*[yý])\s*[:\-]?\s*(.+)$", re.I)
+VI_DU_CHAT = """Khách: BV Thủ Đức
+R0011C 50 hộp
+HBsAg que x20
+HCV khay 10 giá 11000
+giảm 5%
+hiệu lực 30 ngày
+ghi chú: Giá đã gồm VAT, giao hàng tận nơi"""
+
+
+VIET_TAT = {"bv": "benh vien", "bvdk": "benh vien da khoa", "ttyt": "trung tam y te", "tyt": "tram y te",
+            "pk": "phong kham", "pkdk": "phong kham da khoa", "cty": "cong ty", "ct": "cong ty", "tnhh": "trach nhiem huu han"}
+
+
+def viet_tat(s):
+    """Bỏ dấu và mở các chữ viết tắt hay dùng (BV, TTYT, PK…) để so tên khách."""
+    return " ".join(VIET_TAT.get(w, w) for w in re.sub(r"[^a-z0-9 ]", " ", gap(s)).split())
+
+
+def _so_chat(s, k=""):
+    x = doc_gia(s)
+    return x * 1000 if k in ("k", "nghin", "ngan") else x
+
+
+def _khop_hang(hang, q):
+    """Tìm hàng theo câu đã bỏ dấu: trùng ký mã hiệu thì lấy luôn; không thì mỗi từ phải có trong tên/mã/nhãn hiệu."""
+    tu = q.split()
+    for t in tu:
+        ex = [h for h in hang if h["_m"] and h["_m"] == t]
+        if ex:
+            return ex[:1]
+    ung = [h for h in hang if all(re.search(r"(?<![a-z0-9])" + re.escape(t), h["_g"]) for t in tu)]
+    if len(ung) > 1:
+        for loc in (lambda h: h["_t"] == q, lambda h: all(re.search(r"(?<![a-z0-9])" + re.escape(t), h["_t"]) for t in tu)):
+            hep = [h for h in ung if loc(h)]
+            if len(hep) == 1:
+                return hep
+            if hep:
+                ung = hep
+    return ung
+
+
+def doc_chat_bg(c, van_ban):
+    """Hiểu yêu cầu gõ tự do -> thông tin báo giá và các dòng hàng (mỗi dòng có danh sách hàng khớp)."""
+    kq = {"ten_kh": "", "giam": 0.0, "hieu_luc": None, "ghi_chu": "", "dong": [], "khong_hieu": []}
+    hang = [dict(h) for h in c.db.execute("SELECT * FROM hang_hoa ORDER BY id").fetchall()]
+    for h in hang:
+        h["_g"] = gap(" ".join(str(h[k] or "") for k in ("ten", "ten_tm", "ma", "nhan_hieu")))
+        h["_t"], h["_m"] = gap(h["ten"]), gap(h["ma"])
+    khach = [r["ten"] for r in c.db.execute("SELECT ten FROM khach_hang").fetchall()]
+
+    def dat_khach(ten):
+        g = viet_tat(ten)
+        trung = [k for k in khach if g and (g in viet_tat(k) or viet_tat(k) in g)]
+        kq["ten_kh"] = trung[0] if len(trung) == 1 else ten.strip()
+
+    cac_cau = []
+    for dong in str(van_ban or "")[:5000].splitlines():
+        m = MAU_GHI_CHU.match(dong.strip(" \t-•*+"))
+        if m:                   # ghi chú lấy nguyên dòng, kể cả dấu phẩy
+            kq["ghi_chu"] = (kq["ghi_chu"] + "; " if kq["ghi_chu"] else "") + m.group(1).strip()
+        else:
+            cac_cau += re.split(r";|,(?!\d)", dong)
+    for cau in cac_cau:
+        cau = cau.strip(" \t.-•*+")
+        if not cau:
+            continue
+        g = gap(cau)
+        con = g
+        m = re.search(r"(?:giam|chiet khau|ck)\s*(?:gia\s*)?(\d+(?:[.,]\d+)?)\s*%", con)
+        if m:
+            kq["giam"] = min(float(m.group(1).replace(",", ".")), 100.0)
+            con = (con[:m.start()] + " " + con[m.end():]).strip()
+        m = re.search(r"hieu luc\s*(?:den|toi)?\s*(?:ngay\s*)?(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", con)
+        if m:
+            nam = int(m.group(3) or date.today().year)
+            try:
+                kq["hieu_luc"] = date(nam + 2000 if nam < 100 else nam, int(m.group(2)), int(m.group(1))).isoformat()
+            except ValueError:
+                kq["khong_hieu"].append(cau)
+            con = (con[:m.start()] + " " + con[m.end():]).strip()
+        else:
+            m = re.search(r"hieu luc\s*(\d{1,3})\s*ngay", con)
+            if m:
+                kq["hieu_luc"] = (date.today() + timedelta(days=int(m.group(1)))).isoformat()
+                con = (con[:m.start()] + " " + con[m.end():]).strip()
+        if not con:
+            continue
+        m = MAU_KHACH.match(cau)
+        if m and not re.search(r"\d", gap(m.group(1))[:3]) and not _khop_hang(hang, gap(cau)):
+            dat_khach(m.group(1))
+            continue
+        # mặt hàng: tách giá, số lượng; phần còn lại để tìm hàng
+        gia = 0.0
+        m = re.search(r"(?:(?<![a-z])(?:don gia|gia)|@)\s*[:=]?\s*(\d[\d.,]*)\s*(k|nghin|ngan|d|vnd)?\b", con)
+        if m:
+            gia = _so_chat(m.group(1), m.group(2) or "")
+            con = (con[:m.start()] + " " + con[m.end():]).strip()
+        sl = 0.0
+        for mau in (r"(?:^|\s)(?:x|sl|so luong)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\b", r"(?:^|\s)(\d+(?:[.,]\d+)?)\s*" + DV_SL + r"\b",
+                    r"(?:^|\s)x?(\d+(?:[.,]\d+)?)$"):
+            m = re.search(mau, con)
+            if m:
+                sl = float(m.group(1).replace(",", "."))
+                con = (con[:m.start()] + " " + con[m.end():]).strip()
+                break
+        con = re.sub(r"\s+", " ", con).strip()
+        ung = _khop_hang(hang, con) if con else []
+        if not ung and not sl and not gia and not kq["ten_kh"] and not kq["dong"]:
+            dat_khach(cau)          # dòng đầu không phải hàng -> coi là tên khách
+            continue
+        kq["dong"].append({"cau": cau, "sl": sl, "gia": gia, "ung": ung[:15], "nhieu": len(ung)})
+    return kq
+
+
+def _gia_chat(kq, d, h):
+    if d["gia"]:
+        return d["gia"]
+    return round((h["gia_ban"] or 0) * (1 - kq["giam"] / 100))
+
+
+def bg_nhanh(c):
+    van_ban = c.form.get("yeu_cau", "") if c.method == "POST" else ""
+    kq = doc_chat_bg(c, van_ban) if van_ban.strip() else None
+    if kq and c.form.get("buoc") == "tao":
+        cac_dong, bo = [], 0
+        for i, d in enumerate(kq["dong"]):
+            h = None
+            if len(d["ung"]) == 1:
+                h = d["ung"][0]
+            else:
+                v = c.form.get(f"chon_{i}", "")
+                h = next((x for x in d["ung"] if str(x["id"]) == v), None)
+            if not h:
+                bo += 1
+                continue
+            cac_dong.append(dict({t: h[t] for t, _ in COT_HANG}, so_luong=d["sl"], don_gia=_gia_chat(kq, d, h),
+                                 gia_min=h["gia_min"] or 0, gia_max=h["gia_max"] or 0))
+        if not cac_dong:
+            raise Loi(400, "Chưa có mặt hàng nào khớp danh mục để đưa vào báo giá.")
+        hom_nay = date.today()
+        gt = {"so_bg": so_bg_tiep(c, hom_nay.year), "ngay": hom_nay.isoformat(), "ten_kh": kq["ten_kh"][:300],
+              "hieu_luc_den": kq["hieu_luc"] or (hom_nay + timedelta(days=HIEU_LUC_NGAY)).isoformat(),
+              "ghi_chu": kq["ghi_chu"][:1000], "phu_trach_id": c.user["id"]}
+        try:
+            bid = c.db.them(f"INSERT INTO bao_gia ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
+                            list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
+        except LOI_TRUNG:
+            c.db.rollback()
+            raise Loi(400, "Số báo giá vừa bị trùng. Hãy bấm Tạo báo giá lần nữa.")
+        bg_them_dong(c, bid, cac_dong)
+        return Chuyen(f"/bao-gia/{bid}", f"Đã tạo báo giá {gt['so_bg']} với {len(cac_dong)} mặt hàng"
+                      + (f", bỏ {bo} dòng không khớp hàng" if bo else "") + ". Kiểm tra lại rồi tải file Word.")
+    tra_loi = ""
+    if kq:
+        hl = kq["hieu_luc"] or (date.today() + timedelta(days=HIEU_LUC_NGAY)).isoformat()
+        y = [f'<dt>Kính gửi</dt><dd>{e(kq["ten_kh"] or "Quý Khách hàng")}</dd>', f'<dt>Hiệu lực đến</dt><dd>{ngay(hl)}</dd>']
+        if kq["giam"]:
+            y.append(f'<dt>Giảm giá</dt><dd>{so_o(kq["giam"])}% trên giá bán (dòng tự ghi giá thì giữ nguyên)</dd>')
+        if kq["ghi_chu"]:
+            y.append(f'<dt>Ghi chú</dt><dd>{e(kq["ghi_chu"])}</dd>')
+        hang, tong, can_chon = "", 0, False
+        for i, d in enumerate(kq["dong"]):
+            sl = so_o(d["sl"]) or "—"
+            if len(d["ung"]) == 1:
+                h = d["ung"][0]
+                gia = _gia_chat(kq, d, h)
+                tong += gia * d["sl"]
+                canh = ""
+                if h["gia_min"] and gia < h["gia_min"]:
+                    canh = ' <span class="nhan do">dưới giá Min</span>'
+                elif h["gia_max"] and gia > h["gia_max"]:
+                    canh = ' <span class="nhan vang">trên giá Max</span>'
+                hang += (f'<tr><td class="mo">{e(d["cau"])}</td><td><span class="nhan xanh">Đã khớp</span> <b>{e(h["ma"])}</b> '
+                         f'{e(h["ten"])}<br><span class="mo">{e(h["ten_tm"])} · {e(h["quy_cach"])}</span></td>'
+                         f'<td class="so">{sl}</td><td class="so">{tien(gia) if gia else "—"}{canh}</td>'
+                         f'<td class="so">{tien(gia * d["sl"]) if d["sl"] and gia else ""}</td></tr>')
+            elif d["ung"]:
+                can_chon = True
+                lc = "".join(f'<option value="{h["id"]}">{e(h["ma"])} · {e(h["ten"])} · {e(h["ten_tm"])}'
+                             f'{" · " + tien(h["gia_ban"]) if h["gia_ban"] else ""}</option>' for h in d["ung"])
+                them = f' <span class="mo">(hiện 15/{d["nhieu"]}, gõ rõ hơn để thu hẹp)</span>' if d["nhieu"] > 15 else ""
+                hang += (f'<tr><td class="mo">{e(d["cau"])}</td><td><span class="nhan vang">Chọn giúp</span> có {d["nhieu"]} hàng khớp{them}<br>'
+                         f'<select name="chon_{i}" form="f-tao" required aria-label="Chọn hàng"><option value="">— chọn hàng —</option>'
+                         f'{lc}<option value="bo">Bỏ qua dòng này</option></select></td>'
+                         f'<td class="so">{sl}</td><td class="so">{tien(d["gia"]) if d["gia"] else "giá bán"}</td><td></td></tr>')
+            else:
+                hang += (f'<tr><td class="mo">{e(d["cau"])}</td><td><span class="nhan do">Không tìm thấy</span> '
+                         'dòng này sẽ bị bỏ qua — gõ ký mã hiệu hoặc tên ngắn như trong danh mục</td><td></td><td></td><td></td></tr>')
+        chan = f'<tr><td colspan="4" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(tong)}</b></td></tr>' if tong else ""
+        co_dong = any(d["ung"] for d in kq["dong"])
+        bang = ('<div class="cuon"><table><thead><tr><th>Bạn gõ</th><th>App hiểu là</th><th class="so">Số lượng</th>'
+                f'<th class="so">Đơn giá (đ)</th><th class="so">Thành tiền</th></tr></thead><tbody>{hang}{chan}</tbody></table></div>'
+                if kq["dong"] else '<p class="mo">Chưa thấy mặt hàng nào. Mỗi mặt hàng gõ một dòng, ví dụ: R0011C 50 hộp.</p>')
+        tao = (f'<form method="post" id="f-tao">{an_csrf(c)}<input type="hidden" name="buoc" value="tao">'
+               f'<textarea name="yeu_cau" hidden>{e(van_ban)}</textarea><div class="hang-nut"><button class="nut">Tạo báo giá</button>'
+               f'<span class="mo">{"Chọn hàng ở các dòng màu vàng trước khi tạo. " if can_chon else ""}'
+               'Sau khi tạo vẫn sửa được số lượng, giá, thêm bớt hàng.</span></div></form>') if co_dong else ""
+        tra_loi = f'<div class="the"><h2>App hiểu như sau</h2><dl class="thong-tin">{"".join(y)}</dl>{bang}{tao}</div>'
+    chua_dm = "" if c.db.execute("SELECT 1 FROM hang_hoa").fetchone() else \
+        '<p class="nhan do">Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa trước.</p>'
+    return trang(c, "Soạn báo giá bằng chat", f"""
+      <h1>Soạn báo giá bằng chat</h1>
+      <div class="the">{chua_dm}<form method="post">{an_csrf(c)}<input type="hidden" name="buoc" value="xem">
+        <label class="rong">Gõ yêu cầu, mỗi ý một dòng
+          <textarea name="yeu_cau" rows="9" placeholder="{e(VI_DU_CHAT)}" {"" if kq else "autofocus"}>{e(van_ban)}</textarea></label>
+        <div class="hang-nut"><button class="nut">Gửi</button>{'<a href="/bao-gia/nhanh">Làm báo giá khác</a>' if kq else ""}</div></form>
+        <details><summary>Cách gõ</summary><ul class="mo">
+          <li><b>Khách hàng:</b> <code>Khách: BV Thủ Đức</code> (hoặc <code>Kính gửi …</code>, <code>Báo giá cho …</code>). Dòng đầu không phải tên hàng cũng được hiểu là tên khách.</li>
+          <li><b>Mặt hàng:</b> mỗi hàng một dòng — ký mã hiệu hoặc tên ngắn, rồi số lượng: <code>R0011C 50</code>, <code>HBsAg que x20</code>, <code>HIV khay 30 hộp</code>. Không ghi số lượng thì báo giá chỉ có đơn giá.</li>
+          <li><b>Giá riêng:</b> thêm <code>giá 11000</code> (hoặc <code>@11k</code>) cuối dòng hàng. Không ghi thì lấy giá bán trong danh mục.</li>
+          <li><b>Giảm giá cả báo giá:</b> <code>giảm 5%</code> · <b>Hiệu lực:</b> <code>hiệu lực 30 ngày</code> hoặc <code>hiệu lực đến 31/12</code> · <b>Ghi chú:</b> <code>ghi chú: Giá đã gồm VAT</code></li>
+          <li>Gõ có dấu hay không dấu đều được. Nhiều hàng trên một dòng thì cách nhau bằng dấu <code>;</code></li></ul></details></div>
+      {tra_loi}""", "bgn")
 
 
 # ───────────────────────── bán hàng: phần dùng chung ─────────────────────────
@@ -3806,6 +4032,7 @@ TUYEN = [
     ("POST", r"/hop-dong/(\d+)/google-doc", hd_google, "nd"),
     ("GET", r"/bao-gia", ds_bao_gia, "nd"),
     ("GET|POST", r"/bao-gia/moi", bg_moi, "nd"),
+    ("GET|POST", r"/bao-gia/nhanh", bg_nhanh, "nd"),
     ("GET", r"/bao-gia/(\d+)", bg_xem, "nd"),
     ("POST", r"/bao-gia/(\d+)/sua", bg_sua, "nd"),
     ("POST", r"/bao-gia/(\d+)/xoa", bg_xoa, "nd"),
