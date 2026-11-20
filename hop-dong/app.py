@@ -526,6 +526,10 @@ def trang(c, tieu_de, than, muc=""):
                f'<div class="tk"><a href="/doi-mat-khau">{e(c.user["ho_ten"])}</a>'
                f'<form method="post" action="/dang-xuat"><input type="hidden" name="csrf" value="{e(c.csrf)}">'
                f'<button class="nut-chu">Đăng xuất</button></form></div></div></header>')
+    ai = hop_ai = ""
+    if c.user and (muc in ("bg", "bgm", "bgn", "hh", "muc:bao-gia")):
+        ai = '<script src="/static/ai_bg.js" defer></script>'
+        hop_ai = f'<div id="ai-bg" data-csrf="{e(c.csrf)}" hidden></div>'
     tb = ""
     if c.tb:
         tb = f'<div class="thong-bao">{e(c.tb)}</div>'
@@ -533,8 +537,8 @@ def trang(c, tieu_de, than, muc=""):
     return (f'<!doctype html><html lang="vi"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{e(tieu_de)} · Hợp đồng</title><link rel="stylesheet" href="/static/style.css">'
-            f'<script src="/static/app.js" defer></script></head><body>{nav}'
-            f'<main class="khung">{tb}{than}</main></body></html>')
+            f'<script src="/static/app.js" defer></script>{ai}</head><body>{nav}'
+            f'<main class="khung">{tb}{than}</main>{hop_ai}</body></html>')
 
 
 def an_csrf(c):
@@ -2566,44 +2570,58 @@ Nhiệm vụ: đọc yêu cầu và chọn đúng hàng trong DANH MỤC (chỉ 
 - tra_loi: một câu ngắn tiếng Việt cho người dùng biết đã hiểu gì, hoặc hỏi lại điều chưa rõ."""
 
 
-def ai_soan_bg(c, van_ban):
-    """Gemini đọc câu tự do -> các dòng theo cách gõ của trang chat (mã hàng, số lượng…) + câu trả lời ngắn."""
+def goi_gemini(he_thong, noi_dung, schema):
+    """Gọi Gemini (gói miễn phí), trả về JSON theo schema."""
     khoa = os.environ.get("GEMINI_API_KEY", "")
     if not khoa:
-        raise Loi(503, "Chưa cài khóa GEMINI_API_KEY cho app trên Vercel (project data.adc). Tạm thời dùng nút Gửi (không AI).")
-    hang = c.db.execute("SELECT ma, ten, ten_tm, nhan_hieu, quy_cach, gia_ban FROM hang_hoa ORDER BY id LIMIT 1500").fetchall()
-    if not hang:
-        raise Loi(400, "Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa trước.")
-    dm = "\n".join(" | ".join(str(h[k] or "") for k in ("ma", "ten", "ten_tm", "nhan_hieu", "quy_cach", "gia_ban")) for h in hang)
-    kh = "\n".join(r["ten"] for r in c.db.execute("SELECT ten FROM khach_hang ORDER BY ten LIMIT 500").fetchall())
-    than = {
-        "systemInstruction": {"parts": [{"text": LENH_AI_BG + f"\nHôm nay: {date.today().isoformat()}"
-                                         f"\n\nDANH MỤC (ký mã hiệu | tên | tên thương mại | nhãn hiệu | quy cách | giá bán):\n{dm}"
-                                         f"\n\nDANH SÁCH KHÁCH:\n{kh or '(trống)'}"}]},
-        "contents": [{"role": "user", "parts": [{"text": van_ban[:4000]}]}],
-        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": {
-            "type": "OBJECT", "properties": {
-                "ten_kh": {"type": "STRING"}, "giam_pct": {"type": "NUMBER"}, "hieu_luc_den": {"type": "STRING"},
-                "ghi_chu": {"type": "STRING"}, "tra_loi": {"type": "STRING"},
-                "hang": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
-                    "ma": {"type": "STRING"}, "tim": {"type": "STRING"}, "so_luong": {"type": "NUMBER"}, "don_gia": {"type": "NUMBER"}},
-                    "required": ["ma", "so_luong", "don_gia"]}}},
-            "required": ["ten_kh", "hang", "tra_loi"]}}}
+        raise Loi(503, "Chưa cài khóa GEMINI_API_KEY cho app trên Vercel (project data.adc).")
+    than = {"systemInstruction": {"parts": [{"text": he_thong}]}, "contents": noi_dung,
+            "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": schema}}
     yc = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_MODEL)}:generateContent",
                                 json.dumps(than).encode(), {"Content-Type": "application/json", "x-goog-api-key": khoa})
     try:
-        with urllib.request.urlopen(yc, timeout=45) as r:
+        with urllib.request.urlopen(yc, timeout=50) as r:
             j = json.loads(r.read())
     except urllib.error.HTTPError as ex:
         if ex.code == 429:
-            raise Loi(429, "Đã hết lượt AI miễn phí trong lúc này (giới hạn của Google). Thử lại sau ít phút, hoặc dùng nút Gửi (không AI).")
-        raise Loi(502, f"AI báo lỗi {ex.code}. Thử lại hoặc dùng nút Gửi (không AI).")
+            raise Loi(429, "Đã hết lượt AI miễn phí trong lúc này (giới hạn của Google). Thử lại sau ít phút, hoặc ngày mai.")
+        raise Loi(502, f"AI báo lỗi {ex.code}. Thử lại sau ít phút.")
     except (urllib.error.URLError, TimeoutError, ValueError):
-        raise Loi(502, "Không gọi được AI. Thử lại hoặc dùng nút Gửi (không AI).")
+        raise Loi(502, "Không gọi được AI. Thử lại sau ít phút.")
     try:
-        kq = json.loads(j["candidates"][0]["content"]["parts"][0]["text"])
+        return json.loads(j["candidates"][0]["content"]["parts"][0]["text"])
     except (KeyError, IndexError, TypeError, ValueError):
-        raise Loi(502, "AI trả lời không đúng dạng. Thử gõ lại rõ hơn.")
+        raise Loi(502, "AI trả lời không đúng dạng. Thử hỏi lại.")
+
+
+def du_lieu_ai(c):
+    """Danh mục hàng (dạng chữ cho AI), danh sách khách, và bảng tra hàng theo ký mã hiệu."""
+    hang = [dict(h) for h in c.db.execute("SELECT * FROM hang_hoa ORDER BY id LIMIT 1500").fetchall()]
+    if not hang:
+        raise Loi(400, "Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa trước.")
+    dm = "\n".join(" | ".join(str(so_o(h[k]) if k.startswith("gia") else (h[k] or ""))
+                              for k in ("ma", "ten", "ten_tm", "nhan_hieu", "quy_cach", "gia_ban", "gia_min", "gia_max")) for h in hang)
+    kh = "\n".join(r["ten"] for r in c.db.execute("SELECT ten FROM khach_hang ORDER BY ten LIMIT 500").fetchall())
+    return dm, kh or "(trống)", {gap(h["ma"]): h for h in hang if h["ma"]}
+
+
+SCHEMA_NHAP = {"type": "OBJECT", "properties": {
+    "ten_kh": {"type": "STRING"}, "giam_pct": {"type": "NUMBER"}, "hieu_luc_den": {"type": "STRING"}, "ghi_chu": {"type": "STRING"},
+    "hang": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+        "ma": {"type": "STRING"}, "tim": {"type": "STRING"}, "so_luong": {"type": "NUMBER"}, "don_gia": {"type": "NUMBER"}},
+        "required": ["ma", "so_luong", "don_gia"]}}},
+    "required": ["ten_kh", "hang"]}
+
+
+def ai_soan_bg(c, van_ban):
+    """Gemini đọc câu tự do -> các dòng theo cách gõ của trang chat (mã hàng, số lượng…) + câu trả lời ngắn."""
+    dm, kh, _ = du_lieu_ai(c)
+    schema = json.loads(json.dumps(SCHEMA_NHAP))
+    schema["properties"]["tra_loi"] = {"type": "STRING"}
+    schema["required"].append("tra_loi")
+    kq = goi_gemini(LENH_AI_BG + f"\nHôm nay: {date.today().isoformat()}"
+                    f"\n\nDANH MỤC (ký mã hiệu | tên | tên thương mại | nhãn hiệu | quy cách | giá bán | giá Min | giá Max):\n{dm}"
+                    f"\n\nDANH SÁCH KHÁCH:\n{kh}", [{"role": "user", "parts": [{"text": van_ban[:4000]}]}], schema)
     dong = []
     if str(kq.get("ten_kh") or "").strip():
         dong.append("Khách: " + str(kq["ten_kh"]).replace(";", " ").replace(",", " ").strip())
@@ -2630,6 +2648,126 @@ def date_or_none(s):
         return None
 
 
+def tao_bg_moi(c, ten_kh, hieu_luc, ghi_chu, cac_dong):
+    """Tạo báo giá mới (số kế tiếp, người phụ trách = người đang dùng) kèm các dòng hàng."""
+    hom_nay = date.today()
+    gt = {"so_bg": so_bg_tiep(c, hom_nay.year), "ngay": hom_nay.isoformat(), "ten_kh": (ten_kh or "")[:300],
+          "hieu_luc_den": hieu_luc or (hom_nay + timedelta(days=HIEU_LUC_NGAY)).isoformat(),
+          "ghi_chu": (ghi_chu or "")[:1000], "phu_trach_id": c.user["id"]}
+    try:
+        bid = c.db.them(f"INSERT INTO bao_gia ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
+                        list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
+    except LOI_TRUNG:
+        c.db.rollback()
+        raise Loi(400, "Số báo giá vừa bị trùng. Hãy bấm Tạo báo giá lần nữa.")
+    bg_them_dong(c, bid, cac_dong)
+    return bid, gt["so_bg"]
+
+
+# ── Trợ lý AI dạng hộp chat nổi (giống tab Kết quả bên muasamcong) ──
+LENH_AI_CHAT = """Bạn là Trợ lý AI báo giá trong app quản lý báo giá của công ty Avanta (test nhanh, thiết bị y tế).
+Bạn giúp nhân viên kinh doanh: (1) tra cứu hàng trong DANH MỤC: tên, ký mã hiệu, hãng, quy cách, giá bán, giá Min/Max;
+(2) soạn và sửa BẢN NHÁP báo giá qua hội thoại; app tự hiện bảng bản nháp và nút "Tạo báo giá" dưới câu trả lời của bạn.
+Quy tắc:
+- Chỉ dùng hàng và ký mã hiệu có trong DANH MỤC, không bịa mã, không bịa giá.
+- nhap luôn là bản nháp ĐẦY ĐỦ sau lượt này. Người dùng chỉ hỏi (không nhờ soạn/sửa) thì trả nhap y nguyên BẢN NHÁP HIỆN TẠI.
+  Khi sửa thì giữ các hàng cũ, trừ hàng người dùng bảo bỏ. "Làm báo giá mới"/"báo giá khác" thì bắt đầu bản nháp trống.
+- Tên hàng khớp nhiều hãng mà người dùng chưa nói rõ: KHÔNG tự chọn, không thêm vào nhap; hỏi lại trong tra_loi, liệt kê các lựa chọn (mã · hãng · giá).
+- so_luong: số lượng khách cần (0 nếu không nói). don_gia: chỉ điền khi người dùng nêu giá riêng cho hàng đó ("11k" = 11000), không thì 0 (app tự lấy giá bán trong danh mục, trừ giảm giá chung).
+- giam_pct: % giảm chung nếu có. hieu_luc_den: yyyy-mm-dd ("N ngày" tính từ hôm nay), không nói thì giữ như bản nháp.
+- ten_kh: điền khi người dùng nêu khách (sau "cho", "gửi", "khách", "kính gửi", hoặc tên bệnh viện/phòng khám/TTYT/công ty), kể cả khách chưa có
+  trong DANH SÁCH KHÁCH. Khớp tên trong danh sách thì dùng đúng tên đó; không thì viết có dấu, mở viết tắt (bv → Bệnh viện, ttyt → Trung tâm Y tế, pk → Phòng khám).
+- ghi_chu: điều kiện VAT, giao hàng, thanh toán… nếu người dùng nêu.
+- tra_loi: tiếng Việt, ngắn gọn, thân thiện, có thể dùng Markdown (gạch đầu dòng, bảng nhỏ). Tiền viết dạng 1.234.567 đ.
+  Không chép lại cả bản nháp; chỉ nói đã thêm/sửa gì, nhắc nếu đơn giá thấp hơn giá Min hoặc cao hơn giá Max, và khi xong thì nhắc bấm "Tạo báo giá"."""
+
+
+def sach_nhap(nhap, theo_ma):
+    """Chuẩn hóa bản nháp từ trình duyệt / AI: chỉ giữ hàng có ký mã hiệu trong danh mục."""
+    nhap = nhap if isinstance(nhap, dict) else {}
+    so = lambda v: max(0.0, float(v)) if isinstance(v, (int, float)) and math.isfinite(v) else doc_gia(v)
+    hl = date_or_none(nhap.get("hieu_luc_den"))
+    kq = {"ten_kh": " ".join(str(nhap.get("ten_kh") or "").split())[:300], "giam_pct": min(so(nhap.get("giam_pct")), 100.0),
+          "hieu_luc_den": hl.isoformat() if hl else "", "ghi_chu": " ".join(str(nhap.get("ghi_chu") or "").split())[:1000], "hang": []}
+    bo = []
+    for h in (nhap.get("hang") or [])[:200]:
+        if not isinstance(h, dict):
+            continue
+        hh = theo_ma.get(gap(h.get("ma")))
+        if not hh:
+            if h.get("ma") or h.get("tim"):
+                bo.append(str(h.get("ma") or h.get("tim"))[:60])
+            continue
+        kq["hang"].append({"ma": hh["ma"], "so_luong": so(h.get("so_luong")), "don_gia": so(h.get("don_gia"))})
+    return kq, bo
+
+
+def dong_nhap(nhap, theo_ma):
+    """Các dòng báo giá đầy đủ từ bản nháp (đơn giá = giá riêng, hoặc giá bán trừ % giảm)."""
+    ra = []
+    for x in nhap["hang"]:
+        h = theo_ma[gap(x["ma"])]
+        gia = x["don_gia"] or round((h["gia_ban"] or 0) * (1 - nhap["giam_pct"] / 100))
+        ra.append(dict({t: h[t] for t, _ in COT_HANG}, so_luong=x["so_luong"], don_gia=gia,
+                       gia_min=h["gia_min"] or 0, gia_max=h["gia_max"] or 0))
+    return ra
+
+
+def bang_nhap(nhap, theo_ma):
+    dong = []
+    for d in dong_nhap(nhap, theo_ma):
+        canh = "dưới giá Min" if d["gia_min"] and d["don_gia"] < d["gia_min"] else \
+               "trên giá Max" if d["gia_max"] and d["don_gia"] > d["gia_max"] else ""
+        dong.append({"ma": d["ma"], "ten": d["ten"], "ten_tm": d["ten_tm"], "nhan_hieu": d["nhan_hieu"], "quy_cach": d["quy_cach"],
+                     "sl": sl(d["so_luong"]) if d["so_luong"] else "", "gia": tien(d["don_gia"]),
+                     "tt": tien(d["so_luong"] * d["don_gia"]) if d["so_luong"] else "", "canh": canh})
+    hl = nhap["hieu_luc_den"] or (date.today() + timedelta(days=HIEU_LUC_NGAY)).isoformat()
+    tong = sum(d["so_luong"] * d["don_gia"] for d in dong_nhap(nhap, theo_ma))
+    return {"ten_kh": nhap["ten_kh"] or "Quý Khách hàng", "hieu_luc": ngay(hl), "giam": so_o(nhap["giam_pct"]),
+            "ghi_chu": nhap["ghi_chu"], "dong": dong, "tong": tien(tong) if tong else ""}
+
+
+def doc_json_form(c, ten, md):
+    try:
+        v = json.loads(c.form.get(ten) or "null")
+    except ValueError:
+        raise Loi(400, "Dữ liệu gửi lên không hợp lệ. Tải lại trang rồi thử lại.")
+    return md if v is None else v
+
+
+def bg_ai_chat(c):
+    ls = doc_json_form(c, "lich_su", [])
+    ls = [m for m in (ls if isinstance(ls, list) else []) if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+          and str(m.get("content") or "").strip()][-14:]
+    while ls and ls[0]["role"] != "user":
+        ls.pop(0)
+    if not ls or ls[-1]["role"] != "user":
+        raise Loi(400, "Chưa có câu hỏi.")
+    dm, kh, theo_ma = du_lieu_ai(c)
+    nhap, _ = sach_nhap(doc_json_form(c, "nhap", {}), theo_ma)
+    schema = {"type": "OBJECT", "properties": {"tra_loi": {"type": "STRING"}, "nhap": SCHEMA_NHAP}, "required": ["tra_loi", "nhap"]}
+    kq = goi_gemini(LENH_AI_CHAT + f"\nHôm nay: {date.today().isoformat()}"
+                    f"\n\nDANH MỤC (ký mã hiệu | tên | tên thương mại | nhãn hiệu | quy cách | giá bán | giá Min | giá Max):\n{dm}"
+                    f"\n\nDANH SÁCH KHÁCH:\n{kh}\n\nBẢN NHÁP HIỆN TẠI:\n{json.dumps(nhap, ensure_ascii=False)}",
+                    [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": str(m["content"])[:4000]}]} for m in ls],
+                    schema)
+    nhap, bo = sach_nhap(kq.get("nhap"), theo_ma)
+    tra_loi = str(kq.get("tra_loi") or "").strip()[:4000] or "Đã cập nhật bản nháp."
+    if bo:
+        tra_loi += "\n\n(Bỏ qua mã không có trong danh mục: " + ", ".join(bo[:10]) + ")"
+    return Json({"tra_loi": tra_loi, "nhap": nhap, "bang": bang_nhap(nhap, theo_ma) if nhap["hang"] else None})
+
+
+def bg_ai_tao(c):
+    _, _, theo_ma = du_lieu_ai(c)
+    nhap, _ = sach_nhap(doc_json_form(c, "nhap", {}), theo_ma)
+    if not nhap["hang"]:
+        raise Loi(400, "Bản nháp chưa có mặt hàng nào.")
+    bid, so = tao_bg_moi(c, nhap["ten_kh"], nhap["hieu_luc_den"], nhap["ghi_chu"], dong_nhap(nhap, theo_ma))
+    c.dat_cookie("hd_tb", urllib.parse.quote(f"Đã tạo báo giá {so} từ Trợ lý AI. Kiểm tra lại rồi tải file Word."), 60)
+    return Json({"url": f"/bao-gia/{bid}", "so_bg": so})
+
+
 def bg_nhanh(c):
     van_ban = c.form.get("yeu_cau", "") if c.method == "POST" else ""
     ai_noi = ""
@@ -2652,18 +2790,8 @@ def bg_nhanh(c):
                                  gia_min=h["gia_min"] or 0, gia_max=h["gia_max"] or 0))
         if not cac_dong:
             raise Loi(400, "Chưa có mặt hàng nào khớp danh mục để đưa vào báo giá.")
-        hom_nay = date.today()
-        gt = {"so_bg": so_bg_tiep(c, hom_nay.year), "ngay": hom_nay.isoformat(), "ten_kh": kq["ten_kh"][:300],
-              "hieu_luc_den": kq["hieu_luc"] or (hom_nay + timedelta(days=HIEU_LUC_NGAY)).isoformat(),
-              "ghi_chu": kq["ghi_chu"][:1000], "phu_trach_id": c.user["id"]}
-        try:
-            bid = c.db.them(f"INSERT INTO bao_gia ({', '.join(gt)}, tao_luc) VALUES ({'?, ' * len(gt)}?)",
-                            list(gt.values()) + [datetime.now().isoformat(timespec="seconds")])
-        except LOI_TRUNG:
-            c.db.rollback()
-            raise Loi(400, "Số báo giá vừa bị trùng. Hãy bấm Tạo báo giá lần nữa.")
-        bg_them_dong(c, bid, cac_dong)
-        return Chuyen(f"/bao-gia/{bid}", f"Đã tạo báo giá {gt['so_bg']} với {len(cac_dong)} mặt hàng"
+        bid, so = tao_bg_moi(c, kq["ten_kh"], kq["hieu_luc"], kq["ghi_chu"], cac_dong)
+        return Chuyen(f"/bao-gia/{bid}", f"Đã tạo báo giá {so} với {len(cac_dong)} mặt hàng"
                       + (f", bỏ {bo} dòng không khớp hàng" if bo else "") + ". Kiểm tra lại rồi tải file Word.")
     tra_loi = ""
     if kq:
@@ -4114,6 +4242,8 @@ TUYEN = [
     ("GET", r"/bao-gia", ds_bao_gia, "nd"),
     ("GET|POST", r"/bao-gia/moi", bg_moi, "nd"),
     ("GET|POST", r"/bao-gia/nhanh", bg_nhanh, "nd"),
+    ("POST", r"/bao-gia/ai", bg_ai_chat, "nd"),
+    ("POST", r"/bao-gia/ai/tao", bg_ai_tao, "nd"),
     ("GET", r"/bao-gia/(\d+)", bg_xem, "nd"),
     ("POST", r"/bao-gia/(\d+)/sua", bg_sua, "nd"),
     ("POST", r"/bao-gia/(\d+)/xoa", bg_xoa, "nd"),
