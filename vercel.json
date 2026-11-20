@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "installCommand": "",
+  "installCommand": "npm install --omit=dev --no-audit --no-fund",
   "buildCommand": "sh vercel_build.sh",
   "outputDirectory": "public",
   "cleanUrls": true,
@@ -70,5 +70,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/auth.js": {
+      "maxDuration": 60
+    }
+  }
 }

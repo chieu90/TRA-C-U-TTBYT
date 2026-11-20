@@ -6,6 +6,7 @@
 //   POST /api/auth?action=dang-nhap        {email, mat_khau}
 //   POST /api/auth?action=dang-xuat
 //   POST /api/auth?action=doi-mat-khau     {cu, moi}
+//   POST /api/auth?action=hoi-kq           {messages:[{role,content}]} -> trợ lý AI trả lời về KQ trúng thầu (api/_kq_ai.js)
 //   GET  /api/auth?action=khach-nv         -> khách hàng theo nhân viên (người đã đăng nhập)
 //   Admin: POST link-khach-nv {link} (Google Sheet, tự đọc lại mỗi 15 phút) | POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
@@ -215,19 +216,51 @@ module.exports = async (req, res) => {
     }
 
     // dữ liệu KQ đã lọc theo khách của nhân viên (middleware chuyển yêu cầu file KQ về đây)
+    // đọc 1 tệp KQ, lọc theo "chỉ khách của nhân viên" nếu tài khoản bị giới hạn
+    const docKq = async (f, mine) => {
+      const r = await fetch(`https://${req.headers.host}${f}`, { headers: { "x-mc-noi-bo": internalKey() } });
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (mine) {
+        const ci = d.cot.indexOf("nha_thau");
+        d.rows = d.rows.filter(row => String(row[ci] || "").split("; ").some(n => mine.has(kfold(n))));
+        d.chi_khach_cua = kqOf(me);
+      }
+      return d;
+    };
+    const khachCua = async () => {
+      const nv = kqOf(me); if (!nv) return null;
+      return new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").includes(nv)).map(x => kfold(x.ten)));
+    };
+
     if (action === "kq") {
       const f = new URL(req.url, "http://x").searchParams.get("f") || "";
       if (!/^\/(trung_thau|duong_huyet)(_\d{4})?\.json$/.test(f)) return send(res, 400, { loi: "Sai tệp." });
-      const r = await fetch(`https://${req.headers.host}${f}`, { headers: { "x-mc-noi-bo": internalKey() } });
-      if (!r.ok) return send(res, r.status, { loi: "Không đọc được dữ liệu." });
-      const d = await r.json(), nv = kqOf(me);
-      if (nv) {
-        const mine = new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").includes(nv)).map(x => kfold(x.ten)));
-        const ci = d.cot.indexOf("nha_thau");
-        d.rows = d.rows.filter(row => String(row[ci] || "").split("; ").some(n => mine.has(kfold(n))));
-        d.chi_khach_cua = nv;
-      }
+      const d = await docKq(f, await khachCua());
+      if (!d) return send(res, 502, { loi: "Không đọc được dữ liệu." });
       return send(res, 200, d);
+    }
+
+    // trợ lý AI tab Kết quả: chỉ trả lời trên dữ liệu người hỏi được xem
+    if (action === "hoi-kq" && req.method === "POST") {
+      const tabs = tabsOf(me), loai = [];
+      if (tabs.includes("trung-thau") || tabs.includes("so-sanh")) loai.push(["test", "trung_thau"]);
+      if (tabs.includes("duong-huyet") || tabs.includes("so-sanh")) loai.push(["duong_huyet", "duong_huyet"]);
+      if (!loai.length) return send(res, 403, { loi: "Tài khoản chưa được xem tab Kết quả." });
+      const mine = await khachCua(), ds = [];
+      let nhom_hang = [];
+      await Promise.all(loai.flatMap(([l, f]) => ["", "_2025", "_2024"].map(async y => {
+        const d = await docKq(`/${f}${y}.json`, mine).catch(() => null);
+        if (d) { ds.push({ loai: l, nam: d.nam, cot: d.cot, rows: d.rows }); if (l === "test" && !y) nhom_hang = d.nhom || []; }
+      })));
+      try {
+        const out = await require("./_kq_ai").hoi({ ds, messages: b.messages, pham_vi: kqOf(me), nhom_hang });
+        return send(res, 200, out);
+      } catch (e) {
+        console.error("hoi-kq", e.status || e.code || "", e.message);
+        const code = e.code === 400 || e.code === 503 ? e.code : 502;
+        return send(res, code, { loi: code === 502 ? "Trợ lý AI đang lỗi, thử lại sau ít phút." : e.message });
+      }
     }
 
     if (action === "doi-mat-khau" && req.method === "POST") {

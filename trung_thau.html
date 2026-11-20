@@ -996,5 +996,123 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
   b.addEventListener('click', () => window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
 })();
 </script>
+<!-- Trợ lý AI: hỏi đáp về kết quả trúng thầu (máy chủ: /api/auth?action=hoi-kq, dữ liệu đã lọc theo quyền) -->
+<style>
+.ai-btn { position: fixed; left: 20px; bottom: 20px; z-index: 45; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 999px;
+  padding: 11px 16px; font: inherit; font-weight: 600; font-size: 14px; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); box-shadow: 0 6px 20px rgba(16,35,70,.25); }
+.ai-btn svg { width: 18px; height: 18px; }
+.ai-btn[hidden] { display: none; }
+.ai-box { position: fixed; left: 20px; bottom: 20px; z-index: 60; width: min(440px, calc(100vw - 32px)); height: min(620px, calc(100vh - 40px));
+  display: none; flex-direction: column; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(16,35,70,.25); overflow: hidden; }
+.ai-box.open { display: flex; }
+.ai-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: #fff; background: linear-gradient(120deg, var(--brand), var(--brand-2)); }
+.ai-head b { flex: 1; font-size: 15px; }
+.ai-head button { background: rgba(255,255,255,.18); border: 0; color: #fff; border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 13px; cursor: pointer; }
+.ai-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
+.ai-m { max-width: 92%; padding: 9px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.ai-m.u { align-self: flex-end; background: var(--brand); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.ai-m.a { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.ai-m.a p { margin: 0 0 6px; } .ai-m.a p:last-child { margin: 0; }
+.ai-m.a ul { margin: 4px 0 6px; padding-left: 18px; }
+.ai-m.a .tw { overflow-x: auto; margin: 6px 0; }
+.ai-m.a table { border-collapse: collapse; font-size: 12.5px; }
+.ai-m.a th, .ai-m.a td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.ai-m.a th { background: var(--line-2); }
+.ai-m.a td.n { text-align: right; white-space: nowrap; }
+.ai-m.err { align-self: flex-start; color: #c2410c; background: #fdeee6; }
+.ai-m.wait { align-self: flex-start; color: var(--muted); font-style: italic; }
+.ai-goi { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-goi button { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+.ai-goi button:hover { border-color: var(--brand); }
+.ai-in { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: var(--surface); }
+.ai-in textarea { flex: 1; resize: none; height: 42px; max-height: 120px; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 14px; outline: none; }
+.ai-in textarea:focus { border-color: var(--brand); }
+.ai-in button { border: 0; border-radius: 10px; padding: 0 14px; color: #fff; font: inherit; font-weight: 600; cursor: pointer; background: var(--brand); }
+.ai-in button:disabled { opacity: .5; cursor: default; }
+.ai-note { font-size: 11.5px; color: var(--muted); padding: 0 12px 8px; background: var(--surface); }
+@media (max-width: 760px) { .ai-btn { left: 14px; bottom: calc(78px + env(safe-area-inset-bottom)); padding: 10px 14px; }
+  .ai-box { left: 8px; right: 8px; width: auto; bottom: 8px; top: 8px; height: auto; } }
+@media print { .ai-btn, .ai-box { display: none !important; } }
+</style>
+<button type="button" class="ai-btn notranslate" id="aiBtn" translate="no" aria-haspopup="dialog">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 10h7M8.5 13.5h4.5"/></svg>
+  Hỏi AI
+</button>
+<section class="ai-box notranslate" id="aiBox" translate="no" role="dialog" aria-label="Trợ lý AI kết quả trúng thầu">
+  <div class="ai-head"><b>Trợ lý AI · Kết quả trúng thầu</b><button type="button" id="aiNew" title="Cuộc hỏi mới">Mới</button><button type="button" id="aiClose" aria-label="Đóng">✕</button></div>
+  <div class="ai-log" id="aiLog" aria-live="polite"></div>
+  <form class="ai-in" id="aiForm"><textarea id="aiQ" placeholder="Hỏi về kết quả trúng thầu…" aria-label="Câu hỏi"></textarea><button type="submit" id="aiSend">Gửi</button></form>
+  <div class="ai-note">AI có thể sai, nên đối chiếu lại số liệu trên bảng trước khi dùng.</div>
+</section>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const btn = $('aiBtn'), box = $('aiBox'), log = $('aiLog'), q = $('aiQ'), send = $('aiSend');
+  const KEY = 'kq_ai_hoi';
+  let hist = [];
+  try { hist = JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (e) {}
+  const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(hist.slice(-20))); } catch (e) {} };
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Markdown tối giản: đoạn, danh sách, bảng
+  function md(t) {
+    const L = String(t).split('\n'), out = []; let i = 0;
+    while (i < L.length) {
+      const l = L[i];
+      if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < L.length && /^\s*\|[\s:|-]+\|\s*$/.test(L[i + 1])) {
+        const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const h = cells(l); i += 2; const rows = [];
+        while (i < L.length && /^\s*\|.*\|\s*$/.test(L[i])) rows.push(cells(L[i++]));
+        out.push('<div class="tw"><table><thead><tr>' + h.map(c => `<th>${inl(c)}</th>`).join('') + '</tr></thead><tbody>' +
+          rows.map(r => '<tr>' + r.map(c => `<td${/^[\d.,\s%đ+-]+(tỷ|triệu)?\s*đ?$/.test(c) ? ' class="n"' : ''}>${inl(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>');
+        continue;
+      }
+      if (/^\s*([-*•]|\d+\.)\s+/.test(l)) {
+        const it = []; while (i < L.length && /^\s*([-*•]|\d+\.)\s+/.test(L[i])) it.push(L[i++].replace(/^\s*([-*•]|\d+\.)\s+/, ''));
+        out.push('<ul>' + it.map(x => `<li>${inl(x)}</li>`).join('') + '</ul>'); continue;
+      }
+      if (l.trim()) out.push(`<p>${inl(l.replace(/^#+\s*/, ''))}</p>`);
+      i++;
+    }
+    return out.join('');
+  }
+  const GOI = ['Top 10 nhà thầu trúng nhiều nhất năm 2026', 'Hãng nào chiếm thị phần lớn nhất nhóm HIV?', 'Giá trúng thấp nhất của test Cúm A/B năm nay',
+    'So sánh giá trị trúng thầu 2025 và 2026 theo nhóm hàng', '10 gói trúng thầu mới nhất'];
+  function add(cls, html) { const d = document.createElement('div'); d.className = 'ai-m ' + cls; d.innerHTML = html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+  function render() {
+    log.innerHTML = '';
+    if (!hist.length) {
+      add('a', '<p>Chào anh/chị, tôi trả lời các câu hỏi về <b>kết quả trúng thầu Test và Đường huyết</b> (2024–2026): nhà thầu, hãng, cơ sở y tế, tỉnh, đơn giá, giá trị…</p>');
+      const g = document.createElement('div'); g.className = 'ai-goi';
+      GOI.forEach(t => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.onclick = () => ask(t); g.appendChild(b); });
+      log.appendChild(g);
+    }
+    hist.forEach(m => m.role === 'user' ? add('u', esc(m.content)) : add('a', md(m.content)));
+  }
+  async function ask(text) {
+    text = String(text || '').trim(); if (!text || send.disabled) return;
+    if (!hist.length) log.innerHTML = '';
+    hist.push({ role: 'user', content: text }); save(); add('u', esc(text)); q.value = '';
+    send.disabled = true; const w = add('wait', 'Đang tra dữ liệu…');
+    try {
+      const r = await fetch('/api/auth?action=hoi-kq', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hist }) });
+      const d = await r.json().catch(() => ({}));
+      w.remove();
+      if (!r.ok) { hist.pop(); save(); add('err', esc(d.loi || 'Lỗi kết nối, thử lại.')); return; }
+      hist.push({ role: 'assistant', content: d.tra_loi }); save(); add('a', md(d.tra_loi));
+    } catch (e) { w.remove(); hist.pop(); save(); add('err', 'Lỗi kết nối, thử lại.'); }
+    finally { send.disabled = false; q.focus(); }
+  }
+  btn.onclick = () => { box.classList.add('open'); btn.hidden = true; render(); q.focus(); };
+  $('aiClose').onclick = () => { box.classList.remove('open'); btn.hidden = false; };
+  $('aiNew').onclick = () => { hist = []; save(); render(); q.focus(); };
+  $('aiForm').onsubmit = e => { e.preventDefault(); ask(q.value); };
+  q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q.value); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && box.classList.contains('open')) $('aiClose').click(); });
+})();
+</script>
 </body>
 </html>
