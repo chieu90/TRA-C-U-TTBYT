@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "installCommand": "npm install --omit=dev --no-audit --no-fund",
+  "installCommand": "",
   "buildCommand": "sh vercel_build.sh",
   "outputDirectory": "public",
   "cleanUrls": true,

@@ -1,11 +1,9 @@
-// Trợ lý AI cho tab Kết quả trúng thầu: Claude tự gọi 2 công cụ (thống kê / tìm dòng) trên dữ liệu KQ
-// mà người hỏi được xem (đã lọc theo tab và theo "chỉ khách của nhân viên"). Dữ liệu không rời máy chủ ngoài
-// các kết quả công cụ gửi cho Claude. Khóa API đặt ở biến môi trường ANTHROPIC_API_KEY trên Vercel.
+// Trợ lý AI cho tab Kết quả trúng thầu: Gemini (Google, gói miễn phí) tự gọi 2 công cụ (thống kê / tìm dòng)
+// trên dữ liệu KQ mà người hỏi được xem (đã lọc theo tab và theo "chỉ khách của nhân viên"). Chỉ kết quả công cụ
+// được gửi cho Gemini. Khóa API: biến môi trường GEMINI_API_KEY trên Vercel (tạo ở aistudio.google.com).
+// Gói miễn phí: Google có thể dùng nội dung hỏi đáp để cải thiện sản phẩm; có giới hạn số lượt mỗi phút / mỗi ngày.
 // File bắt đầu bằng "_" nên Vercel không coi là một API riêng.
-const Anthropic = require("@anthropic-ai/sdk");
-const { betaTool } = require("@anthropic-ai/sdk/helpers/beta/json-schema");
-
-const MODEL = process.env.KQ_AI_MODEL || "claude-opus-5-5";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const fold = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/\s+/g, " ").trim();
 const NHOM_THEO = { cdt: "cdt", tinh: "tinh", nhom: "nhom", hang: "hang_chuan", nha_thau: "nha_thau", xuat_xu: "xuat_xu", ten: "ten", thang: "_thang", nam: "_nam", hinh_thuc: "hinh_thuc" };
 
@@ -93,27 +91,36 @@ function timDong(rows, input) {
     hang: r.hang_chuan || r.hang, nhan: r.nhan, xuat_xu: r.xuat_xu, dvt: r.dvt, sl: r.sl, don_gia: r.don_gia, gia_tri_vnd: tron(r._gt), nha_thau: r.nha_thau, hinh_thuc: r.hinh_thuc })) };
 }
 
+const KHAI_BAO = [
+  { name: "thong_ke", description: "Tổng hợp kết quả trúng thầu theo bộ lọc: tổng số dòng, số gói, giá trị (VNĐ = số lượng × đơn giá), số lượng, số test; nếu có nhom_theo thì chia nhóm (cơ sở y tế, tỉnh, nhóm hàng, hãng, nhà thầu, xuất xứ, tên hàng, tháng, năm, hình thức). Dùng cho câu hỏi tổng số, xếp hạng, thị phần, so sánh năm.",
+    parameters: { type: "object", properties: { ...BO_LOC,
+      nhom_theo: { type: "string", enum: Object.keys(NHOM_THEO) },
+      sap_xep: { type: "string", enum: ["gia_tri_vnd", "so_dong", "so_test"], description: "Mặc định gia_tri_vnd (theo tháng/năm thì theo thời gian)" },
+      so_nhom: { type: "integer", description: "Số nhóm trả về, tối đa 50, mặc định 15" } } } },
+  { name: "tim_dong", description: "Liệt kê từng dòng kết quả trúng thầu (gói, ngày, cơ sở y tế, hàng, hãng, đơn giá, nhà thầu) theo bộ lọc. Dùng khi cần chi tiết hoặc đơn giá cụ thể.",
+    parameters: { type: "object", properties: { ...BO_LOC,
+      sap_xep: { type: "string", enum: ["moi_nhat", "don_gia_tang", "don_gia_giam", "gia_tri_giam"] },
+      so_dong: { type: "integer", description: "Tối đa 40, mặc định 20" } } } },
+];
+
+const loi = (code, msg) => Object.assign(new Error(msg), { code });
+
+async function goi(body) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`, {
+    method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 429) throw loi(429, "Đã hết lượt AI miễn phí trong lúc này (giới hạn của Google). Thử lại sau ít phút, hoặc ngày mai.");
+  if (!r.ok) throw loi(502, "gemini " + r.status + " " + String(j.error?.message || "").slice(0, 300));
+  return j;
+}
+
 // messages: [{role:"user"|"assistant", content:string}] (lịch sử ngắn do trình duyệt gửi lên)
 async function hoi({ ds, messages, pham_vi, nhom_hang }) {
-  if (!process.env.ANTHROPIC_API_KEY) { const e = new Error("Chưa cài khóa ANTHROPIC_API_KEY trên Vercel."); e.code = 503; throw e; }
+  if (!process.env.GEMINI_API_KEY) throw loi(503, "Chưa cài khóa GEMINI_API_KEY trên Vercel.");
   const rows = phang(ds);
   const nams = [...new Set(rows.map(r => r._nam))].sort();
-  const client = new Anthropic();
-  const tools = [
-    betaTool({ name: "thong_ke", description: "Tổng hợp kết quả trúng thầu theo bộ lọc: tổng số dòng, số gói, giá trị (VNĐ = số lượng × đơn giá), số lượng, số test; nếu có nhom_theo thì chia nhóm (cơ sở y tế, tỉnh, nhóm hàng, hãng, nhà thầu, xuất xứ, tên hàng, tháng, năm, hình thức). Dùng cho câu hỏi tổng số, xếp hạng, thị phần, so sánh năm.",
-      inputSchema: { type: "object", additionalProperties: false, properties: { ...BO_LOC,
-        nhom_theo: { type: "string", enum: Object.keys(NHOM_THEO) },
-        sap_xep: { type: "string", enum: ["gia_tri_vnd", "so_dong", "so_test"], description: "Mặc định gia_tri_vnd (theo tháng/năm thì theo thời gian)" },
-        so_nhom: { type: "integer", description: "Số nhóm trả về, tối đa 50, mặc định 15" } } },
-      run: async input => JSON.stringify(thongKe(rows, input)) }),
-    betaTool({ name: "tim_dong", description: "Liệt kê từng dòng kết quả trúng thầu (gói, ngày, cơ sở y tế, hàng, hãng, đơn giá, nhà thầu) theo bộ lọc. Dùng khi cần chi tiết hoặc đơn giá cụ thể.",
-      inputSchema: { type: "object", additionalProperties: false, properties: { ...BO_LOC,
-        sap_xep: { type: "string", enum: ["moi_nhat", "don_gia_tang", "don_gia_giam", "gia_tri_giam"] },
-        so_dong: { type: "integer", description: "Tối đa 40, mặc định 20" } } },
-      run: async input => JSON.stringify(timDong(rows, input)) }),
-  ];
   const system = `Bạn là trợ lý phân tích kết quả trúng thầu test nhanh và đường huyết (dữ liệu muasamcong) cho công ty kinh doanh thiết bị y tế.
-Luôn trả lời bằng tiếng Việt, ngắn gọn, đúng trọng tâm; số liệu lấy từ công cụ, không bịa. Mỗi câu hỏi có số liệu phải gọi công cụ trước khi trả lời.
+Luôn trả lời bằng tiếng Việt, ngắn gọn, đúng trọng tâm; số liệu lấy từ công cụ, không bịa. Mỗi câu hỏi có số liệu phải gọi công cụ thong_ke hoặc tim_dong trước khi trả lời.
 Tiền viết dạng 1.234.567 đ (hoặc "x,y tỷ" / "x triệu" khi lớn). Khi liệt kê nhiều mục dùng bảng Markdown ngắn (tối đa ~15 dòng).
 Nếu công cụ trả về 0 dòng, thử nới bộ lọc (bỏ dấu, rút ngắn từ khóa) trước khi kết luận không có.
 Dữ liệu có các năm: ${nams.join(", ")}. Hôm nay: ${new Date().toISOString().slice(0, 10)}.
@@ -121,20 +128,28 @@ Nhóm hàng Test: ${(nhom_hang || []).join("; ")}.
 ${pham_vi ? `Phạm vi của người hỏi: chỉ các kết quả mà nhà thầu trúng là khách do ${pham_vi} phụ trách. Nói rõ điều này khi trả lời về tổng thị trường.` : "Người hỏi xem được toàn bộ dữ liệu."}
 Không trả lời các việc ngoài dữ liệu kết quả trúng thầu này.`;
   const msgs = (messages || []).filter(m => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
-    .slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
+    .slice(-12).map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content.slice(0, 4000) }] }));
   while (msgs.length && msgs[0].role !== "user") msgs.shift();
-  if (!msgs.length || msgs[msgs.length - 1].role !== "user") { const e = new Error("Thiếu câu hỏi."); e.code = 400; throw e; }
+  if (!msgs.length || msgs[msgs.length - 1].role !== "user") throw loi(400, "Thiếu câu hỏi.");
 
-  const runner = client.beta.messages.toolRunner({
-    model: MODEL, max_tokens: 8000, max_iterations: 8,
-    betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
-    output_config: { effort: "low" },
-    system, tools, messages: msgs,
-  });
-  const final = await runner.runUntilDone();
-  if (final.stop_reason === "refusal") return { tra_loi: "Xin lỗi, tôi không trả lời được câu hỏi này." };
-  const text = final.content.filter(b => b.type === "text").map(b => b.text).join("\n").trim();
-  return { tra_loi: text || "Chưa có câu trả lời, anh/chị hỏi lại giúp tôi." };
+  const chay = { thong_ke: a => thongKe(rows, a), tim_dong: a => timDong(rows, a) };
+  for (let vong = 0; vong < 8; vong++) {
+    const j = await goi({ systemInstruction: { parts: [{ text: system }] }, contents: msgs,
+      tools: [{ functionDeclarations: KHAI_BAO }], generationConfig: { maxOutputTokens: 4000 } });
+    const c = j.candidates?.[0]?.content;
+    if (!c?.parts?.length) return { tra_loi: "Xin lỗi, tôi không trả lời được câu hỏi này." };
+    msgs.push({ role: "model", parts: c.parts });           // giữ nguyên (kể cả thoughtSignature) để gửi lại
+    const calls = c.parts.filter(p => p.functionCall);
+    if (!calls.length) {
+      const text = c.parts.filter(p => p.text && !p.thought).map(p => p.text).join("").trim();
+      return { tra_loi: text || "Chưa có câu trả lời, anh/chị hỏi lại giúp tôi." };
+    }
+    msgs.push({ role: "user", parts: calls.map(({ functionCall: f }) => {
+      let out; try { out = chay[f.name] ? chay[f.name](f.args || {}) : { loi: "Không có công cụ " + f.name }; } catch (e) { out = { loi: String(e.message) }; }
+      return { functionResponse: { name: f.name, response: out, ...(f.id ? { id: f.id } : {}) } };
+    }) });
+  }
+  return { tra_loi: "Câu hỏi cần tra quá nhiều bước, anh/chị hỏi cụ thể hơn giúp tôi." };
 }
 
 module.exports = { hoi };

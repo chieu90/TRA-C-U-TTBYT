@@ -258,7 +258,7 @@ module.exports = async (req, res) => {
         return send(res, 200, out);
       } catch (e) {
         console.error("hoi-kq", e.status || e.code || "", e.message);
-        const code = e.code === 400 || e.code === 503 ? e.code : 502;
+        const code = [400, 429, 503].includes(e.code) ? e.code : 502;
         return send(res, code, { loi: code === 502 ? "Trợ lý AI đang lỗi, thử lại sau ít phút." : e.message });
       }
     }
