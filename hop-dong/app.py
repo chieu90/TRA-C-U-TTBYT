@@ -2561,7 +2561,7 @@ Nhiệm vụ: đọc yêu cầu và chọn đúng hàng trong DANH MỤC (chỉ 
 - Khi một tên khớp nhiều hàng mà người dùng không nói rõ hãng, chọn tất cả hàng khớp không được; hãy để ma rỗng và ghi tim = câu gốc ngắn gọn.
 - so_luong: số lượng khách cần (0 nếu không nói). don_gia: chỉ điền khi người dùng tự nêu giá cho hàng đó (đơn vị đồng, "11k" = 11000), không thì 0.
 - giam_pct: phần trăm giảm giá chung nếu có. hieu_luc_den: yyyy-mm-dd nếu người dùng nói ngày hết hiệu lực (hoặc tính từ "N ngày" kể từ hôm nay), không thì rỗng.
-- ten_kh: tên khách hàng/cơ sở y tế, ưu tiên đúng tên trong DANH SÁCH KHÁCH nếu khớp. ghi_chu: điều kiện thanh toán, giao hàng, VAT… nếu người dùng nêu.
+- ten_kh: BẮT BUỘC điền nếu người dùng nêu khách (thường sau "cho", "gửi", "khách", "kính gửi", hoặc tên bệnh viện/phòng khám/TTYT/công ty), kể cả khi không có trong DANH SÁCH KHÁCH. Nếu khớp một tên trong danh sách thì dùng đúng tên đó; không thì viết hoa chữ đầu, có dấu, mở viết tắt (bv → Bệnh viện, ttyt → Trung tâm Y tế, pk → Phòng khám). Chỉ để rỗng khi thật sự không có tên khách. ghi_chu: điều kiện thanh toán, giao hàng, VAT… nếu người dùng nêu.
 - Nếu người dùng muốn bỏ/sửa một hàng trong danh sách cũ thì trả về danh sách sau khi sửa.
 - tra_loi: một câu ngắn tiếng Việt cho người dùng biết đã hiểu gì, hoặc hỏi lại điều chưa rõ."""
 
