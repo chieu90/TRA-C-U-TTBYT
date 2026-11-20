@@ -151,6 +151,7 @@ COT_THEM = [
     ("hop_dong", "loai", "TEXT DEFAULT 'thau'"),
     ("tep", "nguon", "TEXT DEFAULT ''"),
     ("khach_hang", "han_no", "INTEGER DEFAULT 30"),
+    ("bao_gia", "duyet_boi", "INTEGER"), ("bao_gia", "duyet_luc", "TEXT"),
 ]
 
 SCHEMA_VIEW = """
@@ -270,7 +271,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("uy_quyen_dong", "dvt")).fetchone():
+                                        "AND column_name = ?", ("bao_gia", "duyet_luc")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -2114,7 +2115,7 @@ def hang_hoa(c):
 
 TT_BG = [("nhap", "Đang soạn"), ("da_gui", "Đã gửi khách"), ("dong_y", "Khách đồng ý"), ("khong_thanh", "Không thành")]
 HIEU_LUC_NGAY = 30           # hiệu lực mặc định của báo giá
-SQL_BG = ("SELECT b.*, u.ho_ten AS phu_trach, "
+SQL_BG = ("SELECT b.*, u.ho_ten AS phu_trach, (SELECT ho_ten FROM nguoi_dung WHERE id = b.duyet_boi) AS nguoi_duyet, "
           "(SELECT COUNT(*) FROM bao_gia_dong d WHERE d.bao_gia_id = b.id) AS so_dong, "
           "COALESCE((SELECT SUM(d.so_luong * d.don_gia) FROM bao_gia_dong d WHERE d.bao_gia_id = b.id), 0) AS gia_tri "
           "FROM bao_gia b LEFT JOIN nguoi_dung u ON u.id = b.phu_trach_id WHERE 1=1")
@@ -2127,6 +2128,37 @@ def lay_bg(c, bid):
     if not c.ql and b["phu_trach_id"] != c.user["id"]:
         raise Loi(403, "Bạn không phụ trách báo giá này.")
     return b
+
+
+def khoa_bg(b):
+    """Báo giá đã duyệt thì không sửa được nội dung (chỉ đổi tình trạng); quản lý bỏ duyệt nếu cần sửa."""
+    if b["duyet_luc"]:
+        raise Loi(403, f"Báo giá {b['so_bg']} đã duyệt nên không sửa được nội dung. Nhờ quản lý bấm Bỏ duyệt nếu cần sửa.")
+
+
+def bg_duyet(c, bid):
+    b = lay_bg(c, bid)
+    if b["duyet_luc"]:
+        return Chuyen(f"/bao-gia/{bid}", "Báo giá này đã duyệt rồi.")
+    if not b["so_dong"]:
+        raise Loi(400, "Báo giá chưa có hàng nào, chưa duyệt được.")
+    c.db.execute("UPDATE bao_gia SET duyet_boi = ?, duyet_luc = ? WHERE id = ?",
+                 (c.user["id"], datetime.now().isoformat(timespec="seconds"), bid))
+    c.db.commit()
+    return Chuyen(f"/bao-gia/{bid}", f"Đã duyệt báo giá {b['so_bg']}. Nội dung đã khóa, không sửa được nữa.")
+
+
+def bg_bo_duyet(c, bid):
+    b = lay_bg(c, bid)
+    c.db.execute("UPDATE bao_gia SET duyet_boi = NULL, duyet_luc = NULL WHERE id = ?", (bid,))
+    c.db.commit()
+    return Chuyen(f"/bao-gia/{bid}", f"Đã bỏ duyệt báo giá {b['so_bg']}. Có thể sửa lại; sửa xong nhớ duyệt lại.")
+
+
+def nhan_duyet(b):
+    if not b["duyet_luc"]:
+        return ""
+    return f'<span class="nhan xanh" title="Duyệt bởi {e(b["nguoi_duyet"] or "")}">🔒 Đã duyệt</span>'
 
 
 def dong_cua_bg(c, bid):
@@ -2174,13 +2206,13 @@ def ds_bao_gia(c):
         loc_pt = chon("pt", [(u["id"], u["ho_ten"]) for u in nd], pt, "Mọi người phụ trách")
     dong = ""
     for b in ds:
-        xoa = ('<td class="thao-tac">' + nut_xoa(c, f'/bao-gia/{b["id"]}/xoa', f"Xóa báo giá {b['so_bg']}? Không khôi phục được.")
+        xoa = ('<td class="thao-tac">' + ("" if b["duyet_luc"] else nut_xoa(c, f'/bao-gia/{b["id"]}/xoa', f"Xóa báo giá {b['so_bg']}? Không khôi phục được."))
                + '</td>') if c.duoc_xoa else ""
         link = f' <a href="{e(b["link_file"])}" target="_blank" rel="noopener noreferrer">Docs</a>' if b["link_file"] else ""
         dong += (f'<tr><td><a href="/bao-gia/{b["id"]}"><b>{e(b["so_bg"])}</b></a>{link}</td><td>{ngay(b["ngay"])}</td>'
                  f'<td>{e(b["ten_kh"] or "—")}</td><td class="so">{b["so_dong"]}</td>'
                  f'<td class="so">{tien(b["gia_tri"]) if b["gia_tri"] else "—"}</td><td>{ngay(b["hieu_luc_den"])}</td>'
-                 f'<td>{e(b["phu_trach"] or "—")}</td><td>{nhan_bg(b)}</td>{xoa}</tr>')
+                 f'<td>{e(b["phu_trach"] or "—")}</td><td>{nhan_bg(b)} {nhan_duyet(b)}</td>{xoa}</tr>')
     if ds:
         bang = ('<div class="the cuon"><table><thead><tr><th>Số báo giá</th><th>Ngày</th><th>Khách hàng</th>'
                 '<th class="so">Mặt hàng</th><th class="so">Giá trị (đ)</th><th>Hiệu lực đến</th><th>Phụ trách</th>'
@@ -2255,6 +2287,13 @@ def bg_moi(c):
 
 def bg_sua(c, bid):
     b = lay_bg(c, bid)
+    if b["duyet_luc"]:
+        tt = c.form.get("trang_thai")
+        if tt not in dict(TT_BG):
+            khoa_bg(b)
+        c.db.execute("UPDATE bao_gia SET trang_thai = ? WHERE id = ?", (tt, bid))
+        c.db.commit()
+        return Chuyen(f"/bao-gia/{bid}", "Đã đổi tình trạng báo giá.")
     gt = doc_dau_bg(c, b)
     c.db.execute(f"UPDATE bao_gia SET {', '.join(k + ' = ?' for k in gt)} WHERE id = ?", list(gt.values()) + [bid])
     c.db.commit()
@@ -2265,6 +2304,7 @@ def bg_xoa(c, bid):
     b = lay_bg(c, bid)
     if not c.duoc_xoa:
         raise Loi(403, "Bạn chưa được cấp quyền xóa. Hãy nhờ quản lý.")
+    khoa_bg(b)
     c.db.execute("DELETE FROM bao_gia_dong WHERE bao_gia_id = ?", (bid,))
     c.db.execute("DELETE FROM bao_gia WHERE id = ?", (bid,))
     c.db.commit()
@@ -2275,6 +2315,7 @@ def bg_xem(c, bid):
     b = lay_bg(c, bid)
     dong = dong_cua_bg(c, bid)
     tim = c.q.get("tim", "")
+    khoa = bool(b["duyet_luc"])
     # bảng các dòng hàng: sửa số lượng, đơn giá ngay trong bảng
     hang = ""
     for i, d in enumerate(dong, 1):
@@ -2286,13 +2327,22 @@ def bg_xem(c, bid):
         tt_ = f'{tien(d["so_luong"] * d["don_gia"])}' if d["so_luong"] else ""
         hang += (f'<tr><td class="so">{i}</td><td>{e(d["ten"])}<br><span class="mo">{e(d["ten_tm"])}</span></td>'
                  f'<td>{e(d["ma"])}</td><td>{e(d["nhan_hieu"])}</td><td>{e(d["quy_cach"])}</td>'
-                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{d["id"]}" '
-                 f'value="{so_o(d["so_luong"])}" aria-label="Số lượng"></td>'
-                 f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="gia_{d["id"]}" '
-                 f'value="{so_o(d["don_gia"])}" aria-label="Đơn giá"></td>'
-                 f'<td class="so">{tt_}</td><td class="mo">{khoang_gia(d)}{canh}</td>'
-                 f'<td class="thao-tac"><button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button></td></tr>')
-    if dong:
+                 + (f'<td class="so">{sl(d["so_luong"]) if d["so_luong"] else ""}</td><td class="so">{tien(d["don_gia"])}</td>' if khoa else
+                    f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="sl_{d["id"]}" '
+                    f'value="{so_o(d["so_luong"])}" aria-label="Số lượng"></td>'
+                    f'<td class="so"><input class="o-nho" type="number" min="0" step="any" name="gia_{d["id"]}" '
+                    f'value="{so_o(d["don_gia"])}" aria-label="Đơn giá"></td>')
+                 + f'<td class="so">{tt_}</td><td class="mo">{khoang_gia(d)}{canh}</td>'
+                 + ('<td></td></tr>' if khoa else f'<td class="thao-tac"><button class="nut-chu nguy" name="xoa" value="{d["id"]}">Bỏ</button></td></tr>'))
+    if dong and khoa:
+        tong = sum(d["so_luong"] * d["don_gia"] for d in dong)
+        chan = (f'<tr><td colspan="7" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(tong)}</b></td><td colspan="2"></td></tr>'
+                if tong else "")
+        bang = ('<div class="cuon"><table><thead><tr><th class="so">STT</th>'
+                '<th>Tên TTBYT / tên thương mại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Quy cách</th><th class="so">Số lượng</th>'
+                '<th class="so">Đơn giá (đ)</th><th class="so">Thành tiền</th><th>Giá Min – Max</th><th></th></tr></thead>'
+                f'<tbody>{hang}{chan}</tbody></table></div>')
+    elif dong:
         tong = sum(d["so_luong"] * d["don_gia"] for d in dong)
         chan = (f'<tr><td colspan="7" class="so"><b>Tổng cộng</b></td><td class="so"><b>{tien(tong)}</b></td><td colspan="2"></td></tr>'
                 if tong else "")
@@ -2332,33 +2382,48 @@ def bg_xem(c, bid):
                       f'<button class="nut phu">{"Tạo lại" if b["link_file"] else "Tạo"} link Google Docs</button></form>')
     link = (f'<dt>Link Google Docs</dt><dd><a href="{e(b["link_file"])}" target="_blank" rel="noopener noreferrer">{e(b["link_file"])}</a></dd>'
             if b["link_file"] else "")
-    xoa = nut_xoa(c, f"/bao-gia/{bid}/xoa", f"Xóa báo giá {b['so_bg']}? Không khôi phục được.", "Xóa báo giá") if c.duoc_xoa else ""
+    xoa = nut_xoa(c, f"/bao-gia/{bid}/xoa", f"Xóa báo giá {b['so_bg']}? Không khôi phục được.", "Xóa báo giá") if c.duoc_xoa and not khoa else ""
+    nut_duyet = ""
+    if c.ql and khoa:
+        nut_duyet = (f'<form method="post" action="/bao-gia/{bid}/bo-duyet" class="trong-dong" '
+                     f'data-xac-nhan="Bỏ duyệt báo giá {e(b["so_bg"])} để sửa lại nội dung?">{an_csrf(c)}<button class="nut phu">Bỏ duyệt</button></form>')
+    elif c.ql and dong:
+        nut_duyet = (f'<form method="post" action="/bao-gia/{bid}/duyet" class="trong-dong" '
+                     f'data-xac-nhan="Duyệt báo giá {e(b["so_bg"])}? Sau khi duyệt sẽ không sửa được nội dung.">{an_csrf(c)}<button class="nut">Duyệt báo giá</button></form>')
+    duyet_tt = (f'<dt>Duyệt</dt><dd>{e(b["nguoi_duyet"] or "—")} · {ngay(b["duyet_luc"][:10])} {b["duyet_luc"][11:16]}</dd>' if khoa else
+                '<dt>Duyệt</dt><dd class="mo">Chưa duyệt' + ("" if c.ql else " — quản lý duyệt xong thì báo giá bị khóa, không sửa được") + '</dd>')
+    sua_tt = (f"""<details class="the"><summary>Đổi tình trạng</summary>
+        <form method="post" action="/bao-gia/{bid}/sua" class="luoi">{an_csrf(c)}<label>Tình trạng{chon("trang_thai", TT_BG, b["trang_thai"])}</label>
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form>
+        <p class="mo">Báo giá đã duyệt: chỉ đổi được tình trạng, nội dung đã khóa.</p></details>""" if khoa else
+              f"""<details class="the"><summary>Sửa thông tin, đổi tình trạng</summary>
+        <form method="post" action="/bao-gia/{bid}/sua" class="luoi">{an_csrf(c)}{o_dau_bg(c, b)}
+          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>""")
     tu_tay = "".join(o(nhan, ten, bat_buoc=(ten == "ten_tm")) for ten, nhan in COT_HANG)
-    return trang(c, f"Báo giá {b['so_bg']}", f"""
-      <div class="dau-trang"><h1>Báo giá {e(b["so_bg"])} {nhan_bg(b)}</h1>
-        <div class="hang-nut">{'<a class="nut" href="/bao-gia/%d/tai">Tải file Word</a><a class="nut phu" href="/don-hang/moi?bg=%d">Lập đơn hàng</a>' % (bid, bid) if dong else ""}{nut_google}</div></div>
-      <div class="the"><dl class="thong-tin"><dt>Kính gửi</dt><dd>{e(b["ten_kh"] or "Quý Khách hàng")}</dd>
-        <dt>Ngày</dt><dd>{ngay(b["ngay"])}</dd><dt>Hiệu lực đến</dt><dd>{ngay(b["hieu_luc_den"]) or "—"}</dd>
-        <dt>Phụ trách</dt><dd>{e(b["phu_trach"] or "—")}</dd>{link}
-        {f'<dt>Ghi chú</dt><dd>{e(b["ghi_chu"])}</dd>' if b["ghi_chu"] else ""}</dl></div>
-      <div class="the"><h2>Hàng trong báo giá <span class="dem">{len(dong)}</span></h2>{bang}</div>
-      <div class="the"><h2>Thêm hàng</h2>{chua_dm}
+    them_html = f"""      <div class="the"><h2>Thêm hàng</h2>{chua_dm}
         <form class="bo-loc"><input type="search" name="tim" value="{e(tim)}" placeholder="Gõ tên, ký mã hiệu, nhãn hiệu… ví dụ: HIV khay" {"autofocus" if tim else ""}>
           <button class="nut phu">Tìm</button></form>{kq_tim}</div>
       <details class="the"><summary>Thêm hàng không có trong danh mục</summary>
         <form method="post" action="/bao-gia/{bid}/them-tay" class="luoi">{an_csrf(c)}{tu_tay}
           {o("Số lượng", "so_luong", kieu="number", them='min="0" step="any"')}
           {o("Đơn giá (đ)", "don_gia", kieu="number", them='min="0" step="any"')}
-          <div class="hang-nut"><button class="nut phu">Thêm dòng</button></div></form></details>
-      <details class="the"><summary>Sửa thông tin, đổi tình trạng</summary>
-        <form method="post" action="/bao-gia/{bid}/sua" class="luoi">{an_csrf(c)}{o_dau_bg(c, b)}
-          <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>
+          <div class="hang-nut"><button class="nut phu">Thêm dòng</button></div></form></details>"""
+    return trang(c, f"Báo giá {b['so_bg']}", f"""
+      <div class="dau-trang"><h1>Báo giá {e(b["so_bg"])} {nhan_bg(b)} {nhan_duyet(b)}</h1>
+        <div class="hang-nut">{'<a class="nut" href="/bao-gia/%d/tai">Tải file Word</a><a class="nut phu" href="/don-hang/moi?bg=%d">Lập đơn hàng</a>' % (bid, bid) if dong else ""}{nut_google}{nut_duyet}</div></div>
+      <div class="the"><dl class="thong-tin"><dt>Kính gửi</dt><dd>{e(b["ten_kh"] or "Quý Khách hàng")}</dd>
+        <dt>Ngày</dt><dd>{ngay(b["ngay"])}</dd><dt>Hiệu lực đến</dt><dd>{ngay(b["hieu_luc_den"]) or "—"}</dd>
+        <dt>Phụ trách</dt><dd>{e(b["phu_trach"] or "—")}</dd>{duyet_tt}{link}
+        {f'<dt>Ghi chú</dt><dd>{e(b["ghi_chu"])}</dd>' if b["ghi_chu"] else ""}</dl></div>
+      <div class="the"><h2>Hàng trong báo giá <span class="dem">{len(dong)}</span></h2>{bang}</div>
+      {"" if khoa else them_html}
+      {sua_tt}
       {xoa}""", "bg")
 
 
 def bg_dong_luu(c, bid):
     """Lưu số lượng, đơn giá của mọi dòng; hoặc bỏ một dòng khi bấm nút Bỏ."""
-    lay_bg(c, bid)
+    khoa_bg(lay_bg(c, bid))
     xoa = c.form.get("xoa", "")
     if xoa.isdigit():
         c.db.execute("DELETE FROM bao_gia_dong WHERE id = ? AND bao_gia_id = ?", (int(xoa), bid))
@@ -2380,7 +2445,7 @@ def bg_them_dong(c, bid, cac_dong):
 
 
 def bg_them(c, bid):
-    lay_bg(c, bid)
+    khoa_bg(lay_bg(c, bid))
     tim = c.form.get("tim", "")
     if c.form.get("tat_ca") == "1" and tim.strip():
         dk, ts = dk_tim_hang(tim)
@@ -2398,7 +2463,7 @@ def bg_them(c, bid):
 
 
 def bg_them_tay(c, bid):
-    lay_bg(c, bid)
+    khoa_bg(lay_bg(c, bid))
     d = {t: c.chu(t, nhan, t == "ten_tm", 500) for t, nhan in COT_HANG}
     d.update(so_luong=c.so("so_luong", "Số lượng"), don_gia=c.so("don_gia", "Đơn giá"), gia_min=0, gia_max=0)
     bg_them_dong(c, bid, [d])
@@ -4246,6 +4311,8 @@ TUYEN = [
     ("POST", r"/bao-gia/ai/tao", bg_ai_tao, "nd"),
     ("GET", r"/bao-gia/(\d+)", bg_xem, "nd"),
     ("POST", r"/bao-gia/(\d+)/sua", bg_sua, "nd"),
+    ("POST", r"/bao-gia/(\d+)/duyet", bg_duyet, "ql"),
+    ("POST", r"/bao-gia/(\d+)/bo-duyet", bg_bo_duyet, "ql"),
     ("POST", r"/bao-gia/(\d+)/xoa", bg_xoa, "nd"),
     ("POST", r"/bao-gia/(\d+)/dong", bg_dong_luu, "nd"),
     ("POST", r"/bao-gia/(\d+)/them", bg_them, "nd"),
