@@ -2554,8 +2554,87 @@ def _gia_chat(kq, d, h):
     return round((h["gia_ban"] or 0) * (1 - kq["giam"] / 100))
 
 
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+LENH_AI_BG = """Bạn là trợ lý soạn báo giá test nhanh / thiết bị y tế của công ty Avanta. Người dùng gõ yêu cầu báo giá bằng tiếng Việt tự do
+(có thể không dấu, viết tắt, sai chính tả, nhiều hàng trên một dòng, hoặc là danh sách đã soạn rồi kèm câu bổ sung/sửa).
+Nhiệm vụ: đọc yêu cầu và chọn đúng hàng trong DANH MỤC (chỉ dùng ký mã hiệu có trong danh mục, không bịa mã).
+- Khi một tên khớp nhiều hàng mà người dùng không nói rõ hãng, chọn tất cả hàng khớp không được; hãy để ma rỗng và ghi tim = câu gốc ngắn gọn.
+- so_luong: số lượng khách cần (0 nếu không nói). don_gia: chỉ điền khi người dùng tự nêu giá cho hàng đó (đơn vị đồng, "11k" = 11000), không thì 0.
+- giam_pct: phần trăm giảm giá chung nếu có. hieu_luc_den: yyyy-mm-dd nếu người dùng nói ngày hết hiệu lực (hoặc tính từ "N ngày" kể từ hôm nay), không thì rỗng.
+- ten_kh: tên khách hàng/cơ sở y tế, ưu tiên đúng tên trong DANH SÁCH KHÁCH nếu khớp. ghi_chu: điều kiện thanh toán, giao hàng, VAT… nếu người dùng nêu.
+- Nếu người dùng muốn bỏ/sửa một hàng trong danh sách cũ thì trả về danh sách sau khi sửa.
+- tra_loi: một câu ngắn tiếng Việt cho người dùng biết đã hiểu gì, hoặc hỏi lại điều chưa rõ."""
+
+
+def ai_soan_bg(c, van_ban):
+    """Gemini đọc câu tự do -> các dòng theo cách gõ của trang chat (mã hàng, số lượng…) + câu trả lời ngắn."""
+    khoa = os.environ.get("GEMINI_API_KEY", "")
+    if not khoa:
+        raise Loi(503, "Chưa cài khóa GEMINI_API_KEY cho app trên Vercel (project data.adc). Tạm thời dùng nút Gửi (không AI).")
+    hang = c.db.execute("SELECT ma, ten, ten_tm, nhan_hieu, quy_cach, gia_ban FROM hang_hoa ORDER BY id LIMIT 1500").fetchall()
+    if not hang:
+        raise Loi(400, "Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa trước.")
+    dm = "\n".join(" | ".join(str(h[k] or "") for k in ("ma", "ten", "ten_tm", "nhan_hieu", "quy_cach", "gia_ban")) for h in hang)
+    kh = "\n".join(r["ten"] for r in c.db.execute("SELECT ten FROM khach_hang ORDER BY ten LIMIT 500").fetchall())
+    than = {
+        "systemInstruction": {"parts": [{"text": LENH_AI_BG + f"\nHôm nay: {date.today().isoformat()}"
+                                         f"\n\nDANH MỤC (ký mã hiệu | tên | tên thương mại | nhãn hiệu | quy cách | giá bán):\n{dm}"
+                                         f"\n\nDANH SÁCH KHÁCH:\n{kh or '(trống)'}"}]},
+        "contents": [{"role": "user", "parts": [{"text": van_ban[:4000]}]}],
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": {
+            "type": "OBJECT", "properties": {
+                "ten_kh": {"type": "STRING"}, "giam_pct": {"type": "NUMBER"}, "hieu_luc_den": {"type": "STRING"},
+                "ghi_chu": {"type": "STRING"}, "tra_loi": {"type": "STRING"},
+                "hang": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+                    "ma": {"type": "STRING"}, "tim": {"type": "STRING"}, "so_luong": {"type": "NUMBER"}, "don_gia": {"type": "NUMBER"}},
+                    "required": ["ma", "so_luong", "don_gia"]}}},
+            "required": ["ten_kh", "hang", "tra_loi"]}}}
+    yc = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_MODEL)}:generateContent",
+                                json.dumps(than).encode(), {"Content-Type": "application/json", "x-goog-api-key": khoa})
+    try:
+        with urllib.request.urlopen(yc, timeout=45) as r:
+            j = json.loads(r.read())
+    except urllib.error.HTTPError as ex:
+        if ex.code == 429:
+            raise Loi(429, "Đã hết lượt AI miễn phí trong lúc này (giới hạn của Google). Thử lại sau ít phút, hoặc dùng nút Gửi (không AI).")
+        raise Loi(502, f"AI báo lỗi {ex.code}. Thử lại hoặc dùng nút Gửi (không AI).")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        raise Loi(502, "Không gọi được AI. Thử lại hoặc dùng nút Gửi (không AI).")
+    try:
+        kq = json.loads(j["candidates"][0]["content"]["parts"][0]["text"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        raise Loi(502, "AI trả lời không đúng dạng. Thử gõ lại rõ hơn.")
+    dong = []
+    if str(kq.get("ten_kh") or "").strip():
+        dong.append("Khách: " + str(kq["ten_kh"]).replace(";", " ").replace(",", " ").strip())
+    for h in kq.get("hang") or []:
+        ten = str(h.get("ma") or h.get("tim") or "").strip().replace(";", " ").replace(",", " ")
+        if not ten:
+            continue
+        sl, gia = h.get("so_luong") or 0, h.get("don_gia") or 0
+        dong.append(ten + (f" x{so_o(sl)}" if sl else "") + (f" giá {so_o(gia)}" if gia else ""))
+    if kq.get("giam_pct"):
+        dong.append(f"giảm {so_o(kq['giam_pct'])}%")
+    hl = date_or_none(kq.get("hieu_luc_den"))
+    if hl:
+        dong.append(f"hiệu lực đến {hl.day:02d}/{hl.month:02d}/{hl.year}")
+    if str(kq.get("ghi_chu") or "").strip():
+        dong.append("ghi chú: " + " ".join(str(kq["ghi_chu"]).split()))
+    return "\n".join(dong), str(kq.get("tra_loi") or "").strip()[:500]
+
+
+def date_or_none(s):
+    try:
+        return date.fromisoformat(str(s or "")[:10])
+    except ValueError:
+        return None
+
+
 def bg_nhanh(c):
     van_ban = c.form.get("yeu_cau", "") if c.method == "POST" else ""
+    ai_noi = ""
+    if van_ban.strip() and c.form.get("buoc") == "ai":
+        van_ban, ai_noi = ai_soan_bg(c, van_ban)
     kq = doc_chat_bg(c, van_ban) if van_ban.strip() else None
     if kq and c.form.get("buoc") == "tao":
         cac_dong, bo = [], 0
@@ -2631,7 +2710,7 @@ def bg_nhanh(c):
                f'<textarea name="yeu_cau" hidden>{e(van_ban)}</textarea><div class="hang-nut"><button class="nut">Tạo báo giá</button>'
                f'<span class="mo">{"Chọn hàng ở các dòng màu vàng trước khi tạo. " if can_chon else ""}'
                'Sau khi tạo vẫn sửa được số lượng, giá, thêm bớt hàng.</span></div></form>') if co_dong else ""
-        tra_loi = f'<div class="the"><h2>App hiểu như sau</h2><dl class="thong-tin">{"".join(y)}</dl>{bang}{tao}</div>'
+        tra_loi = f'<div class="the"><h2>App hiểu như sau</h2>{"<p><b>AI:</b> " + e(ai_noi) + "</p>" if ai_noi else ""}<dl class="thong-tin">{"".join(y)}</dl>{bang}{tao}</div>'
     chua_dm = "" if c.db.execute("SELECT 1 FROM hang_hoa").fetchone() else \
         '<p class="nhan do">Chưa có danh mục hàng hóa — quản lý nhập bảng giá ở mục Hàng hóa trước.</p>'
     return trang(c, "Soạn báo giá bằng chat", f"""
@@ -2639,7 +2718,9 @@ def bg_nhanh(c):
       <div class="the">{chua_dm}<form method="post">{an_csrf(c)}<input type="hidden" name="buoc" value="xem">
         <label class="rong">Gõ yêu cầu, mỗi ý một dòng
           <textarea name="yeu_cau" rows="9" placeholder="{e(VI_DU_CHAT)}" {"" if kq else "autofocus"}>{e(van_ban)}</textarea></label>
-        <div class="hang-nut"><button class="nut">Gửi</button>{'<a href="/bao-gia/nhanh">Làm báo giá khác</a>' if kq else ""}</div></form>
+        <div class="hang-nut"><button class="nut" name="buoc" value="ai">Gửi cho AI</button><button class="nut phu">Gửi (không AI)</button>
+          {'<a href="/bao-gia/nhanh">Làm báo giá khác</a>' if kq else ""}</div>
+        <p class="mo">AI hiểu câu gõ tự do. Sau khi AI đọc, ô trên đổi thành danh sách mã hàng — muốn sửa thì gõ thêm câu bổ sung (ví dụ "bỏ HCV, thêm 10 hộp HIV OnSite") rồi gửi lại.</p></form>
         <details><summary>Cách gõ</summary><ul class="mo">
           <li><b>Khách hàng:</b> <code>Khách: BV Thủ Đức</code> (hoặc <code>Kính gửi …</code>, <code>Báo giá cho …</code>). Dòng đầu không phải tên hàng cũng được hiểu là tên khách.</li>
           <li><b>Mặt hàng:</b> mỗi hàng một dòng — ký mã hiệu hoặc tên ngắn, rồi số lượng: <code>R0011C 50</code>, <code>HBsAg que x20</code>, <code>HIV khay 30 hộp</code>. Không ghi số lượng thì báo giá chỉ có đơn giá.</li>
