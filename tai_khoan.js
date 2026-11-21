@@ -44,6 +44,8 @@
     if (nav && !nav.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec'; a.textContent = 'Công việc'; nav.appendChild(a); }
     // icon cho từng nút tab trên thanh trên cùng (cùng bộ icon với thanh tab dưới đáy trên điện thoại)
     if (nav && !nav.querySelector('a[href="/trang-chu"]')) { const a = document.createElement('a'); a.href = '/trang-chu'; a.textContent = 'Trang chủ'; nav.prepend(a); }
+    // đã vào 1 tab thì thanh trên chỉ còn nút Trang chủ (chuyển tab qua lưới icon ở trang chủ) — yêu cầu 21/11/2026
+    if (nav) nav.querySelectorAll('a:not([href="/trang-chu"])').forEach(a => a.remove());
     if (nav) {
       const st2 = document.createElement('style');
       st2.textContent = '.nav a{display:inline-flex;align-items:center;gap:7px}.nav a .ic{width:17px;height:17px;flex:none}';
