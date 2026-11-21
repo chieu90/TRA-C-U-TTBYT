@@ -12,6 +12,16 @@
     .acct .menu a,.acct .menu button{display:flex;justify-content:space-between;width:100%;text-align:left;padding:9px 10px;border:0;background:none;
     color:inherit;font:inherit;font-size:14px;border-radius:8px;text-decoration:none;cursor:pointer}.acct .menu a:hover,.acct .menu button:hover{background:var(--line-2,#eef2f7)}
     .acct-toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#14213d;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:90}`;
+  const ICON = {
+    '/goi-thau': '<path d="M4 6h16M4 12h16M4 18h10"/>',
+    '/bao-gia': '<path d="M20 12 12 20 4 12V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
+    '/co-so-y-te': '<path d="M4 21V5l8-3 8 3v16M9 21v-5h6v5M12 7v4M10 9h4"/>',
+    '/trung-thau': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    '/duong-huyet': '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+    '/cong-viec': '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+    '/so-sanh': '<path d="M8 3v18M16 3v18M3 8h5M16 16h5"/>',
+    '/': '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const toast = t => { const d = document.createElement('div'); d.className = 'acct-toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 4000); };
   async function post(action, data) {
@@ -31,6 +41,16 @@
     // tab Công việc: mọi tài khoản đã đăng nhập đều có (chỉ thấy gói phân cho mình)
     const nav = document.querySelector('.nav');
     if (nav && !nav.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec'; a.textContent = 'Công việc'; nav.appendChild(a); }
+    // icon cho từng nút tab trên thanh trên cùng (cùng bộ icon với thanh tab dưới đáy trên điện thoại)
+    if (nav) {
+      const st2 = document.createElement('style');
+      st2.textContent = '.nav a{display:inline-flex;align-items:center;gap:7px}.nav a .ic{width:17px;height:17px;flex:none}';
+      document.head.appendChild(st2);
+      nav.querySelectorAll('a').forEach(a => {
+        const p = ICON[a.getAttribute('href')]; if (!p || a.querySelector('.ic')) return;
+        a.insertAdjacentHTML('afterbegin', `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`);
+      });
+    }
     const tb = document.querySelector('.tabbar');
     if (tb && !tb.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec';
       a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Công việc</span>';
