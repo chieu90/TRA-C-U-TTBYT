@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quản lý công việc – Muasamcong ADC</title>
+<meta name="theme-color" content="#0b5cad">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #f3f6fa; --surface: #fff; --text: #14213d; --muted: #5b6b82; --line: #e2e8f0; --line-2: #eef2f7;
+  --brand: #0b5cad; --brand-2: #0e9f9a; --accent-soft: #e6f0fb; --ok: #15803d; --ok-bg: #e8f7ee; --bad: #c2410c; --bad-bg: #fdeee6;
+  --warn: #b45309; --warn-bg: #fdf3e2; --gray-bg: #eef2f7; --shadow: 0 1px 2px rgba(16,35,70,.06), 0 6px 20px rgba(16,35,70,.06); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1420; --surface: #141d2b; --text: #e5ebf3; --muted: #93a3b8; --line: #243145; --line-2: #1b2636;
+  --brand: #3b8bdb; --brand-2: #22b3ad; --accent-soft: #16304d; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a2113;
+  --warn: #fbbf24; --warn-bg: #3a2d12; --gray-bg: #1b2636; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif; }
+a { color: var(--brand); }
+.hero { background: linear-gradient(120deg, var(--brand) 0%, #0a4a8c 45%, var(--brand-2) 100%); color: #fff; padding: 24px 16px 72px; }
+.hero-in { max-width: 1180px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hero h1 { margin: 0; font-size: 22px; }
+.hero .sub { margin: 8px 0 0; opacity: .9; font-size: 14px; }
+.nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.nav a { color: #fff; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500; background: rgba(255,255,255,.14); }
+.nav a.on { background: rgba(255,255,255,.3); }
+.wrap { max-width: 1180px; margin: -52px auto 40px; padding: 0 16px; }
+.card { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.stat { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; background: var(--surface); text-align: left; font: inherit; color: inherit; }
+.stat b { display: block; font-size: 22px; line-height: 1.2; }
+.stat span { color: var(--muted); font-size: 13px; }
+.stat.on { border-color: var(--brand); background: var(--accent-soft); }
+.bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.bar input[type=search] { flex: 1; min-width: 220px; }
+select, input, textarea { font: inherit; font-size: 14px; padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--text); }
+textarea { width: 100%; min-height: 64px; resize: vertical; }
+button { font: inherit; font-size: 13.5px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+button.pri { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; border: 0; font-weight: 600; }
+button:disabled { opacity: .6; cursor: default; }
+.note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+.list { display: grid; gap: 10px; }
+.job { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); border-left: 4px solid var(--line); }
+.job.st-moi { border-left-color: var(--brand); }
+.job.st-co { border-left-color: var(--brand-2); }
+.job.st-khong { border-left-color: var(--muted); }
+.job.st-trung { border-left-color: var(--ok); }
+.job.st-truot, .job.st-huy { border-left-color: var(--bad); }
+.head { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 12px 14px; cursor: pointer; }
+.head .ma { font: 12px ui-monospace, monospace; color: var(--muted); }
+.head .ten { font-weight: 600; margin: 2px 0; }
+.head .meta { color: var(--muted); font-size: 13px; }
+.head .right { text-align: right; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--gray-bg); color: var(--muted); }
+.tag.moi { background: var(--accent-soft); color: var(--brand); }
+.tag.co { background: var(--accent-soft); color: var(--brand-2); }
+.tag.trung { background: var(--ok-bg); color: var(--ok); }
+.tag.truot, .tag.huy { background: var(--bad-bg); color: var(--bad); }
+.tag.han { background: var(--warn-bg); color: var(--warn); }
+.who { font-size: 13px; }
+.body { display: none; border-top: 1px solid var(--line-2); padding: 12px 14px 14px; }
+.job.open .body { display: block; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; }
+.f label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+.f select, .f input { width: 100%; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg label { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1.5px solid var(--line); border-radius: 999px; cursor: pointer; font-size: 13.5px; color: var(--text); margin: 0; }
+.seg label:has(input:checked) { border-color: var(--brand); background: var(--accent-soft); }
+.seg input { margin: 0; accent-color: var(--brand); }
+.items { border: 1px solid var(--line); border-radius: 10px; max-height: 340px; overflow: auto; margin-top: 4px; }
+.items table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.items th { position: sticky; top: 0; background: var(--surface); text-align: left; font-size: 12px; color: var(--muted); padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.items td { padding: 6px 8px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+.items tr.chon td { background: var(--accent-soft); }
+.items input[type=text] { width: 100%; padding: 5px 7px; font-size: 13px; }
+.items .nh { color: var(--muted); font-size: 12px; }
+.acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.acts .sv { color: var(--muted); font-size: 12.5px; }
+.empty { text-align: center; color: var(--muted); padding: 30px; background: var(--surface); border-radius: 14px; }
+.msg { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--surface);
+  padding: 10px 16px; border-radius: 10px; font-size: 14px; display: none; z-index: 60; }
+@media (max-width: 640px) {
+  .head { grid-template-columns: 1fr; }
+  .head .right { flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; }
+  .items thead { display: none; }
+  .items tr { display: grid; grid-template-columns: 28px 1fr; gap: 2px 6px; padding: 6px 0; border-bottom: 1px solid var(--line-2); }
+  .items td { border: 0; padding: 2px 6px; }
+  .items td.sl { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+  .items td.chao { grid-column: 2; }
+}
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in"><div class="top">
+  <h1>Quản lý công việc</h1>
+  <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/cong-viec" class="on">Công việc</a></nav>
+</div><p class="sub" id="sub">Gói thầu được phân cho nhân viên theo cơ sở y tế phụ trách.</p></div></header>
+<main class="wrap">
+  <div id="warn"></div>
+  <section class="card">
+    <div class="stats" id="stats"></div>
+    <div class="bar">
+      <input type="search" id="q" placeholder="Tìm mã gói, tên gói, chủ đầu tư, tỉnh, khách hàng, mặt hàng…">
+      <select id="fNv" hidden></select>
+      <select id="fHan"><option value="">Mọi hạn</option><option value="con">Còn hạn nộp</option><option value="het">Đã hết hạn nộp</option></select>
+      <button type="button" id="xls">Tải Excel</button>
+    </div>
+  </section>
+  <div class="list" id="list"><div class="empty">Đang tải…</div></div>
+</main>
+<div class="msg" id="msg"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+const money = v => v ? Number(v).toLocaleString('vi-VN') + ' đ' : '';
+const num = v => v == null ? '' : Number(v).toLocaleString('vi-VN');
+const when = s => s ? new Date(s).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const hanTxt = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) + (s.length > 10 ? ' ' + s.slice(11, 16) : '') : '';
+const nowStr = () => { const d = new Date(Date.now() + 7 * 3600e3); return d.toISOString().slice(0, 16).replace('T', ' '); };
+const TG = { '': 'Chưa quyết', co: 'Tham gia', khong: 'Không tham gia' };
+const KQ = { '': '—', cho: 'Chờ kết quả', trung: 'Trúng thầu', truot: 'Trượt', huy: 'Hủy thầu' };
+let D = null, filt = 'tat_ca', openMa = new URLSearchParams(location.search).get('ma') || '';
+
+function toast(t) { const m = $('#msg'); m.textContent = t; m.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => m.style.display = 'none', 3000); }
+// trạng thái gộp để lọc / tô màu
+const st = v => v.ket_qua === 'trung' ? 'trung' : v.ket_qua === 'truot' ? 'truot' : v.ket_qua === 'huy' ? 'huy'
+  : v.tham_gia === 'khong' ? 'khong' : v.tham_gia === 'co' ? 'co' : 'moi';
+const ST_NAME = { moi: 'Mới / chưa quyết', co: 'Đang tham gia', khong: 'Không tham gia', trung: 'Trúng thầu', truot: 'Trượt', huy: 'Hủy thầu' };
+const conHan = v => v.han && v.han > nowStr();
+
+async function load() {
+  const r = await fetch('/api/auth?action=cong-viec', { cache: 'no-store' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $('#list').innerHTML = `<div class="empty">${esc(d.loi || 'Không tải được dữ liệu.')}</div>`; return; }
+  D = d;
+  const w = [];
+  if (!d.phan_cong.co_link) w.push(d.la_ql ? 'Chưa gắn sheet phân công cơ sở y tế nên gói thầu chưa tự phân cho nhân viên. Admin vào <a href="/quan-tri">Quản trị</a> → "Phân công cơ sở y tế" để dán link.' : 'Admin chưa gắn sheet phân công cơ sở y tế.');
+  else if (!d.toi && !d.la_ql) w.push('Tài khoản của bạn chưa gắn với tên nhân viên nào trong sheet phân công. Nhờ admin chọn "Công việc của" ở trang Quản trị.');
+  if (d.phan_cong.loi) w.push('Lần đọc sheet phân công gần nhất bị lỗi: ' + esc(d.phan_cong.loi));
+  $('#warn').innerHTML = w.map(x => `<div class="warnbox">${x}</div>`).join('');
+  $('#sub').textContent = (d.la_ql ? 'Bạn xem được mọi nhân viên.' : `Gói thầu phân cho ${d.toi || 'bạn'}.`) + (d.cap_nhat ? ` Dữ liệu gói thầu cập nhật ${d.cap_nhat}.` : '');
+  if (d.la_ql) {
+    const nvs = [...new Set([...d.nv, ...d.viec.map(v => v.nv).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'vi'));
+    const cur = $('#fNv').value || (d.toi && nvs.includes(d.toi) ? '' : '');
+    $('#fNv').innerHTML = `<option value="">Mọi nhân viên</option><option value="__chua">Chưa phân công</option>` + nvs.map(n => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    $('#fNv').hidden = false;
+  }
+  render();
+}
+
+function pool() {
+  const q = fold($('#q').value.trim()), nv = $('#fNv').value, han = $('#fHan').value;
+  return D.viec.filter(v => (!nv || (nv === '__chua' ? !v.nv : v.nv.split(/[,;]\s*/).includes(nv)))
+    && (!han || (han === 'con' ? conHan(v) : !conHan(v)))
+    && (!q || fold([v.ma, v.ten, v.cdt, v.tinh, v.khach, v.nv, v.ghi_chu, ...v.hang.map(h => h.ten + ' ' + h.nhom)].join(' ')).includes(q)));
+}
+function render() {
+  const p = pool(), c = { tat_ca: p.length };
+  p.forEach(v => { const s = st(v); c[s] = (c[s] || 0) + 1; });
+  $('#stats').innerHTML = [['tat_ca', 'Tất cả'], ...Object.entries(ST_NAME)].map(([k, n]) =>
+    `<button type="button" class="stat${filt === k ? ' on' : ''}" data-f="${k}"><b>${c[k] || 0}</b><span>${n}</span></button>`).join('');
+  const ds = p.filter(v => filt === 'tat_ca' || st(v) === filt);
+  // còn hạn lên trước (hạn gần nhất trước), rồi các gói đã hết hạn (mới nhất trước)
+  const now = nowStr();
+  ds.sort((a, b) => { const ac = a.han > now, bc = b.han > now; return ac !== bc ? (ac ? -1 : 1) : ac ? a.han.localeCompare(b.han) : b.han.localeCompare(a.han); });
+  $('#list').innerHTML = ds.length ? ds.map(card).join('') : `<div class="empty">Không có gói thầu nào${filt !== 'tat_ca' || $('#q').value ? ' khớp bộ lọc' : ''}.</div>`;
+  if (openMa) { const el = document.querySelector(`.job[data-ma="${CSS.escape(openMa)}"]`); if (el) { el.classList.add('open'); el.scrollIntoView({ block: 'start' }); } openMa = ''; }
+}
+function card(v) {
+  const s = st(v), chon = new Map(v.san_pham.map(x => [x.ten, x.chao]));
+  const nvOpts = [...new Set([...D.nv, v.nv, v.tu_dong].filter(Boolean))];
+  const kh = D.khach.filter(k => !v.nv || k.nv.split(/[,;\/]\s*/).some(n => v.nv.split(/[,;]\s*/).includes(n.trim())));
+  return `<article class="job st-${s}" data-ma="${esc(v.ma)}">
+  <div class="head">
+    <div><div class="ma">${esc(v.ma)}${v.con_tren_web ? '' : ' · đã rời danh sách gói thầu'}</div>
+      <div class="ten">${esc(v.ten)}</div>
+      <div class="meta">${esc(v.cdt)} · ${esc(v.tinh)}${v.gia_goi ? ' · ' + money(v.gia_goi) : ''} · ${v.hang.length} mặt hàng</div></div>
+    <div class="right"><span class="tag ${s}">${ST_NAME[s]}</span>
+      <span class="tag${conHan(v) ? ' han' : ''}">Hạn ${esc(hanTxt(v.han))}</span>
+      <span class="who">${v.nv ? '👤 ' + esc(v.nv) : '<i>Chưa phân công</i>'}${v.khach ? ' · ' + esc(v.khach) : ''}</span></div>
+  </div>
+  <div class="body"><form data-ma="${esc(v.ma)}">
+    <div class="grid">
+      <div class="f"><label>Nhân viên phụ trách</label><select name="nv"><option value="">— Chưa phân công —</option>${nvOpts.map(n => `<option${n === v.nv ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+      <div class="f"><label>Khách hàng (đơn vị dự thầu)</label><input name="khach" list="kh-${esc(v.ma)}" value="${esc(v.khach)}" placeholder="Chọn hoặc gõ tên khách">
+        <datalist id="kh-${esc(v.ma)}">${kh.map(k => `<option value="${esc(k.ten)}">`).join('')}</datalist></div>
+      <div class="f"><label>Kết quả</label><select name="ket_qua">${Object.entries(KQ).map(([k, n]) => `<option value="${k}"${k === v.ket_qua ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+    </div>
+    <div class="f" style="margin-top:10px"><label>Có tham gia không?</label><div class="seg">${Object.entries(TG).map(([k, n]) =>
+      `<label><input type="radio" name="tham_gia" value="${k}"${k === v.tham_gia ? ' checked' : ''}>${n}</label>`).join('')}</div></div>
+    <div class="f" style="margin-top:10px"><label>Sản phẩm tham gia: tick mặt hàng, ghi sản phẩm chào (hãng / mã) nếu cần</label>
+      <div class="items"><table><thead><tr><th style="width:30px"><input type="checkbox" data-all title="Chọn tất cả"></th><th>Mặt hàng trong gói</th><th>Số lượng</th><th>Sản phẩm chào</th></tr></thead><tbody>
+      ${v.hang.map((h, i) => `<tr class="${chon.has(h.ten) ? 'chon' : ''}"><td><input type="checkbox" data-i="${i}"${chon.has(h.ten) ? ' checked' : ''}></td>
+        <td>${esc(h.ten)}${h.nhom ? `<div class="nh">${esc(h.nhom)}</div>` : ''}</td><td class="sl">${num(h.sl)} ${esc(h.dvt)}</td>
+        <td class="chao"><input type="text" data-c="${i}" value="${esc(chon.get(h.ten) || '')}" placeholder="vd: Wondfo W012"></td></tr>`).join('') || '<tr><td colspan="4">Gói không có danh sách mặt hàng.</td></tr>'}
+      </tbody></table></div></div>
+    <div class="f" style="margin-top:10px"><label>Ghi chú</label><textarea name="ghi_chu" placeholder="Giá dự kiến, đối thủ, việc cần làm…">${esc(v.ghi_chu)}</textarea></div>
+    <div class="acts"><button type="submit" class="pri">Lưu</button>
+      ${v.link ? `<a href="${esc(v.link)}" target="_blank" rel="noopener">Xem trên muasamcong</a>` : ''}
+      <a href="/goi-thau?ma=${encodeURIComponent(v.ma)}">Xem ở tab Gói thầu</a>
+      <span class="sv">${v.sua_luc ? `Lưu lần cuối: ${esc(v.sua_boi)} · ${when(v.sua_luc)}` : v.tu_dong ? 'Tự phân theo cơ sở y tế, chưa ai cập nhật.' : ''}</span></div>
+  </form></div></article>`;
+}
+
+$('#stats').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filt = b.dataset.f; render(); });
+['#q', '#fNv', '#fHan'].forEach(s => $(s).addEventListener('input', () => D && render()));
+$('#list').addEventListener('click', e => {
+  const h = e.target.closest('.head'); if (h) h.parentElement.classList.toggle('open');
+});
+$('#list').addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches('[data-all]')) t.closest('table').querySelectorAll('[data-i]').forEach(c => { c.checked = t.checked; c.closest('tr').classList.toggle('chon', t.checked); });
+  if (t.matches('[data-i]')) t.closest('tr').classList.toggle('chon', t.checked);
+  if (t.matches('[data-c]') && t.value.trim()) { const c = t.closest('tr').querySelector('[data-i]'); c.checked = true; t.closest('tr').classList.add('chon'); }
+  if (t.name === 'tham_gia' && t.value === 'co') { const k = t.form.ket_qua; if (!k.value) k.value = 'cho'; }
+});
+$('#list').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, ma = f.dataset.ma, v = D.viec.find(x => x.ma === ma), btn = f.querySelector('button[type=submit]');
+  const san_pham = [...f.querySelectorAll('[data-i]:checked')].map(c => ({ ten: v.hang[+c.dataset.i].ten, chao: f.querySelector(`[data-c="${c.dataset.i}"]`).value.trim() }));
+  const data = { ma, nv: f.nv.value, khach: f.khach.value.trim(), tham_gia: (f.querySelector('[name=tham_gia]:checked') || {}).value || '',
+    san_pham, ket_qua: f.ket_qua.value, ghi_chu: f.ghi_chu.value };
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/auth?action=cong-viec-luu', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.loi || 'Không lưu được');
+    toast('Đã lưu ' + ma); openMa = ma; await load();
+  } catch (err) { toast(err.message); btn.disabled = false; }
+});
+// Excel: mỗi gói 1 dòng
+$('#xls').onclick = async () => {
+  if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+  const rows = pool().filter(v => filt === 'tat_ca' || st(v) === filt).map(v => ({ 'Mã gói': v.ma, 'Tên gói': v.ten, 'Chủ đầu tư': v.cdt, 'Tỉnh': v.tinh,
+    'Hạn nộp': hanTxt(v.han), 'Giá gói (đ)': v.gia_goi || '', 'Nhân viên': v.nv, 'Khách hàng': v.khach, 'Tham gia': TG[v.tham_gia],
+    'Sản phẩm tham gia': v.san_pham.map(x => x.ten + (x.chao ? ' → ' + x.chao : '')).join('; '), 'Kết quả': KQ[v.ket_qua] === '—' ? '' : KQ[v.ket_qua],
+    'Ghi chú': v.ghi_chu, 'Cập nhật': v.sua_luc ? v.sua_boi + ' ' + when(v.sua_luc) : '' }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Cong viec');
+  XLSX.writeFile(wb, 'cong-viec-goi-thau.xlsx');
+};
+load();
+</script>
+<script src="/tai-khoan.js" defer></script>
+</body>
+</html>

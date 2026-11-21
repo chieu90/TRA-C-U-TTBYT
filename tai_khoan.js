@@ -28,6 +28,13 @@
     document.querySelectorAll('.nav a, .tabbar a').forEach(a => {
       const t = TAB_OF[a.getAttribute('href')]; if (t && !u.tabs.includes(t)) a.remove();
     });
+    // tab Công việc: mọi tài khoản đã đăng nhập đều có (chỉ thấy gói phân cho mình)
+    const nav = document.querySelector('.nav');
+    if (nav && !nav.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec'; a.textContent = 'Công việc'; nav.appendChild(a); }
+    const tb = document.querySelector('.tabbar');
+    if (tb && !tb.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec';
+      a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>Công việc</span>';
+      tb.appendChild(a); }
     if (new URLSearchParams(location.search).get('khong-quyen')) toast('Tài khoản của bạn chưa được cấp quyền xem trang đó.');
     if (u.kq_nv && ['trung-thau', 'duong-huyet', 'so-sanh'].includes(tab)) {  // nhắc 1 lần mỗi phiên
       try { if (!sessionStorage.getItem('kq_nhac')) { toast(`Bạn đang xem kết quả các khách do ${u.kq_nv} phụ trách.`); sessionStorage.setItem('kq_nhac', '1'); } } catch (e) {}

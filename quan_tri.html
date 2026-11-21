@@ -68,13 +68,18 @@ tr.dirty td { background: var(--warn-bg); }
 <body>
 <header class="hero"><div class="hero-in"><div class="top">
   <h1>Quản trị tài khoản</h1>
-  <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a></nav>
+  <nav class="nav"><a href="/goi-thau">Gói thầu</a><a href="/bao-gia">Báo giá</a><a href="/co-so-y-te">Cơ sở y tế</a><a href="/trung-thau">KQ Test</a><a href="/duong-huyet">KQ Đường Huyết</a><a href="/cong-viec">Công việc</a></nav>
 </div></div></header>
 <main class="wrap">
   <section class="card"><h2>Phân quyền</h2><p class="cap">Tick từng tab mỗi người được xem rồi bấm Lưu. Chọn vai trò sẽ tick sẵn các tab mẫu, sau đó vẫn sửa được. Admin luôn xem mọi tab và quản trị tài khoản. Thay đổi có hiệu lực ở lần tải trang kế tiếp của người đó.</p><div class="roles" id="roles"></div></section>
   <section class="card"><h2>Tài khoản</h2><p class="cap" id="cap"></p><div class="scroll"><table>
     <thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Vai trò và tab được xem</th><th>Đăng ký / đăng nhập cuối</th><th>Thao tác</th></tr></thead>
     <tbody id="rows"><tr><td colspan="5">Đang tải…</td></tr></tbody></table></div></section>
+  <section class="card"><h2>Phân công cơ sở y tế (tab Công việc)</h2>
+    <p class="cap">Gói thầu mới của cơ sở y tế nào sẽ tự vào tab <b>Công việc</b> của nhân viên phụ trách cơ sở đó. Dán link Google Sheet phân công (cùng sheet gửi mail gói thầu, có tab <b>Nhân viên</b> và <b>Cơ sở y tế</b>), chia sẻ "Bất kỳ ai có đường liên kết – Người xem". Trang tự đọc lại mỗi 15 phút. Ở bảng Tài khoản, chọn "Công việc của" để gắn mỗi tài khoản với đúng tên nhân viên trong sheet.</p>
+    <div class="acts" style="align-items:center"><input id="pcLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:240px">
+      <button type="button" class="pri" id="pcSave">Lưu link và đọc ngay</button></div>
+    <p class="cap" id="pcInfo" style="margin:8px 0 0"></p></section>
   <section class="card"><h2>Khách hàng theo nhân viên</h2>
     <p class="cap">Dùng cho bộ lọc "Nhân viên" trên KQ Test và KQ Đường huyết: lọc các dòng mà nhà thầu trúng là khách của nhân viên đó. Dán link Google Sheet (Drive) có cột <b>Tên khách hàng</b> và cột <b>Nhân viên BH</b>; một khách nhiều nhân viên thì ghi cách nhau bằng dấu phẩy. Sheet phải chia sẻ "Bất kỳ ai có đường liên kết – Người xem". Trang tự đọc lại sheet mỗi 15 phút, sửa trên Drive là xong.</p>
     <div class="acts" style="align-items:center"><input id="khLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:240px">
@@ -111,11 +116,14 @@ async function load() {
   const kqSel = u => u.vai_tro === 'admin' ? '' : `<div class="kq">KQ Test / Đường huyết: <select data-k="kq_nv">
     <option value="">Xem tất cả khách</option>${[...new Set([...nvs, u.kq_nv].filter(Boolean))].map(n =>
     `<option value="${esc(n)}"${n === u.kq_nv ? ' selected' : ''}>Chỉ khách của ${esc(n)}</option>`).join('')}</select></div>`;
+  const cvSel = u => `<div class="kq">Công việc của: <select data-k="cv_nv">
+    <option value="">Tự nhận (theo email / nhân viên KQ)</option>${[...new Set([...PC_NV, ...nvs, u.cv_nv].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(n =>
+    `<option value="${esc(n)}"${n === u.cv_nv ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
   const roleSel = u => `<select data-k="vai_tro">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}"${k === u.vai_tro ? ' selected' : ''}>${esc(v.ten)}</option>`).join('')}</select>`;
   $('#rows').innerHTML = d.ds.map(u => `<tr data-id="${u.id}">
     <td data-l="Người dùng"><div><b>${esc(u.ten)}</b>${u.id === ME.id ? ' (bạn)' : ''}<div class="sub">${esc(u.email)}${u.sdt ? ' · ' + esc(u.sdt) : ''}</div></div></td>
     <td data-l="Trạng thái"><span class="tag ${u.trang_thai}">${ST_NAME[u.trang_thai] || u.trang_thai}</span></td>
-    <td data-l="Quyền"><div>${roleSel(u)}${tabBox(u)}${kqSel(u)}</div></td>
+    <td data-l="Quyền"><div>${roleSel(u)}${tabBox(u)}${kqSel(u)}${cvSel(u)}</div></td>
     <td data-l="Đăng ký / đăng nhập"><div class="sub">${when(u.tao_luc)}<br>${when(u.dang_nhap_cuoi)}</div></td>
     <td data-l="Thao tác"><div class="acts">
       ${u.trang_thai === 'cho_duyet' ? '<button class="pri" data-a="duyet">Duyệt</button>' : ''}
@@ -131,11 +139,12 @@ $('#rows').addEventListener('click', async e => {
   const tr = e.target.closest('tr'), id = +tr.dataset.id, vai_tro = tr.querySelector('[data-k=vai_tro]').value;
   const tabs = [...tr.querySelectorAll('.tabs input:checked')].map(i => i.value);
   const kqEl = tr.querySelector('[data-k=kq_nv]'), kq_nv = kqEl ? kqEl.value : '';
+  const cv_nv = tr.querySelector('[data-k=cv_nv]').value;
   const name = tr.querySelector('b').textContent;
   try {
     if ((a === 'duyet' || a === 'luu') && vai_tro !== 'admin' && !tabs.length && !confirm(`${name} chưa được tick tab nào, sẽ không xem được trang nào. Vẫn lưu?`)) return;
-    if (a === 'duyet') { await post('sua', { id, vai_tro, tabs, kq_nv, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name}`); }
-    if (a === 'luu') { await post('sua', { id, vai_tro, tabs, kq_nv }); toast(`Đã lưu quyền của ${name}`); }
+    if (a === 'duyet') { await post('sua', { id, vai_tro, tabs, kq_nv, cv_nv, trang_thai: 'hoat_dong' }); toast(`Đã duyệt ${name}`); }
+    if (a === 'luu') { await post('sua', { id, vai_tro, tabs, kq_nv, cv_nv }); toast(`Đã lưu quyền của ${name}`); }
     if (a === 'khoa') { if (!confirm(`Khóa tài khoản ${name}?`)) return; await post('sua', { id, trang_thai: 'khoa' }); toast('Đã khóa'); }
     if (a === 'mo') { await post('sua', { id, trang_thai: 'hoat_dong' }); toast('Đã mở khóa'); }
     if (a === 'xoa') { if (!confirm(`Xóa tài khoản ${name}? Không hoàn tác được.`)) return; await post('xoa', { id }); toast('Đã xóa'); }
@@ -192,7 +201,21 @@ $('#khDown').onclick = async () => {
   await xlsxLib(); const ws = XLSX.utils.aoa_to_sheet([['Tên khách hàng', 'Nhân viên BH'], ...KH.map(k => [k.ten, k.nv])]);
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Khach hang'); XLSX.writeFile(wb, 'khach-hang-theo-nhan-vien.xlsx');
 };
-khLoad().then(load);
+// ---- sheet phân công cơ sở y tế (tab Công việc) ----
+let PC_NV = [];
+async function pcLoad() {
+  const r = await fetch('/api/auth?action=cong-viec'); if (!r.ok) return;
+  const d = await r.json(), p = d.phan_cong || {}; PC_NV = d.nv || [];
+  if (document.activeElement !== $('#pcLink')) $('#pcLink').value = p.link || '';
+  $('#pcInfo').textContent = (p.co_link ? `Đang dùng sheet phân công: ${PC_NV.length} nhân viên. ` : 'Chưa gắn sheet phân công nên tab Công việc chưa tự nhận gói thầu. ') +
+    (p.luc ? 'Đọc lần cuối: ' + when(p.luc) + '. ' : '') + (p.loi ? 'Lỗi lần đọc gần nhất: ' + p.loi : '');
+}
+$('#pcSave').onclick = async () => {
+  const b = $('#pcSave'); b.disabled = true;
+  try { const d = await post('link-phan-cong', { link: $('#pcLink').value }); toast(d.so ? `Đã đọc ${d.so} cơ sở y tế có nhân viên phụ trách` : 'Đã bỏ link'); await pcLoad(); load(); }
+  catch (err) { toast(err.message); } finally { b.disabled = false; }
+};
+Promise.all([khLoad(), pcLoad()]).then(load);
 </script>
 <script src="/tai-khoan.js" defer></script>
 </body>

@@ -8,7 +8,9 @@
 //   POST /api/auth?action=doi-mat-khau     {cu, moi}
 //   POST /api/auth?action=hoi-kq           {messages:[{role,content}]} -> trợ lý AI trả lời về KQ trúng thầu (api/_kq_ai.js)
 //   GET  /api/auth?action=khach-nv         -> khách hàng theo nhân viên (người đã đăng nhập)
-//   Admin: POST link-khach-nv {link} (Google Sheet, tự đọc lại mỗi 15 phút) | POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
+//   GET  /api/auth?action=cong-viec        -> tab Quản lý công việc (gói thầu phân cho nhân viên, api/_cong_viec.js)
+//   POST /api/auth?action=cong-viec-luu    {ma, nv, khach, tham_gia, san_pham:[{ten,chao}], ket_qua, ghi_chu}
+//   Admin: POST link-phan-cong {link} (sheet phân công CSYT) | POST link-khach-nv {link} (Google Sheet, tự đọc lại mỗi 15 phút) | POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
 
 const ROLES = {
@@ -51,6 +53,11 @@ async function ensure() {
   await sql("CREATE TABLE IF NOT EXISTS mc_cau_hinh (k TEXT PRIMARY KEY, v TEXT)");
   // KQ Test / KQ Đường huyết: chỉ xem kết quả của khách do nhân viên này phụ trách ('' = xem tất cả)
   await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS kq_nv TEXT DEFAULT ''");
+  // tab Quản lý công việc: tài khoản này là nhân viên nào trong sheet phân công ('' = tự nhận theo email / nhân viên KQ)
+  await sql("ALTER TABLE mc_tai_khoan ADD COLUMN IF NOT EXISTS cv_nv TEXT DEFAULT ''");
+  await sql(`CREATE TABLE IF NOT EXISTS mc_cong_viec (ma TEXT PRIMARY KEY, nv TEXT DEFAULT '', khach TEXT DEFAULT '',
+    tham_gia TEXT DEFAULT '', san_pham TEXT DEFAULT '[]', ket_qua TEXT DEFAULT '', ghi_chu TEXT DEFAULT '', goi TEXT,
+    sua_boi TEXT DEFAULT '', sua_luc TIMESTAMPTZ DEFAULT now())`);
   ready = true;
 }
 
@@ -85,7 +92,7 @@ function checkPw(pw, stored) {
 }
 
 const pub = u => ({ id: u.id, ten: u.ten, email: u.email, sdt: u.sdt, vai_tro: u.vai_tro,
-  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: tabsOf(u), kq_nv: kqOf(u),
+  ten_vai_tro: (ROLES[u.vai_tro] || {}).ten || u.vai_tro, trang_thai: u.trang_thai, tabs: tabsOf(u), kq_nv: kqOf(u), cv_nv: u.cv_nv || "",
   tao_luc: u.tao_luc, duyet_luc: u.duyet_luc, dang_nhap_cuoi: u.dang_nhap_cuoi });
 
 function body(req) {
@@ -233,6 +240,16 @@ module.exports = async (req, res) => {
       return new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").includes(nv)).map(x => kfold(x.ten)));
     };
 
+    // tab Quản lý công việc (mọi tài khoản đã đăng nhập; nhân viên chỉ thấy gói phân cho mình)
+    const docFile = async f => {
+      const r = await fetch(`https://${req.headers.host}${f}`, { headers: { "x-mc-noi-bo": internalKey() } });
+      if (!r.ok) throw new Error("file " + r.status);
+      return r.json();
+    };
+    const cv = () => require("./_cong_viec")({ sql, cfg, setCfg, parseCsv, docFile, me });
+    if (action === "cong-viec") return send(res, 200, await cv().ds());
+    if (action === "cong-viec-luu" && req.method === "POST") { const [c, d] = await cv().luu(b); return send(res, c, d); }
+
     if (action === "kq") {
       const f = new URL(req.url, "http://x").searchParams.get("f") || "";
       if (!/^\/(trung_thau|duong_huyet)(_\d{4})?\.json$/.test(f)) return send(res, 400, { loi: "Sai tệp." });
@@ -281,6 +298,7 @@ module.exports = async (req, res) => {
       await setCfg("khach_nv_luc", new Date().toISOString());
       return send(res, 200, { ok: true, so: ds.length });
     }
+    if (action === "link-phan-cong" && req.method === "POST") { const [c, d] = await cv().ganLink(b.link); return send(res, c, d); }
     if (action === "link-khach-nv" && req.method === "POST") {  // lưu link Google Sheet và đọc ngay
       const link = String(b.link || "").trim();
       if (!link) { await setCfg("khach_nv_link", ""); return send(res, 200, { ok: true, so: 0 }); }
@@ -303,8 +321,9 @@ module.exports = async (req, res) => {
         return send(res, 400, { loi: "Phải còn ít nhất 1 admin đang hoạt động." });
       const tabs = Array.isArray(b.tabs) ? b.tabs.filter(t => ALL_TABS.includes(t)).join(",") : u.tabs;
       const kq = typeof b.kq_nv === "string" ? b.kq_nv.trim().slice(0, 100) : (u.kq_nv || "");
-      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4, kq_nv=$5,
-                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs, kq]);
+      const cvn = typeof b.cv_nv === "string" ? b.cv_nv.trim().slice(0, 100) : (u.cv_nv || "");
+      await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4, kq_nv=$5, cv_nv=$6,
+                 duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs, kq, cvn]);
       return send(res, 200, { ok: true });
     }
     if (action === "xoa" && req.method === "POST") {
