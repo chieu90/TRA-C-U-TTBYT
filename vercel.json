@@ -7,7 +7,7 @@
   "redirects": [
     {
       "source": "/",
-      "destination": "/goi-thau",
+      "destination": "/trang-chu",
       "permanent": false
     }
   ],

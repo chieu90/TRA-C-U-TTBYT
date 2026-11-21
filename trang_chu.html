@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trang chủ – Muasamcong ADC</title>
+<meta name="theme-color" content="#0b5cad">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg1: #e9eef8; --bg2: #e6e3f3; --tile: #fff; --text: #1f2a44; --muted: #5b6b82; --shadow: 0 1px 2px rgba(16,35,70,.08), 0 4px 14px rgba(16,35,70,.08);
+  --surface: #fff; --line: #e2e8f0; --line-2: #eef2f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg1: #0f1726; --bg2: #171a2e; --tile: #1c2638; --text: #e5ebf3; --muted: #93a3b8; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  --surface: #141d2b; --line: #243145; --line-2: #1b2636; } }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif;
+  background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%) fixed; }
+.hero { padding: 14px 20px; }
+.hero .top { max-width: 1040px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+.brand i { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #0b5cad, #0e9f9a); display: grid; place-items: center; }
+/* nút tài khoản (tai-khoan.js) vốn cho nền xanh: đổi màu cho nền sáng */
+.hero .acct > button { background: var(--tile); color: var(--text); border-color: var(--line); box-shadow: var(--shadow); }
+main { max-width: 1040px; margin: 0 auto; padding: 28px 20px 48px; }
+.hello { text-align: center; margin: 0 0 30px; }
+.hello h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.hello p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 30px 18px; justify-items: center; }
+.app { display: flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none; color: var(--text); width: 132px; }
+.app .ico { width: 96px; height: 96px; border-radius: 18px; background: var(--tile); box-shadow: var(--shadow); display: grid; place-items: center;
+  transition: transform .15s ease, box-shadow .15s ease; }
+.app .ico svg { width: 60px; height: 60px; }
+.app:hover .ico, .app:focus-visible .ico { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(16,35,70,.08), 0 12px 26px rgba(16,35,70,.14); }
+.app:focus-visible { outline: none; }
+.app:focus-visible span { text-decoration: underline; }
+.app span { font-size: 15px; text-align: center; line-height: 1.3; }
+.app small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.app .badge { position: relative; }
+.app .badge b { position: absolute; top: -6px; right: -6px; background: #e11d48; color: #fff; border-radius: 999px; font-size: 12px; padding: 2px 7px; box-shadow: 0 0 0 3px var(--bg1); }
+@media (max-width: 520px) {
+  .apps { grid-template-columns: repeat(3, 1fr); gap: 22px 8px; }
+  .app { width: 100%; } .app .ico { width: 76px; height: 76px; border-radius: 16px; } .app .ico svg { width: 46px; height: 46px; }
+  .app span { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<header class="hero"><div class="top">
+  <div class="brand"><i><svg width="18" height="18" viewBox="0 0 32 32"><path d="M13 7h6v6h6v6h-6v6h-6v-6H7v-6h6z" fill="#fff"/></svg></i>Muasamcong ADC</div>
+</div></header>
+<main>
+  <div class="hello"><h1 id="hi">Xin chào</h1><p id="today"></p></div>
+  <nav class="apps" id="apps" aria-label="Ứng dụng"></nav>
+</main>
+<script>
+// Icon tự vẽ: hình phẳng nhiều màu chồng lên nhau (viewBox 64x64)
+const I = {
+  'goi-thau': `<rect x="14" y="8" width="32" height="42" rx="4" fill="#8b5cf6"/><path d="M22 14h22l8 8v34a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" fill="#f97316"/><path d="M44 14v8h8z" fill="#fdba74"/><rect x="25" y="32" width="20" height="4" rx="2" fill="#fff"/><rect x="25" y="41" width="14" height="4" rx="2" fill="#fff"/>`,
+  'bao-gia': `<path d="M8 30V12a4 4 0 0 1 4-4h18l26 26-22 22z" fill="#14b8a6"/><circle cx="20" cy="20" r="5" fill="#fff"/><circle cx="44" cy="44" r="13" fill="#fbbf24" fill-opacity=".92"/><path d="M44 37v14M40 40.5c0-1.6 1.8-2.5 4-2.5s4 .9 4 2.5-1.8 2.3-4 2.7-4 1.1-4 2.8 1.8 2.5 4 2.5 4-.9 4-2.5" stroke="#92400e" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
+  'co-so-y-te': `<path d="M10 56V22l22-12 22 12v34z" fill="#0e7490"/><rect x="18" y="30" width="28" height="26" fill="#22d3ee" fill-opacity=".85"/><path d="M28 18h8v6h6v8h-6v6h-8v-6h-6v-8h6z" fill="#f43f5e"/><rect x="27" y="44" width="10" height="12" fill="#0e7490"/>`,
+  'trung-thau': `<path d="M18 8h28v14a14 14 0 0 1-28 0z" fill="#fbbf24"/><path d="M18 12H8v4a10 10 0 0 0 10 10M46 12h10v4a10 10 0 0 1-10 10" stroke="#f59e0b" stroke-width="4" fill="none"/><rect x="28" y="34" width="8" height="10" fill="#f59e0b"/><rect x="16" y="44" width="32" height="12" rx="3" fill="#8b5cf6"/><path d="m32 14 2.4 4.8 5.3.8-3.9 3.7.9 5.3-4.7-2.5-4.7 2.5.9-5.3-3.9-3.7 5.3-.8z" fill="#fff"/>`,
+  'duong-huyet': `<path d="M30 6s18 18 18 31a18 18 0 0 1-36 0C12 24 30 6 30 6z" fill="#f43f5e"/><path d="M26 40h7l3-7 4 14 3-7h11" stroke="#14b8a6" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="30" r="4" fill="#fff" fill-opacity=".55"/>`,
+  'so-sanh': `<rect x="8" y="22" width="20" height="34" rx="4" fill="#3b82f6"/><rect x="36" y="10" width="20" height="46" rx="4" fill="#f97316" fill-opacity=".9"/><path d="M14 40h8M42 30h8M42 40h8" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M22 14h12m0 0-4-4m4 4-4 4" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  'cong-viec': `<rect x="12" y="10" width="36" height="46" rx="5" fill="#8b5cf6"/><rect x="22" y="6" width="16" height="9" rx="3" fill="#fbbf24"/><rect x="18" y="20" width="24" height="30" rx="2" fill="#ede9fe"/><path d="m26 37 8 8 18-20" stroke="#14b8a6" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  'quan-tri': `<path d="M32 6 52 13v15c0 13-8.5 23-20 28-11.5-5-20-15-20-28V13z" fill="#0b5cad"/><circle cx="32" cy="27" r="7" fill="#fbbf24"/><path d="M19 46c2.5-6.5 7.3-10 13-10s10.5 3.5 13 10" fill="#22d3ee"/>`,
+  'tra-cuu': `<rect x="8" y="10" width="30" height="30" rx="5" fill="#f97316"/><rect x="14" y="18" width="18" height="4" rx="2" fill="#fff"/><rect x="14" y="26" width="12" height="4" rx="2" fill="#fff"/><circle cx="38" cy="38" r="13" fill="#3b82f6" fill-opacity=".9"/><circle cx="38" cy="38" r="7" fill="#fff"/><path d="m47.5 47.5 8 8" stroke="#1e3a8a" stroke-width="6" stroke-linecap="round"/>`,
+  'hop-dong': `<path d="M14 8h26l10 10v38H14z" fill="#14b8a6"/><path d="M40 8v10h10z" fill="#99f6e4"/><rect x="20" y="24" width="20" height="3.5" rx="1.7" fill="#fff"/><rect x="20" y="32" width="14" height="3.5" rx="1.7" fill="#fff"/><path d="M26 50c4-8 6 2 10-4s6 1 10-2" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="48" cy="46" r="8" fill="#f43f5e" fill-opacity=".9"/>`,
+};
+const APPS = [
+  { id: 'goi-thau', ten: 'Gói thầu', href: '/goi-thau' },
+  { id: 'bao-gia', ten: 'Báo giá', href: '/bao-gia' },
+  { id: 'co-so-y-te', ten: 'Cơ sở y tế', href: '/co-so-y-te' },
+  { id: 'trung-thau', ten: 'KQ Test', href: '/trung-thau' },
+  { id: 'duong-huyet', ten: 'KQ Đường huyết', href: '/duong-huyet' },
+  { id: 'so-sanh', ten: 'So sánh 2025–2026', href: '/so-sanh' },
+  { id: 'cong-viec', ten: 'Công việc', href: '/cong-viec', luon: true },
+  { id: 'tra-cuu', ten: 'Tra cứu TBYT', href: 'https://tra-cuu-tbyt.onrender.com', ngoai: true, luon: true },
+  { id: 'hop-dong', ten: 'Hợp đồng', href: 'https://dataadc.vercel.app', ngoai: true, ql: true },
+  { id: 'quan-tri', ten: 'Quản trị', href: '/quan-tri', admin: true },
+];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const tile = (a, badge) => `<a class="app" href="${a.href}"${a.ngoai ? ' target="_blank" rel="noopener"' : ''}>
+  <div class="ico${badge ? ' badge' : ''}"><svg viewBox="0 0 64 64" aria-hidden="true">${I[a.id]}</svg>${badge ? `<b>${badge}</b>` : ''}</div>
+  <span>${esc(a.ten)}</span></a>`;
+const $ = s => document.querySelector(s);
+$('#today').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+function draw(u, cho) {
+  const tabs = u ? u.tabs : APPS.map(a => a.id), ql = !u || u.vai_tro === 'admin' || u.vai_tro === 'quan_ly';
+  const ds = APPS.filter(a => a.admin ? u && u.vai_tro === 'admin' : a.ql ? ql : a.luon || tabs.includes(a.id));
+  $('#apps').innerHTML = ds.map(a => tile(a, a.id === 'quan-tri' ? cho : 0)).join('');
+}
+draw(null, 0);
+fetch('/api/auth?action=toi', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(d => {
+  if (!d) return;
+  const h = new Date().getHours(), buoi = h < 11 ? 'Chào buổi sáng' : h < 14 ? 'Chào buổi trưa' : h < 18 ? 'Chào buổi chiều' : 'Chào buổi tối';
+  $('#hi').textContent = `${buoi}, ${d.tai_khoan.ten.split(' ').slice(-1)[0]}`;
+  draw(d.tai_khoan, d.cho_duyet);
+}).catch(() => {});
+</script>
+<script src="/tai-khoan.js" defer></script>
+</body>
+</html>

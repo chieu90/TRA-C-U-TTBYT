@@ -25,6 +25,8 @@ cp quan_tri.html public/quan-tri.html
 cp tai_khoan.js public/tai-khoan.js
 # tab Quản lý công việc (gói thầu phân cho nhân viên theo sheet phân công cơ sở y tế; dữ liệu ở api/_cong_viec.js)
 cp cong_viec.html public/cong-viec.html
+# trang chủ: lưới icon các tab (mỗi người chỉ thấy tab mình được xem)
+cp trang_chu.html public/trang-chu.html
 for f in goi-thau bao-gia co-so-y-te trung-thau; do
   sed -i.bak 's#</body>#<script src="/tai-khoan.js" defer></script>\n</body>#' public/$f.html && rm public/$f.html.bak
 done

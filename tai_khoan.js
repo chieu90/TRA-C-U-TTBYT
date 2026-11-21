@@ -20,6 +20,7 @@
     '/duong-huyet': '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
     '/cong-viec': '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
     '/so-sanh': '<path d="M8 3v18M16 3v18M3 8h5M16 16h5"/>',
+    '/trang-chu': '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
     '/': '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,6 +43,7 @@
     const nav = document.querySelector('.nav');
     if (nav && !nav.querySelector('a[href="/cong-viec"]')) { const a = document.createElement('a'); a.href = '/cong-viec'; a.textContent = 'Công việc'; nav.appendChild(a); }
     // icon cho từng nút tab trên thanh trên cùng (cùng bộ icon với thanh tab dưới đáy trên điện thoại)
+    if (nav && !nav.querySelector('a[href="/trang-chu"]')) { const a = document.createElement('a'); a.href = '/trang-chu'; a.textContent = 'Trang chủ'; nav.prepend(a); }
     if (nav) {
       const st2 = document.createElement('style');
       st2.textContent = '.nav a{display:inline-flex;align-items:center;gap:7px}.nav a .ic{width:17px;height:17px;flex:none}';

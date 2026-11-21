@@ -68,7 +68,7 @@ export default async function middleware(req) {
   // quyền từng tab nằm trong phiên (s.t, admin tick ở /quan-tri); admin luôn xem tất cả
   const allowed = s.r === "admin" ? ROLES.admin : (Array.isArray(s.t) ? s.t.filter(x => TABS[x]) : ROLES[s.r] || []);
   const home = allowed.length ? "/" + allowed[0] : "/dang-nhap?chua-co-tab=1";  // chưa được tick tab nào
-  if (path === "/") return Response.redirect(new URL(home, url), 302);
+  if (path === "/") return Response.redirect(new URL("/trang-chu", url), 302);  // trang chủ dạng lưới ứng dụng
   if (path === "/quan-tri") return s.r === "admin" ? pass() : Response.redirect(new URL(home, url), 302);
   const tab = tabOf(path);
   if (tab && !allowed.includes(tab)) {
