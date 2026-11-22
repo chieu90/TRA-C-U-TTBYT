@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import docx_bao_gia, docx_mau, docx_uq
+import docx_bao_gia, docx_mau, docx_uq, xlsx_ts
 
 PORT = int(os.environ.get("PORT", 8770))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -87,6 +87,13 @@ CREATE TABLE IF NOT EXISTS hang_hoa (
   id INTEGER PRIMARY KEY, ten TEXT DEFAULT '', ten_tm TEXT DEFAULT '', ma TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
   nuoc_sx TEXT DEFAULT '', phan_loai TEXT DEFAULT '', hsd TEXT DEFAULT '', quy_cach TEXT DEFAULT '',
   gia_ban REAL DEFAULT 0, gia_min REAL DEFAULT 0, gia_max REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS thong_so (
+  id INTEGER PRIMARY KEY, ten TEXT DEFAULT '', ten_tm TEXT DEFAULT '', ma TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
+  nam_sx TEXT DEFAULT '', nuoc_sx TEXT DEFAULT '', hang_sx TEXT DEFAULT '', chu_so_huu TEXT DEFAULT '', ma_hs TEXT DEFAULT '',
+  phan_loai TEXT DEFAULT '', so_pl TEXT DEFAULT '', link_pl TEXT DEFAULT '', so_lh TEXT DEFAULT '', iso_het TEXT DEFAULT '',
+  tuoi_tho TEXT DEFAULT '', quy_cach TEXT DEFAULT '', dvt TEXT DEFAULT '', cau_hinh TEXT DEFAULT '',
+  gia_tm REAL DEFAULT 0, gia_tv REAL DEFAULT 0, gia_kk REAL DEFAULT 0, gia_tt REAL DEFAULT 0,
+  so_qd TEXT DEFAULT '', ma_ib TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS bao_gia (
   id INTEGER PRIMARY KEY, so_bg TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL, ten_kh TEXT DEFAULT '',
   phu_trach_id INTEGER REFERENCES nguoi_dung(id), trang_thai TEXT NOT NULL DEFAULT 'nhap',
@@ -271,7 +278,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("bao_gia", "duyet_luc")).fetchone():
+                                        "AND column_name = ?", ("thong_so", "ma_ib")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -487,7 +494,8 @@ UNG_DUNG = [
     ("bao-gia", "Báo giá", "bao_gia", [
         ("/bao-gia", "Danh sách báo giá", "bg", "ds_bg", False), ("/bao-gia/moi", "Soạn báo giá", "bgm", "soan", False),
         ("/bao-gia/nhanh", "Soạn bằng chat", "bgn", "chat", False),
-        ("/hang-hoa", "Hàng hóa", "hh", "hang_hoa", False)]),
+        ("/hang-hoa", "Hàng hóa", "hh", "hang_hoa", False),
+        ("/thong-so", "Thông số kỹ thuật", "ts", "mau", False)]),
 ]
 
 
@@ -2109,6 +2117,338 @@ def hang_hoa(c):
         {chon("nh", [(x, x) for x in cac_nh], nh, "Mọi nhãn hiệu")}
         <button class="nut phu">Lọc</button>{'<a href="/hang-hoa">Bỏ lọc</a>' if c.q else ""}</form>
       {bang}""", "hh")
+
+
+# ───────────────────────── thông số kỹ thuật ─────────────────────────
+
+# (cột, tiêu đề như sheet TSKT, độ rộng khi xuất Excel, cụm đầu tiêu đề để nhận cột khi nhập)
+COT_TS = [
+    ("ten", "TÊN TRANG THIẾT BỊ Y TẾ", 28, "ten trang thiet bi"),
+    ("ten_tm", "TÊN THƯƠNG MẠI", 24, "ten thuong mai"),
+    ("ma", "MODEL HOẶC KÝ MÃ HIỆU", 16, "model hoac ky ma hieu"),
+    ("nhan_hieu", "NHÃN HIỆU", 12, "nhan hieu"),
+    ("nam_sx", "NĂM SẢN XUẤT", 11, "nam san xuat"),
+    ("nuoc_sx", "NƯỚC SẢN XUẤT", 12, "nuoc san xuat"),
+    ("hang_sx", "HÃNG SẢN XUẤT", 18, "hang san xuat"),
+    ("chu_so_huu", "HÃNG- NƯỚC CHỦ SỞ HỮU", 20, "hang- nuoc chu so huu"),
+    ("ma_hs", "MÃ HS CỦA HÀNG HÓA", 10, "ma hs"),
+    ("phan_loai", "PHÂN LOẠI TBYT (A, B, C, D)", 10, "phan loai tbyt"),
+    ("so_pl", "SỐ KÝ HIỆU BẢN PL TBYT", 16, "so ky hieu ban pl"),
+    ("link_pl", "ĐƯỜNG LINK BẢN PHÂN LOẠI TRÊN CỔNG THÔNG TIN CỦA BỘ Y TẾ", 30, "duong link ban phan loai"),
+    ("so_lh", "SỐ LƯU HÀNH HOẶC SỐ GIẤY PHÉP NHẬP KHẨU", 18, "so luu hanh"),
+    ("iso_het", "NGÀY HẾT HIỆU LỰC CỦA ISO 13485", 13, "ngay het hieu luc"),
+    ("tuoi_tho", "TUỔI THỌ CỦA HÀNG HÓA (THÁNG)", 11, "tuoi tho"),
+    ("quy_cach", "QUY CÁCH (NẾU CÓ)", 12, "quy cach"),
+    ("dvt", "ĐVT CỤ THỂ CỦA HÀNG HÓA", 10, "dvt"),
+    ("cau_hinh", "CẤU HÌNH, TÍNH NĂNG KỸ THUẬT CƠ BẢN", 90, "cau hinh"),
+    ("gia_tm", "GIÁ TM", 10, "gia tm"),
+    ("gia_tv", "GIÁ TƯ VẤN", 10, "gia tu van"),
+    ("gia_kk", "GIÁ KÊ KHAI", 10, "gia ke khai"),
+    ("gia_tt", "GIÁ TRÚNG THẦU", 10, "gia trung thau"),
+    ("so_qd", "SỐ QĐ/NGÀY QĐ/CSYT", 14, "so qd"),
+    ("ma_ib", "MÃ IB", 10, "ma ib"),
+]
+COT_GIA_TS = ["gia_tm", "gia_tv", "gia_kk", "gia_tt"]
+TS_LINK = "https://docs.google.com/spreadsheets/d/1WJaEzPphvF2Xt0jNx8jGTDTtLmgY6DvuM1JOl0HXM5k/edit"
+
+
+def ngay_ts(v):
+    """Ô ngày của sheet: số ngày kiểu Excel, dd/mm/yyyy hoặc yyyy-mm-dd → yyyy-mm-dd; chữ khác giữ nguyên."""
+    v = str(v or "").strip()
+    if re.fullmatch(r"\d{5}(\.\d+)?", v):
+        return (date(1899, 12, 30) + timedelta(days=int(float(v)))).isoformat()
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", v)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1))).isoformat()
+        except ValueError:
+            return v[:30]
+    return v[:30]
+
+
+def iso_ts(h):
+    """(chữ hiển thị, đã hết hạn?) của ngày hết hiệu lực ISO 13485."""
+    s = h["iso_het"] or ""
+    try:
+        return ngay(s) or s, date.fromisoformat(s) < date.today()
+    except ValueError:
+        return s, False
+
+
+def khoa_ts(h):
+    return (gap(h["ma"]), gap(h["ten_tm"]))
+
+
+def tim_ts(tu):
+    """Nhiều mã cách nhau bằng dấu phẩy / chấm phẩy / xuống dòng: ký mã hiệu chứa một trong các mã.
+    Một cụm chữ: mỗi từ phải có ở mã, tên, nhãn hiệu hoặc phần cấu hình."""
+    ma = [x.strip() for x in re.split(r"[,;\n]", tu) if x.strip()]
+    if len(ma) > 1:
+        return " AND (" + " OR ".join(["ma LIKE ?"] * len(ma[:40])) + ")", [f"%{x}%" for x in ma[:40]]
+    dk, ts = "", []
+    for w in tu.split()[:6]:
+        dk += " AND (ma LIKE ? OR ten LIKE ? OR ten_tm LIKE ? OR nhan_hieu LIKE ? OR cau_hinh LIKE ?)"
+        ts += [f"%{w}%"] * 5
+    return dk, ts
+
+
+def ds_thong_so(c):
+    tu, nh = c.q.get("q", ""), c.q.get("nh", "")
+    dk, ts = tim_ts(tu)
+    if nh:
+        dk += " AND nhan_hieu = ?"
+        ts.append(nh)
+    n = c.db.execute(f"SELECT COUNT(*) AS n FROM thong_so WHERE 1=1{dk}", ts).fetchone()["n"]
+    ghi_chu = ""
+    ma_roi = tu.split()
+    if n == 0 and tu and len(ma_roi) > 1:           # gõ nhiều mã cách nhau bằng dấu cách: thử từng mã một
+        dk = " AND (" + " OR ".join(["ma LIKE ?"] * len(ma_roi[:40])) + ")"
+        ts = [f"%{x}%" for x in ma_roi[:40]]
+        if nh:
+            dk += " AND nhan_hieu = ?"
+            ts.append(nh)
+        n = c.db.execute(f"SELECT COUNT(*) AS n FROM thong_so WHERE 1=1{dk}", ts).fetchone()["n"]
+        ghi_chu = '<p class="mo">Không có hàng khớp cả cụm, đang hiện theo từng mã.</p>' if n else ""
+    ds = c.db.execute(f"SELECT * FROM thong_so WHERE 1=1{dk} ORDER BY nhan_hieu, ma LIMIT 300", ts).fetchall()
+    tong = c.db.execute("SELECT COUNT(*) AS n FROM thong_so").fetchone()["n"]
+    cac_nh = [r["nhan_hieu"] for r in c.db.execute(
+        "SELECT DISTINCT nhan_hieu FROM thong_so WHERE nhan_hieu <> '' ORDER BY nhan_hieu").fetchall()]
+    nut = ""
+    if c.ql:
+        nut = '<a class="nut phu" href="/thong-so/moi">Thêm sản phẩm</a> <a class="nut phu" href="/thong-so/nhap">Nhập từ link / Excel</a>'
+    if ds:
+        dong = ""
+        for h in ds:
+            iso, het = iso_ts(h)
+            nhan_iso = f'<span class="nhan {"do" if het else "xanh"}">{e(iso)}</span>' if iso else ""
+            dong += (f'<tr><td><input type="checkbox" name="ts_{h["id"]}" value="1" aria-label="Chọn"></td>'
+                     f'<td><a href="/thong-so/{h["id"]}">{e(h["ma"])}</a></td><td>{e(h["ten_tm"] or h["ten"])}</td>'
+                     f'<td>{e(h["nhan_hieu"])}</td><td>{e(h["quy_cach"])}</td><td>{e(h["phan_loai"])}</td><td>{nhan_iso}</td>'
+                     f'<td class="so">{tien(h["gia_tm"]) if h["gia_tm"] else ""}</td></tr>')
+        bang = (f'<form method="post" action="/thong-so/tai">{an_csrf(c)}<div class="the cuon"><table><thead><tr><th></th>'
+                '<th>Ký mã hiệu</th><th>Tên thương mại</th><th>Nhãn hiệu</th><th>Quy cách</th><th>Loại</th>'
+                f'<th>ISO 13485 hết hạn</th><th class="so">Giá TM (đ)</th></tr></thead><tbody>{dong}</tbody></table></div>'
+                '<label class="o-tich"><input type="checkbox" name="bo_gia" value="1"> Bỏ 4 cột giá khi tải</label>'
+                '<div class="hang-nut"><button class="nut">Tải Excel các mã đã chọn</button>'
+                '<button class="nut phu" name="tat_ca" value="1">Tải Excel tất cả kết quả</button></div>'
+                f'<input type="hidden" name="q" value="{e(tu)}"><input type="hidden" name="nh" value="{e(nh)}"></form>')
+        if n > len(ds):
+            bang += f'<p class="mo">Đang hiện {len(ds)} / {n} dòng. Gõ thêm để thu hẹp.</p>'
+    elif tong:
+        bang = '<div class="the trong">Không có sản phẩm nào khớp.</div>'
+    else:
+        bang = ('<div class="the trong">Chưa có thông số kỹ thuật. '
+                + ('Bấm <b>Nhập từ link / Excel</b> để đưa bảng TSKT vào.' if c.ql else 'Quản lý cần nhập bảng TSKT.') + '</div>')
+    return trang(c, "Thông số kỹ thuật", f"""
+      <div class="dau-trang"><h1>Thông số kỹ thuật <span class="dem">{n}</span></h1><div>{nut}</div></div>
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}"
+        placeholder="Mã (nhiều mã cách nhau bằng dấu phẩy), tên, nhãn hiệu, từ trong cấu hình…">
+        {chon("nh", [(x, x) for x in cac_nh], nh, "Mọi nhãn hiệu")}
+        <button class="nut phu">Tìm</button>{'<a href="/thong-so">Bỏ lọc</a>' if c.q else ""}</form>
+      {ghi_chu}{bang}""", "ts")
+
+
+def lay_ts(c, tid):
+    h = c.db.execute("SELECT * FROM thong_so WHERE id = ?", (tid,)).fetchone()
+    if not h:
+        raise Loi(404, "Không tìm thấy sản phẩm.")
+    return h
+
+
+def o_ts(h=None):
+    g = (lambda f: h[f] if h else "")
+    ra = ""
+    for f, nhan, _, _ in COT_TS:
+        if f == "cau_hinh":
+            ra += (f'<label class="rong">{e(nhan.title())}<textarea name="cau_hinh" rows="14">{e(g(f))}</textarea></label>')
+        elif f in COT_GIA_TS:
+            ra += o(nhan.title(), f, so_o(g(f)) if h else "", "number", them='min="0" step="any"')
+        elif f == "iso_het":
+            ra += o(nhan.title(), f, g(f), "date")
+        else:
+            ra += o(nhan.title(), f, g(f), bat_buoc=(f == "ma"))
+    return ra
+
+
+def doc_ts(c):
+    d = {}
+    for f, nhan, _, _ in COT_TS:
+        if f in COT_GIA_TS:
+            d[f] = c.so(f, nhan.title())
+        elif f == "cau_hinh":
+            d[f] = (c.form.get(f) or "").strip()[:8000]
+        elif f == "iso_het":
+            d[f] = c.ngay(f, nhan.title())
+        else:
+            d[f] = c.chu(f, nhan.title(), f == "ma", 1000 if f == "link_pl" else 500)
+    return d
+
+
+def ts_moi(c):
+    if c.method == "POST":
+        d = doc_ts(c)
+        ten_cot = [f for f, _, _, _ in COT_TS]
+        c.db.execute(f"INSERT INTO thong_so ({', '.join(ten_cot)}) VALUES ({', '.join('?' * len(ten_cot))})",
+                     [d[f] for f in ten_cot])
+        c.db.commit()
+        return Chuyen("/thong-so", "Đã thêm sản phẩm.")
+    return trang(c, "Thêm sản phẩm", f"""
+      <h1>Thêm sản phẩm</h1>
+      <div class="the"><form method="post" class="luoi">{an_csrf(c)}{o_ts()}
+        <div class="hang-nut"><button class="nut">Lưu</button><a href="/thong-so">Hủy</a></div></form></div>""", "ts")
+
+
+def ts_xem(c, tid):
+    h = lay_ts(c, tid)
+    if c.method == "POST":
+        if not c.ql:
+            raise Loi(403, "Chỉ quản lý mới sửa được thông số kỹ thuật.")
+        d = doc_ts(c)
+        ten_cot = [f for f, _, _, _ in COT_TS]
+        c.db.execute(f"UPDATE thong_so SET {', '.join(f + ' = ?' for f in ten_cot)} WHERE id = ?",
+                     [d[f] for f in ten_cot] + [tid])
+        c.db.commit()
+        return Chuyen(f"/thong-so/{tid}", "Đã lưu.")
+    iso, het = iso_ts(h)
+    dong = ""
+    for f, nhan, _, _ in COT_TS:
+        v = h[f]
+        if f in COT_GIA_TS:
+            v = tien(v) if v else ""
+        elif f == "iso_het":
+            v = f'{e(iso)} <span class="nhan do">Đã hết hạn</span>' if het else e(iso)
+        elif f == "link_pl" and v:
+            v = f'<a href="{e(v)}" target="_blank" rel="noopener noreferrer">{e(v)}</a>'
+        elif f == "cau_hinh":
+            v = e(v).replace("\n", "<br>")
+        else:
+            v = e(v)
+        dong += f'<tr><th>{e(nhan.capitalize())}</th><td>{v}</td></tr>'
+    sua = xoa = ""
+    if c.ql:
+        sua = (f'<details class="the"><summary>Sửa thông số</summary><form method="post" class="luoi">{an_csrf(c)}{o_ts(h)}'
+               '<div class="hang-nut"><button class="nut">Lưu</button></div></form></details>')
+        xoa = nut_xoa(c, f"/thong-so/{tid}/xoa", f"Xóa {h['ma']}?", "Xóa sản phẩm")
+    return trang(c, h["ma"], f"""
+      <div class="dau-trang"><h1>{e(h["ma"])}</h1>
+        <form method="post" action="/thong-so/tai">{an_csrf(c)}<input type="hidden" name="ts_{tid}" value="1">
+          <button class="nut">Tải Excel</button> <button class="nut phu" name="bo_gia" value="1">Tải Excel (bỏ giá)</button></form></div>
+      <div class="the cuon"><table><tbody>{dong}</tbody></table></div>{sua}{xoa}
+      <p><a href="/thong-so" data-quay-lai>← Quay lại</a></p>""", "ts")
+
+
+def ts_xoa(c, tid):
+    lay_ts(c, tid)
+    c.db.execute("DELETE FROM thong_so WHERE id = ?", (tid,))
+    c.db.commit()
+    return Chuyen("/thong-so", "Đã xóa sản phẩm.")
+
+
+def ts_tai(c):
+    """Tải Excel các dòng đã chọn (hoặc tất cả kết quả tìm) — đủ 24 cột như sheet TSKT, tùy chọn bỏ 4 cột giá."""
+    if c.form.get("tat_ca") == "1":
+        dk, ts = tim_ts(c.form.get("q", "").strip())
+        if c.form.get("nh"):
+            dk += " AND nhan_hieu = ?"
+            ts.append(c.form["nh"])
+        ds = c.db.execute(f"SELECT * FROM thong_so WHERE 1=1{dk} ORDER BY nhan_hieu, ma LIMIT 300", ts).fetchall()
+    else:
+        ids = [int(k[3:]) for k in c.form if re.fullmatch(r"ts_\d+", k)][:300]
+        if not ids:
+            raise Loi(400, "Chưa chọn dòng nào. Tích vào ô đầu dòng rồi bấm tải.")
+        ds = c.db.execute(f"SELECT * FROM thong_so WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY nhan_hieu, ma", ids).fetchall()
+    if not ds:
+        raise Loi(400, "Không có dòng nào để tải.")
+    cot = [t for t in COT_TS if not (c.form.get("bo_gia") == "1" and t[0] in COT_GIA_TS)]
+    dong = []
+    for h in ds:
+        dong.append([(ngay(h[f]) or h[f]) if f == "iso_het" else h[f] for f, _, _, _ in cot])
+    so_gia = tuple(i for i, t in enumerate(cot) if t[0] in COT_GIA_TS)
+    dl = xlsx_ts.tao("TSKT", [t[1] for t in cot], [t[2] for t in cot], dong, so_gia)
+    ten = "TSKT_" + "_".join(ten_tep_an_toan(h["ma"]) for h in ds[:3]) + ("_v.v" if len(ds) > 3 else "")
+    return Tep(ten[:90] + ".xlsx", dl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def nhap_ts(c):
+    link_cu = doc_cd(c, "ts_link", TS_LINK)
+    if c.method == "POST":
+        ten_tep, dl = c.tep.get("tep", ("", b""))
+        link = c.link("link", "Link Google Sheet")
+        if not dl and not link:
+            raise Loi(400, "Chưa dán link và chưa chọn file.")
+        if not dl:
+            dl, ten_tep = tai_bang_tu_link(c, link), "tskt.xlsx"
+            ghi_cd(c, "ts_link", link)
+        try:
+            trang_tinh = [("TSKT", doc_csv(dl))] if ten_tep.lower().endswith(".csv") else doc_xlsx(dl, moi_trang=True)
+        except (zipfile.BadZipFile, KeyError, ET.ParseError, StopIteration, ValueError, IndexError):
+            raise Loi(400, "Không đọc được file. Hãy dùng file Excel .xlsx hoặc .csv.")
+        ung = []
+        for ten_trang, hang in trang_tinh:
+            for i, h in enumerate(hang[:30]):
+                cot = {}
+                for j, o_ in enumerate(h):
+                    g = gap(o_)
+                    for f, _, _, khoa in COT_TS:
+                        if f not in cot and g.startswith(khoa):
+                            cot[f] = j
+                            break
+                if "ma" in cot and ("ten_tm" in cot or "ten" in cot):
+                    ung.append((gap(ten_trang) == "tskt", len(cot), ten_trang, hang, i, cot))
+                    break
+        if not ung:
+            raise Loi(400, "Không tìm thấy bảng TSKT. Hàng tiêu đề cần có cột \"Model hoặc ký mã hiệu\" và \"Tên thương mại\".")
+        _, _, ten_trang, hang, dau, cot = max(ung, key=lambda u: u[:2])
+        moi, da_thay, trung = [], set(), 0
+        for h in hang[dau + 1:]:
+            d = {}
+            for f, _, _, _ in COT_TS:
+                v = h[cot[f]] if f in cot and cot[f] < len(h) else ""
+                if f in COT_GIA_TS:
+                    d[f] = doc_gia(v)
+                elif f == "cau_hinh":
+                    d[f] = str(v or "").strip()[:8000]
+                elif f == "iso_het":
+                    d[f] = ngay_ts(v)
+                else:
+                    d[f] = gon(v)[:1000 if f == "link_pl" else 500]
+            if not d["ma"]:
+                continue
+            k = khoa_ts(d)
+            if k in da_thay:
+                trung += 1
+                continue
+            da_thay.add(k)
+            moi.append(d)
+        if not moi:
+            raise Loi(400, "Bảng không có dòng sản phẩm nào.")
+        ten_cot = [f for f, _, _, _ in COT_TS]
+        if c.form.get("thay_het") == "1":
+            c.db.execute("DELETE FROM thong_so")
+        co = {khoa_ts(r): r["id"] for r in c.db.execute("SELECT id, ma, ten_tm FROM thong_so").fetchall()}
+        them = [[d[t] for t in ten_cot] for d in moi if khoa_ts(d) not in co]
+        sua = [[d[t] for t in ten_cot] + [co[khoa_ts(d)]] for d in moi if khoa_ts(d) in co]
+        if them:
+            c.db.executemany(f"INSERT INTO thong_so ({', '.join(ten_cot)}) VALUES ({', '.join('?' * len(ten_cot))})", them)
+        if sua:
+            c.db.executemany(f"UPDATE thong_so SET {', '.join(t + ' = ?' for t in ten_cot)} WHERE id = ?", sua)
+        c.db.commit()
+        tb = f"Đã nhập từ trang tính {ten_trang.strip() or 'đầu tiên'}: thêm {len(them)} sản phẩm mới, cập nhật {len(sua)} sản phẩm đã có"
+        return Chuyen("/thong-so", tb + (f", bỏ {trung} dòng trùng mã + tên thương mại trong file." if trung else "."))
+    return trang(c, "Nhập thông số kỹ thuật", f"""
+      <h1>Nhập bảng thông số kỹ thuật</h1>
+      <div class="the"><form method="post" enctype="multipart/form-data" class="luoi-1">{an_csrf(c)}
+        <label>Link Google Sheet (hoặc file Excel trên Google Drive)<input type="url" name="link" value="{e(link_cu)}"
+          placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+        <label>Hoặc chọn file Excel (.xlsx) / .csv từ máy<input type="file" name="tep" accept=".xlsx,.csv"></label>
+        <label class="o-tich"><input type="checkbox" name="thay_het" value="1"> Thay toàn bộ bảng bằng file này
+          (xóa các dòng không còn trong file)</label>
+        <div class="hang-nut"><button class="nut">Nhập</button><a href="/thong-so">Hủy</a></div></form></div>
+      <div class="the"><h2>Bảng cần có</h2>
+        <p>Trang tính TSKT với hàng tiêu đề như file "CHIEU 2026 THÔNG SỐ KỸ THUẬT" (24 cột). App nhận cột theo tiêu đề
+        và nhớ link này: khi sheet thay đổi chỉ cần vào đây bấm Nhập lại.</p>
+        <p class="mo">Dòng trùng cả ký mã hiệu và tên thương mại với dòng đã có thì được cập nhật, không tạo thêm dòng.
+        Nếu app báo không đọc được link, tải sheet về dạng Excel rồi chọn file ở ô thứ hai.</p></div>""", "ts")
 
 
 # ───────────────────────── báo giá ─────────────────────────
@@ -4320,6 +4660,12 @@ TUYEN = [
     ("GET", r"/bao-gia/(\d+)/tai", bg_tai, "nd"),
     ("POST", r"/bao-gia/(\d+)/google-doc", bg_google, "nd"),
     ("GET", r"/hang-hoa", hang_hoa, "nd"),
+    ("GET", r"/thong-so", ds_thong_so, "nd"),
+    ("GET|POST", r"/thong-so/moi", ts_moi, "ql"),
+    ("GET|POST", r"/thong-so/nhap", nhap_ts, "ql"),
+    ("POST", r"/thong-so/tai", ts_tai, "nd"),
+    ("GET|POST", r"/thong-so/(\d+)", ts_xem, "nd"),
+    ("POST", r"/thong-so/(\d+)/xoa", ts_xoa, "ql"),
     ("GET", r"/uy-quyen", ds_uy_quyen, "nd"),
     ("GET|POST", r"/uy-quyen/moi", uq_moi, "nd"),
     ("GET", r"/uy-quyen/(\d+)", uq_xem, "nd"),
