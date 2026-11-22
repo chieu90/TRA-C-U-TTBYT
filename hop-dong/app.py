@@ -506,6 +506,7 @@ def o_icon(url, nhan, icon, lon=False):
 
 def trang_chu(c):
     o_ = "".join(o_icon(f"/muc/{ma}", ten, icon, True) for ma, ten, icon, _ in UNG_DUNG)
+    o_ += o_icon("/tro-ly", "Trợ lý AI", "chat", True)
     if c.ql:
         o_ += o_icon("/nguoi-dung", "Người dùng", "nguoi_dung", True)
     return trang(c, "Trang chủ", f'<div class="luoi-app">{o_}</div>')
@@ -539,6 +540,10 @@ def trang(c, tieu_de, than, muc=""):
     if c.user and (muc in ("bg", "bgm", "bgn", "hh", "muc:bao-gia")):
         ai = '<script src="/static/ai_bg.js" defer></script>'
         hop_ai = f'<div id="ai-bg" data-csrf="{e(c.csrf)}" hidden></div>'
+    elif c.user:
+        mo_san = ' data-mo="1"' if muc == "tl" else ""
+        ai = '<script src="/static/tro_ly.js" defer></script>'
+        hop_ai = f'<div id="tro-ly" data-csrf="{e(c.csrf)}"{mo_san} hidden></div>'
     tb = ""
     if c.tb:
         tb = f'<div class="thong-bao">{e(c.tb)}</div>'
@@ -2359,14 +2364,17 @@ def ts_tai(c):
         ds = c.db.execute(f"SELECT * FROM thong_so WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY nhan_hieu, ma", ids).fetchall()
     if not ds:
         raise Loi(400, "Không có dòng nào để tải.")
-    cot = [t for t in COT_TS if not (c.form.get("bo_gia") == "1" and t[0] in COT_GIA_TS)]
-    dong = []
-    for h in ds:
-        dong.append([(ngay(h[f]) or h[f]) if f == "iso_het" else h[f] for f, _, _, _ in cot])
+    return Tep(*xlsx_tu_dong(ds, c.form.get("bo_gia") == "1"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def xlsx_tu_dong(ds, bo_gia):
+    """(tên file, nội dung .xlsx) của các dòng TSKT — đủ 24 cột như sheet gốc, tùy chọn bỏ 4 cột giá."""
+    cot = [t for t in COT_TS if not (bo_gia and t[0] in COT_GIA_TS)]
+    dong = [[(ngay(h[f]) or h[f]) if f == "iso_het" else h[f] for f, _, _, _ in cot] for h in ds]
     so_gia = tuple(i for i, t in enumerate(cot) if t[0] in COT_GIA_TS)
     dl = xlsx_ts.tao("TSKT", [t[1] for t in cot], [t[2] for t in cot], dong, so_gia)
     ten = "TSKT_" + "_".join(ten_tep_an_toan(h["ma"]) for h in ds[:3]) + ("_v.v" if len(ds) > 3 else "")
-    return Tep(ten[:90] + ".xlsx", dl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return ten[:90] + ".xlsx", dl
 
 
 def nhap_ts(c):
@@ -2449,6 +2457,201 @@ def nhap_ts(c):
         và nhớ link này: khi sheet thay đổi chỉ cần vào đây bấm Nhập lại.</p>
         <p class="mo">Dòng trùng cả ký mã hiệu và tên thương mại với dòng đã có thì được cập nhật, không tạo thêm dòng.
         Nếu app báo không đọc được link, tải sheet về dạng Excel rồi chọn file ở ô thứ hai.</p></div>""", "ts")
+
+
+# ───────────────────────── trợ lý AI chung (giao việc, AI tự làm) ─────────────────────────
+
+TL_VONG = 5            # tối đa số lượt gọi công cụ cho một câu giao việc
+TL_GIAY = 52           # tổng thời gian cho một câu (Vercel cho tối đa 60 giây)
+
+LENH_TRO_LY = """Bạn là Trợ lý AI nội bộ của app quản lý của công ty Avanta (test nhanh, thiết bị y tế, hồ sơ thầu).
+Nhân viên giao việc bằng tiếng Việt; bạn tự dùng CÔNG CỤ để làm xong việc rồi báo kết quả ngắn gọn.
+Công cụ có: tra_thong_so (bảng thông số kỹ thuật TSKT), xuat_file_thong_so (tạo file Excel TSKT cho các mã), tra_hang_hoa (danh mục và giá bán).
+Quy tắc:
+- Chỉ nói điều có trong kết quả công cụ. Không bịa thông số, số liệu, mã. Không có thì nói rõ là không có trong bảng.
+- Hỏi thông số / độ nhạy / độ đặc hiệu / cấu hình của một mã: gọi tra_thong_so rồi trả lời đúng số liệu. Khi người dùng cần thông số để dùng
+  cho hồ sơ, chép NGUYÊN VĂN phần cau_hinh_ky_thuat (giữ các gạch đầu dòng), không tóm tắt làm mất ý.
+- Nhờ "cho tôi file" / "xuất file" / "gửi file" thông số: gọi xuat_file_thong_so với đúng các mã (bo_gia=true nếu người dùng nói bỏ giá).
+  Đừng tự viết đường link; app tự hiện nút tải bên dưới câu trả lời của bạn. Chỉ nói đã tạo file, gồm mã nào, mã nào không tìm thấy.
+- Nhiều mã trong một câu thì truyền hết vào một lần gọi công cụ.
+- Mã không có trong bảng: nói rõ, và gợi ý mã gần giống nếu công cụ trả về.
+- Nếu iso_13485_het_han ghi ĐÃ HẾT HẠN thì nhắc người dùng một câu.
+- Việc ngoài khả năng của công cụ (soạn báo giá, tạo hợp đồng, công nợ…): nói rõ chưa làm được ở đây và chỉ mục trong app
+  (báo giá: nút "Hỏi AI" ở mục Báo giá → Danh sách báo giá).
+- Giá chỉ nêu khi người dùng hỏi giá. Tiền viết dạng 1.234.567 đ. Trả lời Markdown gọn (gạch đầu dòng, bảng nhỏ khi cần)."""
+
+TL_CONG_CU = [{"functionDeclarations": [
+    {"name": "tra_thong_so",
+     "description": "Tra bảng thông số kỹ thuật (TSKT) của sản phẩm: tên, hãng, quy cách, phân loại, ISO, độ nhạy/độ đặc hiệu và cấu hình kỹ thuật. "
+                    "Truyền ma (danh sách ký mã hiệu) khi biết mã, hoặc tu_khoa để tìm theo tên/loại xét nghiệm/nhãn hiệu.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "ma": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Các ký mã hiệu, ví dụ R0090C, W072-C"},
+         "tu_khoa": {"type": "STRING", "description": "Từ khóa tìm, ví dụ 'HBsAg', 'syphilis Intec'"}}}},
+    {"name": "xuat_file_thong_so",
+     "description": "Tạo file Excel TSKT (đủ 24 cột như sheet gốc) chỉ gồm các mã được nêu. App tự hiện nút tải cho người dùng.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "ma": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Các ký mã hiệu cần xuất"},
+         "bo_gia": {"type": "BOOLEAN", "description": "true nếu người dùng bảo bỏ giá (bỏ 4 cột giá)"}},
+         "required": ["ma"]}},
+    {"name": "tra_hang_hoa",
+     "description": "Tra danh mục hàng hóa và giá bán, giá Min, giá Max theo từ khóa (tên, ký mã hiệu, nhãn hiệu).",
+     "parameters": {"type": "OBJECT", "properties": {"tu_khoa": {"type": "STRING"}}, "required": ["tu_khoa"]}},
+]}]
+
+
+def _ts_cho_ai(h):
+    iso, het = iso_ts(h)
+    d = {"ky_ma_hieu": h["ma"], "ten_thiet_bi": h["ten"], "ten_thuong_mai": h["ten_tm"], "nhan_hieu": h["nhan_hieu"],
+         "hang_san_xuat": h["hang_sx"], "nuoc_san_xuat": h["nuoc_sx"], "phan_loai": h["phan_loai"], "so_phan_loai": h["so_pl"],
+         "so_luu_hanh": h["so_lh"], "iso_13485_het_han": (iso + (" (ĐÃ HẾT HẠN)" if het else "")) if iso else "",
+         "tuoi_tho": h["tuoi_tho"], "quy_cach": h["quy_cach"], "don_vi": h["dvt"], "cau_hinh_ky_thuat": (h["cau_hinh"] or "")[:2200]}
+    for ten, f in (("gia_tien_mat", "gia_tm"), ("gia_tu_van", "gia_tv"), ("gia_ke_khai", "gia_kk")):
+        if h[f]:
+            d[ten] = so_o(h[f])
+    return {k: v for k, v in d.items() if v not in ("", None)}
+
+
+def _tim_theo_ma(c, ma):
+    """Các dòng TSKT khớp danh sách mã: ưu tiên khớp đúng, không có thì khớp một phần. Trả về (dòng, mã không thấy, gợi ý)."""
+    ds, khong, goi_y = [], [], []
+    da = set()
+    for m in [str(x).strip() for x in (ma or []) if str(x).strip()][:30]:
+        gm = gap(m)
+        ung = c.db.execute("SELECT * FROM thong_so WHERE ma LIKE ? ORDER BY ma LIMIT 12", (f"%{m}%",)).fetchall()
+        dung = [r for r in ung if gap(r["ma"]) == gm or gap(r["ma"]).endswith(" " + gm)]
+        chon_ = dung or ung[:4]
+        if not chon_:
+            khong.append(m)
+            goi_y += [r["ma"] for r in c.db.execute("SELECT ma FROM thong_so WHERE ma LIKE ? LIMIT 3", (f"%{m[:4]}%",)).fetchall()] \
+                if len(m) >= 4 else []
+        for r in chon_:
+            if r["id"] not in da:
+                da.add(r["id"])
+                ds.append(r)
+        if ung and not dung:
+            goi_y.append(f"{m} khớp một phần: " + ", ".join(r["ma"] for r in chon_))
+    return ds, khong, goi_y
+
+
+def tl_cong_cu(c, ten, a, tep_ra):
+    """Chạy một công cụ do AI gọi; trả về dict (gửi lại cho AI). Mọi thao tác đều chỉ đọc hoặc tạo file tải về."""
+    a = a if isinstance(a, dict) else {}
+    if ten in ("tra_thong_so", "xuat_file_thong_so") and not c.db.execute("SELECT 1 FROM thong_so").fetchone():
+        return {"loi": "Bảng thông số kỹ thuật chưa được nhập vào app. Quản lý vào Báo giá → Thông số kỹ thuật → Nhập từ link / Excel."}
+    if ten == "tra_thong_so":
+        ma = a.get("ma") if isinstance(a.get("ma"), list) else []
+        if ma:
+            ds, khong, goi_y = _tim_theo_ma(c, ma)
+            kq = {"ket_qua": [_ts_cho_ai(h) for h in ds[:8]]}
+            if len(ds) > 8:
+                kq["ghi_chu"] = f"Còn {len(ds) - 8} dòng nữa, chưa hiện hết."
+            if khong:
+                kq["khong_tim_thay"] = khong
+            if goi_y:
+                kq["goi_y"] = goi_y[:6]
+            return kq
+        tu = str(a.get("tu_khoa") or "").strip()[:100]
+        if not tu:
+            return {"loi": "Cần truyền ma hoặc tu_khoa."}
+        dk, ts = tim_ts(tu)
+        n = c.db.execute(f"SELECT COUNT(*) AS n FROM thong_so WHERE 1=1{dk}", ts).fetchone()["n"]
+        ds = c.db.execute(f"SELECT * FROM thong_so WHERE 1=1{dk} ORDER BY nhan_hieu, ma LIMIT 6", ts).fetchall()
+        kq = {"so_dong_khop": n, "ket_qua": [_ts_cho_ai(h) for h in ds]}
+        if n > 6:
+            kq["ghi_chu"] = "Chỉ hiện 6 dòng đầu; hỏi người dùng thu hẹp hoặc xuất file."
+        return kq
+    if ten == "xuat_file_thong_so":
+        ma = a.get("ma") if isinstance(a.get("ma"), list) else []
+        ds, khong, goi_y = _tim_theo_ma(c, ma)
+        if not ds:
+            return {"loi": "Không có mã nào trong bảng TSKT.", "khong_tim_thay": khong, "goi_y": goi_y[:6]}
+        ten_file, dl = xlsx_tu_dong(ds, bool(a.get("bo_gia")))
+        token = secrets.token_urlsafe(12)
+        c.db.execute("DELETE FROM tep WHERE ma LIKE 'ai_%' AND cap_nhat < ?",
+                     ((datetime.now() - timedelta(days=7)).isoformat(timespec="seconds"),))
+        c.db.execute("INSERT INTO tep (ma, ten_tep, noi_dung, cap_nhat, nguoi, nguon) VALUES (?, ?, ?, ?, ?, 'tro_ly')",
+                     ("ai_" + token, ten_file[:200], dl, datetime.now().isoformat(timespec="seconds"), c.user["ho_ten"]))
+        c.db.commit()
+        tep_ra.append({"ten": ten_file, "url": f"/tro-ly/tai/{token}"})
+        kq = {"da_tao_file": ten_file, "so_dong": len(ds), "cac_ma": [h["ma"] for h in ds]}
+        if khong:
+            kq["khong_tim_thay"] = khong
+        return kq
+    if ten == "tra_hang_hoa":
+        dk, ts = dk_tim_hang(str(a.get("tu_khoa") or "").strip()[:100])
+        ds = c.db.execute(f"SELECT * FROM hang_hoa WHERE 1=1{dk} ORDER BY id LIMIT 12", ts).fetchall()
+        return {"ket_qua": [{"ky_ma_hieu": h["ma"], "ten": h["ten_tm"] or h["ten"], "nhan_hieu": h["nhan_hieu"], "quy_cach": h["quy_cach"],
+                             "gia_ban": so_o(h["gia_ban"]), "gia_min": so_o(h["gia_min"]), "gia_max": so_o(h["gia_max"])} for h in ds]}
+    return {"loi": f"Không có công cụ {ten}."}
+
+
+def tl_goi_gemini(noi_dung, han_chot):
+    khoa = os.environ.get("GEMINI_API_KEY", "")
+    if not khoa:
+        raise Loi(503, "Chưa cài khóa GEMINI_API_KEY cho app trên Vercel (project data.adc).")
+    con = han_chot - time.time()
+    if con < 6:
+        raise Loi(504, "Việc này quá dài, hãy chia nhỏ rồi giao lại.")
+    than = {"systemInstruction": {"parts": [{"text": LENH_TRO_LY + f"\nHôm nay: {date.today().isoformat()}."}]},
+            "contents": noi_dung, "tools": TL_CONG_CU, "generationConfig": {"temperature": 0}}
+    yc = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{urllib.parse.quote(GEMINI_MODEL)}:generateContent",
+                                json.dumps(than).encode(), {"Content-Type": "application/json", "x-goog-api-key": khoa})
+    try:
+        with urllib.request.urlopen(yc, timeout=min(30, con)) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as ex:
+        if ex.code == 429:
+            raise Loi(429, "Đã hết lượt AI miễn phí trong lúc này (giới hạn của Google). Thử lại sau ít phút, hoặc ngày mai.")
+        raise Loi(502, f"AI báo lỗi {ex.code}. Thử lại sau ít phút.")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        raise Loi(502, "Không gọi được AI. Thử lại sau ít phút.")
+
+
+def tro_ly_chat(c):
+    han_chot = time.time() + TL_GIAY
+    ls = doc_json_form(c, "lich_su", [])
+    ls = [m for m in (ls if isinstance(ls, list) else []) if isinstance(m, dict) and m.get("role") in ("user", "assistant")
+          and str(m.get("content") or "").strip()][-12:]
+    while ls and ls[0]["role"] != "user":
+        ls.pop(0)
+    if not ls or ls[-1]["role"] != "user":
+        raise Loi(400, "Chưa có câu hỏi.")
+    noi_dung = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": str(m["content"])[:3000]}]} for m in ls]
+    tep_ra = []
+    for _ in range(TL_VONG):
+        j = tl_goi_gemini(noi_dung, han_chot)
+        try:
+            nd = j["candidates"][0]["content"]
+            parts = nd.get("parts") or []
+        except (KeyError, IndexError, TypeError):
+            raise Loi(502, "AI trả lời không đúng dạng. Thử hỏi lại.")
+        goi = [p["functionCall"] for p in parts if isinstance(p, dict) and p.get("functionCall")]
+        if not goi:
+            chu = "".join(p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought")).strip()
+            return Json({"tra_loi": chu[:6000] or "Tôi chưa làm được việc này, anh/chị nói rõ hơn giúp.", "tep": tep_ra})
+        noi_dung.append(nd)                                   # giữ nguyên lượt gọi công cụ của AI (kể cả chữ ký suy luận)
+        noi_dung.append({"role": "user", "parts": [
+            {"functionResponse": {"name": g.get("name", ""), "response": {"ket_qua": tl_cong_cu(c, g.get("name", ""), g.get("args"), tep_ra)}}}
+            for g in goi]})
+    raise Loi(504, "Việc này cần quá nhiều bước, hãy chia nhỏ rồi giao lại.")
+
+
+def tro_ly_tai(c, token):
+    r = c.db.execute("SELECT * FROM tep WHERE ma = ?", ("ai_" + str(token),)).fetchone()
+    if not r:
+        raise Loi(404, "File không còn (chỉ giữ 7 ngày). Hãy nhờ trợ lý tạo lại.")
+    return Tep(r["ten_tep"], bytes(r["noi_dung"]), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def tro_ly_trang(c):
+    vd = ["Cho tôi thông số kỹ thuật mã R0090C", "Độ nhạy, độ đặc hiệu của ITP03004-DS50 là bao nhiêu?",
+          "Cho tôi file thông số R0090C, W072-C, ITP01023-DS50 (bỏ giá)", "Tìm các test HBsAg trong bảng thông số",
+          "Giá bán test Dengue NS1 các hãng"]
+    return trang(c, "Trợ lý AI", f"""
+      <div class="the"><h1>Trợ lý AI</h1>
+      <p>Hộp chat đã mở ở góc phải màn hình. Giao việc bằng câu thường, trợ lý tự tra bảng thông số kỹ thuật, tạo file Excel và tra giá hàng.</p>
+      <p class="mo">Ví dụ:</p><ul>{"".join(f"<li>{e(x)}</li>" for x in vd)}</ul>
+      <p class="mo">Trợ lý chỉ tra cứu và tạo file tải về, không sửa dữ liệu. Soạn báo giá dùng nút "Hỏi AI" trong mục Báo giá.</p></div>""", "tl")
 
 
 # ───────────────────────── báo giá ─────────────────────────
@@ -4660,6 +4863,9 @@ TUYEN = [
     ("GET", r"/bao-gia/(\d+)/tai", bg_tai, "nd"),
     ("POST", r"/bao-gia/(\d+)/google-doc", bg_google, "nd"),
     ("GET", r"/hang-hoa", hang_hoa, "nd"),
+    ("GET", r"/tro-ly", tro_ly_trang, "nd"),
+    ("POST", r"/tro-ly/chat", tro_ly_chat, "nd"),
+    ("GET", r"/tro-ly/tai/([\w-]+)", tro_ly_tai, "nd"),
     ("GET", r"/thong-so", ds_thong_so, "nd"),
     ("GET|POST", r"/thong-so/moi", ts_moi, "ql"),
     ("GET|POST", r"/thong-so/nhap", nhap_ts, "ql"),

@@ -167,6 +167,7 @@ td input.o-bang.rong { min-width: 14rem; }
 .ai-hang-nut { display: flex; justify-content: flex-end; margin-top: 8px; }
 .ai-m.loi { align-self: flex-start; color: var(--do); background: var(--do-nen); }
 .ai-m.cho { align-self: flex-start; color: var(--mo); font-style: italic; }
+.ai-m .ai-tep { display: inline-block; text-decoration: none; margin-top: 2px; }
 .ai-goi { display: flex; flex-wrap: wrap; gap: 6px; }
 .ai-goi button { border: 1px solid var(--vien); background: var(--the); color: var(--chu); border-radius: 999px; padding: 6px 10px; font: inherit;
   font-size: 12.5px; cursor: pointer; text-align: left; }
