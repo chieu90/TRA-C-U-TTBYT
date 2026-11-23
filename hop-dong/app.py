@@ -246,6 +246,15 @@ class KetNoi:
     def executemany(self, sql, ds):
         self.c.cursor().executemany(self._sql(sql), ds)
 
+    def chep(self, bang, cot, ds):
+        """Ghi nhanh nhiều dòng: COPY trên PostgreSQL, executemany trên SQLite."""
+        if PG_URL:
+            with self.c.cursor().copy(f"COPY {bang} ({', '.join(cot)}) FROM STDIN") as cp:
+                for d in ds:
+                    cp.write_row(d)
+        else:
+            self.c.executemany(f"INSERT INTO {bang} ({', '.join(cot)}) VALUES ({', '.join('?' * len(cot))})", ds)
+
     def them(self, sql, ts):
         """Chạy INSERT và trả về id của dòng vừa thêm."""
         if PG_URL:
@@ -5504,6 +5513,9 @@ def so_kqb(v):
     t = re.sub(r"\s|đ|₫|vnd|VND", "", str(v or ""))
     if not t or t in ("-", "–"):
         return 0.0
+    if re.fullmatch(r"\(.+\)", t):                       # (25) = số âm kiểu kế toán (hàng trả lại)
+        v = so_kqb(t[1:-1])
+        return -v if v else v
     if re.fullmatch(r"-?\d{1,3}([.,]\d{3})+", t):
         return float(re.sub(r"[.,]", "", t))
     for x in (t, t.replace(".", "").replace(",", ".")):
@@ -5582,8 +5594,13 @@ def doc_kqb(trang_tinh, ten_nguon):
             n = nam
             if gt["nam"] and re.fullmatch(r"20\d\d(\.0)?", gt["nam"]):
                 n = int(float(gt["nam"]))
-            ngay_ = ngay_kqb(gt["ngay"], n) or ngay_kqb(gt["thang"], n) or (th_trang + "-01" if th_trang else "")
-            chung = [ten_trang[:100], gt["khach"][:300], ma, ten, lay(h, "nhan_hieu")[:200], lay(h, "dvt")[:50], gt["nhan_vien"][:200]]
+            ngay_ = ngay_kqb(gt["ngay"], n)
+            if gt["thang"]:
+                th_o = ngay_kqb(gt["thang"], n)
+                if th_o and ngay_[:7] != th_o[:7]:
+                    ngay_ = th_o
+            ngay_ = ngay_ or (th_trang + "-01" if th_trang else "")
+            chung = [ten_trang[:100], gt["khach"][:300], ma, ten, re.sub(r"^[A-Z]\d+\.\s*", "", lay(h, "nhan_hieu"))[:200], lay(h, "dvt")[:50], gt["nhan_vien"][:200]]
             don_gia = so_kqb(lay(h, "don_gia")) or 0
             if thang:
                 for j, th in thang.items():
@@ -5595,9 +5612,24 @@ def doc_kqb(trang_tinh, ten_nguon):
                 v = so_kqb(lay(h, "gia_tri")) or q * don_gia
                 if q or v:
                     dong.append([ngay_] + chung + [q, v])
-            if len(dong) > 60000:
-                raise Loi(400, "File quá lớn (hơn 60.000 dòng). Hãy tách bớt theo năm.")
+            if len(dong) > 300000:
+                raise Loi(400, "File quá lớn (hơn 300.000 dòng). Hãy tách bớt theo năm.")
     return dong, truong_gap, trang_doc
+
+
+def tai_kqb(c, link):
+    """(dữ liệu, tên tệp): link có gid → chỉ tải trang tính đó dạng CSV (file lớn nhiều trang vẫn nhanh); không được thì cả file."""
+    m, g = ID_GOOGLE_RE.search(link or ""), re.search(r"[#?&]gid=(\d+)", link or "")
+    if m and g and "/spreadsheets/" in link:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    f"https://docs.google.com/spreadsheets/d/{m.group(1) or m.group(2)}/export?format=csv&gid={g.group(1)}",
+                    headers={"User-Agent": "hop-dong-app"}), timeout=40) as r:
+                if "text/csv" in r.headers.get("Content-Type", ""):
+                    return r.read(80_000_000), "trang.csv"
+        except (urllib.error.URLError, TimeoutError, OSError):
+            pass
+    return tai_bang_tu_link(c, link), "bang.xlsx"
 
 
 def nhap_kqb(c, nguon_id, ten, link, dl, ten_tep=""):
@@ -5618,11 +5650,11 @@ def nhap_kqb(c, nguon_id, ten, link, dl, ten_tep=""):
     else:
         nguon_id = c.db.them("INSERT INTO nguon_kqb (ten, link, so_dong, cot, cap_nhat) VALUES (?, ?, ?, ?, ?)",
                              (ten, link, len(dong), cot, bay_gio))
-    c.db.executemany("INSERT INTO ket_qua_ban (nguon_id, ngay, trang, khach, ma, ten, nhan_hieu, dvt, nhan_vien, so_luong, gia_tri) "
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [[nguon_id] + d for d in dong])
+    c.db.chep("ket_qua_ban", ["nguon_id", "ngay", "trang", "khach", "ma", "ten", "nhan_hieu", "dvt", "nhan_vien", "so_luong", "gia_tri"],
+              ([nguon_id] + d for d in dong))
     c.db.commit()
     khong_ngay = sum(1 for d in dong if not d[0])
-    return (f"Đã nhập {tien(len(dong))} dòng từ {len(trang_doc)} trang tính ({', '.join(trang_doc)[:200]}). "
+    return (f"Đã nhập {tien(len(dong))} dòng" + (f" từ {len(trang_doc)} trang tính ({', '.join(trang_doc)[:200]})" if any(trang_doc) else "") + ". "
             f"Cột nhận được: {cot}." + (f" Có {tien(khong_ngay)} dòng không có ngày/tháng." if khong_ngay else ""))
 
 
@@ -5635,9 +5667,12 @@ def kqb_nhap(c):
         ten = (c.form.get("ten") or "").strip()[:200]
         cu = c.db.execute("SELECT id, ten FROM nguon_kqb WHERE link = ?", (link,)).fetchone() if link and not dl else None
         if not dl:
-            dl = tai_bang_tu_link(c, link)
-        tb = nhap_kqb(c, cu["id"] if cu else None, ten or (cu["ten"] if cu else "") or ten_tep or "Kết quả bán hàng",
-                      "" if ten_tep and dl and not link else link, dl, ten_tep or "")
+            dl, ten_tep = tai_kqb(c, link)
+            co_tep = False
+        else:
+            co_tep = True
+        tb = nhap_kqb(c, cu["id"] if cu else None, ten or (cu["ten"] if cu else "") or (ten_tep if co_tep else "") or "Kết quả bán hàng",
+                      "" if co_tep else link, dl, ten_tep or "")
         return Chuyen("/ket-qua-ban", tb)
     return trang(c, "Nhập kết quả bán hàng", f"""
       <h1>Nhập kết quả bán hàng</h1>
@@ -5658,7 +5693,8 @@ def kqb_cap_nhat(c, nid):
         raise Loi(404, "Không tìm thấy nguồn dữ liệu.")
     if not n["link"]:
         raise Loi(400, "Nguồn này nhập từ file trên máy, không có link để cập nhật. Hãy nhập lại file mới.")
-    return Chuyen("/ket-qua-ban", nhap_kqb(c, n["id"], n["ten"], n["link"], tai_bang_tu_link(c, n["link"])))
+    dl, ten_tep = tai_kqb(c, n["link"])
+    return Chuyen("/ket-qua-ban", nhap_kqb(c, n["id"], n["ten"], n["link"], dl, ten_tep))
 
 
 def kqb_xoa(c, nid):
@@ -5700,7 +5736,7 @@ def ket_qua_ban(c):
                                     f"GROUP BY {cot} ORDER BY SUM(so_luong) DESC", ts).fetchall()
     nguon = c.db.execute("SELECT * FROM nguon_kqb ORDER BY id").fetchall()
     tong = c.db.execute(f"SELECT COUNT(*) AS n, SUM(so_luong) AS q, SUM(gia_tri) AS v, COUNT(DISTINCT khach) AS kh, "
-                        f"COUNT(DISTINCT ma || '|' || ten) AS hh FROM ket_qua_ban WHERE 1=1{dk}", ts).fetchone()
+                        f"COUNT(DISTINCT CASE WHEN ma <> '' THEN ma ELSE ten END) AS hh FROM ket_qua_ban WHERE 1=1{dk}", ts).fetchone()
     loc_tt = lambda cot: [(r["v"], r["v"]) for r in c.db.execute(
         f"SELECT DISTINCT {cot} AS v FROM ket_qua_ban WHERE {cot} <> '' ORDER BY {cot}").fetchall()]
     bo_loc = f"""<form class="bo-loc">
@@ -5718,8 +5754,8 @@ def ket_qua_ban(c):
         def nhan_loc(k, v):
             return f'<a href="?{urllib.parse.urlencode({**q, k: v})}">{e(v)}</a>'
         sp = [(f'{e(r["ten"])} <span class="mo">{e(r["ma"])}{" · " + e(r["dvt"]) if r["dvt"] else ""}</span>', r["q"] or 0, r["v"] or 0)
-              for r in c.db.execute(f"SELECT ma, ten, dvt, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
-                                    f"GROUP BY ma, ten, dvt ORDER BY SUM(so_luong) DESC", ts).fetchall()]
+              for r in c.db.execute(f"SELECT MAX(ma) AS ma, MAX(ten) AS ten, dvt, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban "
+                                    f"WHERE 1=1{dk} GROUP BY CASE WHEN ma <> '' THEN ma ELSE ten END, dvt ORDER BY SUM(so_luong) DESC", ts).fetchall()]
         th = sorted(((r["thang"] or "", r["q"] or 0, r["v"] or 0) for r in c.db.execute(
             f"SELECT SUBSTR(ngay, 1, 7) AS thang, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
             f"GROUP BY SUBSTR(ngay, 1, 7)", ts).fetchall()), key=lambda x: x[0])
