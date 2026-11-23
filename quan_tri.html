@@ -113,9 +113,12 @@ async function load() {
   const tabBox = u => `<div class="tabs${u.vai_tro === 'admin' ? ' off' : ''}">${Object.keys(TAB_NAME).map(t =>
     `<label><input type="checkbox" value="${t}"${u.tabs.includes(t) ? ' checked' : ''}>${TAB_NAME[t]}</label>`).join('')}</div>`;
   const nvs = [...new Set(KH.flatMap(k => nvList(k.nv)))].sort((a, b) => a.localeCompare(b, 'vi'));
-  const kqSel = u => u.vai_tro === 'admin' ? '' : `<div class="kq">KQ Test / Đường huyết: <select data-k="kq_nv">
-    <option value="">Xem tất cả khách</option>${[...new Set([...nvs, u.kq_nv].filter(Boolean))].map(n =>
-    `<option value="${esc(n)}"${n === u.kq_nv ? ' selected' : ''}>Chỉ khách của ${esc(n)}</option>`).join('')}</select></div>`;
+  // KQ: tick 1 hoặc nhiều nhân viên -> chỉ xem khách của những người đó; không tick ai = xem tất cả khách
+  const kqSel = u => { if (u.vai_tro === 'admin') return '';
+    const cur = nvList(u.kq_nv || '');
+    return `<div class="kq">KQ Test / Đường huyết: <b data-kqtxt>${cur.length ? 'chỉ khách của ' + cur.length + ' nhân viên' : 'xem tất cả khách'}</b>
+    <div class="tabs" data-k="kq_nv">${[...new Set([...nvs, ...cur])].map(n =>
+    `<label><input type="checkbox" value="${esc(n)}"${cur.includes(n) ? ' checked' : ''}>${esc(n)}</label>`).join('')}</div></div>`; };
   const cvSel = u => `<div class="kq">Công việc của: <select data-k="cv_nv">
     <option value="">Tự nhận (theo email / nhân viên KQ)</option>${[...new Set([...PC_NV, ...nvs, u.cv_nv].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')).map(n =>
     `<option value="${esc(n)}"${n === u.cv_nv ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
@@ -137,8 +140,8 @@ async function load() {
 $('#rows').addEventListener('click', async e => {
   const a = e.target.dataset.a; if (!a) return;
   const tr = e.target.closest('tr'), id = +tr.dataset.id, vai_tro = tr.querySelector('[data-k=vai_tro]').value;
-  const tabs = [...tr.querySelectorAll('.tabs input:checked')].map(i => i.value);
-  const kqEl = tr.querySelector('[data-k=kq_nv]'), kq_nv = kqEl ? kqEl.value : '';
+  const tabs = [...tr.querySelectorAll('.tabs:not([data-k]) input:checked')].map(i => i.value);
+  const kq_nv = [...tr.querySelectorAll('[data-k=kq_nv] input:checked')].map(i => i.value);
   const cv_nv = tr.querySelector('[data-k=cv_nv]').value;
   const name = tr.querySelector('b').textContent;
   try {
@@ -155,8 +158,10 @@ $('#rows').addEventListener('click', async e => {
 // chọn vai trò -> tick sẵn tab mẫu; admin thì khóa ô tick (luôn xem tất cả)
 $('#rows').addEventListener('change', e => {
   const tr = e.target.closest('tr'); if (!tr) return; tr.classList.add('dirty');
+  const kqBox = e.target.closest('[data-k=kq_nv]');
+  if (kqBox) { const n = kqBox.querySelectorAll('input:checked').length; tr.querySelector('[data-kqtxt]').textContent = n ? `chỉ khách của ${n} nhân viên` : 'xem tất cả khách'; return; }
   if (e.target.dataset.k !== 'vai_tro') return;
-  const r = ROLES[e.target.value], box = tr.querySelector('.tabs');
+  const r = ROLES[e.target.value], box = tr.querySelector('.tabs:not([data-k])');
   box.classList.toggle('off', e.target.value === 'admin');
   box.querySelectorAll('input').forEach(i => i.checked = r.tabs.includes(i.value));
 });

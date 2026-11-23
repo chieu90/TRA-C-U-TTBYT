@@ -79,7 +79,8 @@ module.exports = function congViec({ sql, cfg, setCfg, parseCsv, docFile, me }) 
     return { link, nv: d.nv || [], cs: d.cs || [], luc: await cfg("phan_cong_luc"), loi };
   }
   // tên nhân viên của người đang đăng nhập: admin chọn ở Quản trị (cv_nv) > nhân viên KQ > email trùng tab "Nhân viên"
-  const toiLa = pc => String(me.cv_nv || "").trim() || String(me.kq_nv || "").trim()
+  const kqMot = String(me.kq_nv || "").split(/\s*[,;]\s*/).filter(Boolean);  // chỉ dùng khi KQ gắn đúng 1 nhân viên
+  const toiLa = pc => String(me.cv_nv || "").trim() || (kqMot.length === 1 ? kqMot[0] : "")
     || ((pc.nv || []).find(n => n.email.includes(String(me.email).toLowerCase())) || {}).ten || "";
   const coToi = (nv, toi) => !!toi && String(nv || "").split(/[,;]+/).map(x => x.trim()).includes(toi);
 

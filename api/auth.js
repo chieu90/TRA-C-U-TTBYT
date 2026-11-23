@@ -21,6 +21,8 @@ const ROLES = {
 const ALL_TABS = ROLES.admin.tabs;
 const STATUS = ["cho_duyet", "hoat_dong", "khoa"];
 const kqOf = u => u.vai_tro === "admin" ? "" : String(u.kq_nv || "");
+// kq_nv có thể gồm nhiều nhân viên, cách nhau dấu phẩy ("A, B"): xem khách của bất kỳ ai trong số đó
+const kqList = u => kqOf(u).split(/\s*[,;]\s*/).filter(Boolean);
 // quyền xem thực tế: admin xem tất cả; người khác theo cột tabs (admin tick từng tab), chưa tick thì theo vai trò mẫu
 const tabsOf = u => u.vai_tro === "admin" ? ALL_TABS
   : (u.tabs != null ? String(u.tabs).split(",").filter(t => ALL_TABS.includes(t)) : (ROLES[u.vai_tro] || {}).tabs || []);
@@ -236,8 +238,8 @@ module.exports = async (req, res) => {
       return d;
     };
     const khachCua = async () => {
-      const nv = kqOf(me); if (!nv) return null;
-      return new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").includes(nv)).map(x => kfold(x.ten)));
+      const nvs = kqList(me); if (!nvs.length) return null;
+      return new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").some(n => nvs.includes(n))).map(x => kfold(x.ten)));
     };
 
     // tab Quản lý công việc (mọi tài khoản đã đăng nhập; nhân viên chỉ thấy gói phân cho mình)
@@ -320,7 +322,8 @@ module.exports = async (req, res) => {
       if (u.vai_tro === "admin" && u.trang_thai === "hoat_dong" && (vt !== "admin" || tt !== "hoat_dong") && (await admins()) <= 1)
         return send(res, 400, { loi: "Phải còn ít nhất 1 admin đang hoạt động." });
       const tabs = Array.isArray(b.tabs) ? b.tabs.filter(t => ALL_TABS.includes(t)).join(",") : u.tabs;
-      const kq = typeof b.kq_nv === "string" ? b.kq_nv.trim().slice(0, 100) : (u.kq_nv || "");
+      const kqIn = Array.isArray(b.kq_nv) ? b.kq_nv : typeof b.kq_nv === "string" ? b.kq_nv.split(/[,;]/) : null;
+      const kq = kqIn ? [...new Set(kqIn.map(x => String(x).trim().slice(0, 100)).filter(Boolean))].join(", ").slice(0, 1000) : (u.kq_nv || "");
       const cvn = typeof b.cv_nv === "string" ? b.cv_nv.trim().slice(0, 100) : (u.cv_nv || "");
       await sql(`UPDATE mc_tai_khoan SET vai_tro=$1, trang_thai=$2, tabs=$4, kq_nv=$5, cv_nv=$6,
                  duyet_luc = CASE WHEN $2='hoat_dong' AND duyet_luc IS NULL THEN now() ELSE duyet_luc END WHERE id=$3`, [vt, tt, id, tabs, kq, cvn]);
