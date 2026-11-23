@@ -32,7 +32,27 @@ body { background: radial-gradient(900px 520px at 0% 18%, var(--bg-b) 0%, transp
   radial-gradient(700px 500px at 30% 100%, var(--bg-b) 0%, transparent 60%), linear-gradient(180deg, var(--bg-c) 0%, var(--bg-d) 100%); background-attachment: fixed; min-height: 100vh; }
 body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: var(--pat-op);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='320' viewBox='0 0 420 320'><g fill='none' stroke-linecap='round' stroke-linejoin='round'><path d='M20 250 L80 210 L130 228 L190 160 L250 182 L310 120 L370 136' stroke='%230b5cad' stroke-opacity='.07' stroke-width='3'/><path d='M40 300 h60 M40 280 h40' stroke='%23f2b705' stroke-opacity='.18' stroke-width='3'/><rect x='300' y='230' width='14' height='50' rx='3' fill='%230b5cad' fill-opacity='.05'/><rect x='322' y='205' width='14' height='75' rx='3' fill='%23f2b705' fill-opacity='.12'/><rect x='344' y='245' width='14' height='35' rx='3' fill='%230b5cad' fill-opacity='.05'/></g><g fill='%23f2b705' fill-opacity='.22'><circle cx='60' cy='60' r='3'/><circle cx='230' cy='40' r='2'/><circle cx='390' cy='80' r='2.5'/></g><g fill='%230b5cad' fill-opacity='.10'><circle cx='150' cy='90' r='2.5'/><circle cx='280' cy='290' r='2'/></g><path d='M200 270 l4 -9 l4 9 l9 4 l-9 4 l-4 9 l-4 -9 l-9 -4z' fill='%23f2b705' fill-opacity='.25'/></svg>"); background-size: 420px 320px; }
-.card { background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(2px); }
+/* các ô theo mẫu kem – cam (yêu cầu 23/11/2026): nền ô kem ấm, viền be, tiêu đề nâu đậm gạch cam, icon số liệu là vòng tròn màu đặc */
+:root { --o-card: #fffaf3; --o-line: #efe3d3; --o-line2: #f7efe4; --o-head: #3b2f25; --o-acc: #e07a3f; --o-grid: #f0e6da;
+  --o-shadow: 0 1px 2px rgba(120,80,40,.05), 0 6px 18px rgba(120,80,40,.07); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --o-card: #221d18; --o-line: #3a3129; --o-line2: #2c251f; --o-head: #f1e4d4; --o-acc: #f0955c; --o-grid: #352d26; --o-shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25); } }
+:root[data-theme="dark"] { --o-card: #221d18; --o-line: #3a3129; --o-line2: #2c251f; --o-head: #f1e4d4; --o-acc: #f0955c; --o-grid: #352d26; --o-shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25); }
+.card { background: color-mix(in srgb, var(--o-card) 96%, transparent); border-color: var(--o-line); box-shadow: var(--o-shadow); backdrop-filter: blur(2px); }
+.card h2 { color: var(--o-head); }
+.card h2::before { background: var(--o-acc); }
+.card th { background: var(--o-line2); }
+.card td { border-bottom-color: var(--o-line2); }
+.card .bar { background: var(--o-line2); }
+.hb .it .bar > b { background: var(--o-acc); }
+.kpis .kpi .ic { border-radius: 50%; color: #fff; }
+.kpis .kpi:nth-child(6n+1) .ic { background: #2e8b4e; }
+.kpis .kpi:nth-child(6n+2) .ic { background: #8b5cc8; }
+.kpis .kpi:nth-child(6n+3) .ic { background: #ef7d2d; }
+.kpis .kpi:nth-child(6n+4) .ic { background: #3b82d6; }
+.kpis .kpi:nth-child(6n+5) .ic { background: #f2b416; }
+.kpis .kpi:nth-child(6n+6) .ic { background: #e0567a; }
+.insights { background: linear-gradient(120deg, color-mix(in srgb, var(--o-acc) 10%, var(--o-card)), var(--o-card) 70%); }
+.ins li::before { background: #2e8b4e; }
 a { color: var(--brand); }
 .hero { background: linear-gradient(120deg, #0b5cad 0%, #083e78 55%, #0b5cad 100%); color: #fff; padding: 22px 16px 78px; position: relative; overflow: hidden; }
 .hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(242,183,5,.45), rgba(242,183,5,0) 70%); }
@@ -361,7 +381,7 @@ function drawLine(cur, prev, year, lastM) {
   prev.forEach(r => { const m = +r.ngay.slice(5, 7) - 1; if (m >= 0) mp[m] += r.gt; });
   const nCur = lastM, max = niceMax(Math.max(...mc.slice(0, nCur), ...(prev.length ? mp : [0]), 1));
   const x = i => L + (W - L - R) * (i + .5) / 12, y = v => T + (H - T - Bm) * (1 - v / max);
-  const g = css('--grid'), mu = css('--faint'), c1 = css('--brand'), c2 = css('--gold');
+  const g = css('--o-grid') || css('--grid'), mu = css('--faint'), c1 = css('--o-acc') || css('--brand'), c2 = css('--faint');
   let s = '';
   for (let i = 0; i <= 4; i++) { const v = max * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${g}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="${mu}">${i ? money(v) : '0'}</text>`; }
   for (let i = 0; i < 12; i++) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${mu}">T${i + 1}</text>`;
