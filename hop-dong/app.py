@@ -150,6 +150,12 @@ CREATE TABLE IF NOT EXISTS tai_lieu (
   nguoi_id INTEGER REFERENCES nguoi_dung(id), cap_nhat TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tai_lieu_tep (
   tai_lieu_id INTEGER NOT NULL UNIQUE REFERENCES tai_lieu(id) ON DELETE CASCADE, noi_dung BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS nguon_kqb (
+  id INTEGER PRIMARY KEY, ten TEXT NOT NULL, link TEXT DEFAULT '', so_dong INTEGER DEFAULT 0, cot TEXT DEFAULT '', cap_nhat TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ket_qua_ban (
+  id INTEGER PRIMARY KEY, nguon_id INTEGER NOT NULL REFERENCES nguon_kqb(id) ON DELETE CASCADE, trang TEXT DEFAULT '',
+  ngay TEXT DEFAULT '', khach TEXT DEFAULT '', ma TEXT DEFAULT '', ten TEXT DEFAULT '', nhan_hieu TEXT DEFAULT '',
+  dvt TEXT DEFAULT '', so_luong REAL DEFAULT 0, gia_tri REAL DEFAULT 0, nhan_vien TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS chi_tien (
   id INTEGER PRIMARY KEY, so_pc TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
   nha_cung_cap_id INTEGER NOT NULL REFERENCES nha_cung_cap(id), so_tien REAL NOT NULL, hinh_thuc TEXT DEFAULT '',
@@ -285,7 +291,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("tai_lieu_tep", "noi_dung")).fetchone():
+                                        "AND column_name = ?", ("ket_qua_ban", "nhan_vien")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -3573,7 +3579,8 @@ ICON.update({k: _svg(v) for k, v in {
 UNG_DUNG += [
     ("ban-hang", "Bán hàng", "ban_hang", [
         ("/don-hang", "Đơn hàng", "dh", "ds_hd", False), ("/don-hang/moi", "Lập đơn hàng", "dhm", "soan", False),
-        ("/cong-no", "Công nợ phải thu", "cn", "tien", False), ("/doanh-so", "Báo cáo doanh số", "ds", "bieu_do", False)]),
+        ("/cong-no", "Công nợ phải thu", "cn", "tien", False), ("/doanh-so", "Báo cáo doanh số", "ds", "bieu_do", False),
+        ("/ket-qua-ban", "Kết quả bán hàng", "kqb", "bieu_do", False)]),
     ("kho", "Kho – Mua hàng", "kho", [
         ("/kho", "Tồn kho", "tk", "hang_hoa", False), ("/nhap-kho", "Nhập kho / mua hàng", "pn", "nhap", True),
         ("/nha-cung-cap", "Nhà cung cấp", "ncc", "khach", True), ("/phai-tra", "Nợ nhà cung cấp", "pt", "tien", True)]),
@@ -5436,6 +5443,316 @@ def tl_nhap_drive(c):
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
+# ───────────────────────── kết quả bán hàng (nhập từ Google Sheet / Excel trên Drive) ─────────────────────────
+# Mỗi link Drive là một "nguồn"; nhập lại cùng link thì thay toàn bộ dòng của nguồn đó (sửa trên Drive → bấm Cập nhật).
+
+TIEU_DE_KQB = [   # (trường, các tiêu đề cột đã bỏ dấu); một tiêu đề khớp với từ khóa dài nhất
+    ("ngay", ("ngay", "ngay ban", "ngay xuat", "ngay hd", "ngay hoa don", "ngay chung tu", "ngay ct", "ngay giao", "ngay giao hang", "date")),
+    ("thang", ("thang", "thang ban", "ky", "month")),
+    ("nam", ("nam", "year")),
+    ("khach", ("khach hang", "ten khach hang", "ten kh", "khach", "kh", "don vi mua", "ten don vi", "benh vien", "co so y te",
+               "csyt", "noi nhan", "dai ly", "nha phan phoi", "npp", "customer", "ten khach")),
+    ("ma", ("ma hang", "ma", "ky ma hieu", "ma sp", "ma vt", "ma san pham", "ma hh", "ma hang hoa", "code", "cat no", "ref")),
+    ("ten", ("ten hang", "ten san pham", "ten thuong mai", "ten vat tu", "ten hang hoa", "san pham", "hang hoa", "mat hang",
+             "ten sp", "ten", "product", "ten tm", "ten ttbyt")),
+    ("nhan_hieu", ("nhan hieu", "hang", "hang sx", "hang san xuat", "thuong hieu", "brand", "nha sx", "nha san xuat")),
+    ("dvt", ("dvt", "don vi tinh", "don vi", "unit")),
+    ("so_luong", ("so luong", "sl", "sl ban", "so luong ban", "luong ban", "qty", "quantity", "tong sl", "tong so luong", "sl xuat",
+                  "so luong xuat")),
+    ("don_gia", ("don gia", "gia ban", "gia")),
+    ("gia_tri", ("thanh tien", "doanh so", "doanh thu", "gia tri", "tong tien", "tien", "amount", "tong gia tri")),
+    ("nhan_vien", ("nhan vien", "nvbh", "nv", "sale", "sales", "nguoi ban", "nhan vien ban hang", "nv ban hang", "phu trach",
+                   "nv phu trach", "ten nhan vien", "nhan vien phu trach")),
+    ("_bo", ("ma khach hang", "ma kh", "ma khach", "ma nv", "ma nhan vien", "stt", "tt", "ma don vi", "ma so thue", "mst")),
+]
+TEN_COT_KQB = {"ngay": "Ngày", "thang": "Tháng", "nam": "Năm", "khach": "Khách hàng", "ma": "Mã hàng", "ten": "Tên hàng",
+               "nhan_hieu": "Nhãn hiệu", "dvt": "ĐVT", "so_luong": "Số lượng", "don_gia": "Đơn giá", "gia_tri": "Thành tiền",
+               "nhan_vien": "Nhân viên"}
+THANG_RE = re.compile(r"(?:t|thang)\s*0?(\d{1,2})(?:\s*[/\-.]\s*(\d{2}|\d{4}))?|0?(\d{1,2})\s*[/\-.]\s*(\d{4})")
+
+
+def _g_kqb(v):
+    return re.sub(r"[^\w/()\-]+", " ", gap(v)).strip()
+
+
+def cot_kqb(g):
+    """Trường ứng với một tiêu đề cột (đã qua _g_kqb), hoặc None."""
+    tot = None
+    for truong, khoa in TIEU_DE_KQB:
+        for k in khoa:
+            if (g == k or g.startswith(k + " ") or g.startswith(k + "(")) and (tot is None or len(k) > tot[0]):
+                tot = (len(k), truong)
+    return tot[1] if tot else None
+
+
+def thang_cot(v, nam):
+    """Tiêu đề kiểu T1 / Tháng 01 / 01/2026 / ngày Excel → 'yyyy-mm' hoặc None."""
+    g = _g_kqb(v)
+    if re.fullmatch(r"\d{5}", g) and 36000 < int(g) < 60000:
+        return (date(1899, 12, 30) + timedelta(days=int(g))).isoformat()[:7]
+    m = THANG_RE.fullmatch(g)
+    if not m:
+        return None
+    th, n = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    th, n = int(th), int(n) if n else nam
+    if n < 100:
+        n += 2000
+    return f"{n:04d}-{th:02d}" if 1 <= th <= 12 else None
+
+
+def so_kqb(v):
+    t = re.sub(r"\s|đ|₫|vnd|VND", "", str(v or ""))
+    if not t or t in ("-", "–"):
+        return 0.0
+    if re.fullmatch(r"-?\d{1,3}([.,]\d{3})+", t):
+        return float(re.sub(r"[.,]", "", t))
+    for x in (t, t.replace(".", "").replace(",", ".")):
+        try:
+            return float(x)
+        except ValueError:
+            pass
+    return None
+
+
+def ngay_kqb(v, nam):
+    """Ô ngày / tháng → 'yyyy-mm-dd' (ngày 01 nếu chỉ biết tháng) hoặc ''."""
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    d = ngay_ts(s)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return d
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?", s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    if re.fullmatch(r"\d{1,2}(\.0)?", s) and 1 <= int(float(s)) <= 12:
+        return f"{nam:04d}-{int(float(s)):02d}-01"
+    th = thang_cot(s, nam)
+    return th + "-01" if th else ""
+
+
+def doc_kqb(trang_tinh, ten_nguon):
+    """[(tên trang, các hàng)] → (các dòng kết quả, các trường nhận được, các trang đã đọc)."""
+    nam_mac = date.today().year
+    dong, truong_gap, trang_doc = [], set(), []
+    for ten_trang, hang in trang_tinh:
+        tot = None
+        for i, h in enumerate(hang[:30]):
+            cot, thang = {}, {}
+            for j, o_ in enumerate(h):
+                g = _g_kqb(o_)
+                if not g or len(g) > 60:
+                    continue
+                th = thang_cot(o_, 0)
+                if th:
+                    thang[j] = o_
+                    continue
+                t = cot_kqb(g)
+                if t and t != "_bo" and t not in cot:
+                    cot[t] = j
+            if ("ten" in cot or "ma" in cot) and ("so_luong" in cot or len(thang) >= 2):
+                diem = len(cot) + 2 * bool(thang)
+                if tot is None or diem > tot[0]:
+                    tot = (diem, i, cot, thang)
+        if not tot:
+            continue
+        _, dau, cot, thang = tot
+        nam = next((int(m.group()) for t in [" ".join(map(str, x)) for x in hang[:dau + 1]] + [ten_trang, ten_nguon]
+                    for m in [re.search(r"20\d\d", t)] if m), nam_mac)
+        thang = {j: thang_cot(v, nam) for j, v in thang.items()}
+        if thang and "so_luong" in cot and len(thang) < 2:
+            thang = {}
+        th_trang = thang_cot(ten_trang, nam)
+        trang_doc.append(ten_trang)
+        truong_gap |= set(cot) | ({"thang"} if thang else set())
+        lay = lambda h, t: gon(h[cot[t]]) if t in cot and cot[t] < len(h) else ""
+        truoc = {}
+        for h in hang[dau + 1:]:
+            ma, ten = lay(h, "ma")[:200], lay(h, "ten")[:500]
+            if not (ma or ten):
+                continue
+            if re.match(r"(tong|cong)\b", gap(ten or ma)):
+                continue
+            gt = {t: lay(h, t) for t in ("khach", "nhan_vien", "ngay", "thang", "nam")}
+            for t in gt:                                   # ô gộp (merge) chỉ có chữ ở dòng đầu → lấy theo dòng trên
+                if gt[t]:
+                    truoc[t] = gt[t]
+                else:
+                    gt[t] = truoc.get(t, "")
+            n = nam
+            if gt["nam"] and re.fullmatch(r"20\d\d(\.0)?", gt["nam"]):
+                n = int(float(gt["nam"]))
+            ngay_ = ngay_kqb(gt["ngay"], n) or ngay_kqb(gt["thang"], n) or (th_trang + "-01" if th_trang else "")
+            chung = [ten_trang[:100], gt["khach"][:300], ma, ten, lay(h, "nhan_hieu")[:200], lay(h, "dvt")[:50], gt["nhan_vien"][:200]]
+            don_gia = so_kqb(lay(h, "don_gia")) or 0
+            if thang:
+                for j, th in thang.items():
+                    q = so_kqb(h[j]) if j < len(h) else 0
+                    if q:
+                        dong.append([th + "-01"] + chung + [q, q * don_gia])
+            else:
+                q = so_kqb(lay(h, "so_luong")) or 0
+                v = so_kqb(lay(h, "gia_tri")) or q * don_gia
+                if q or v:
+                    dong.append([ngay_] + chung + [q, v])
+            if len(dong) > 60000:
+                raise Loi(400, "File quá lớn (hơn 60.000 dòng). Hãy tách bớt theo năm.")
+    return dong, truong_gap, trang_doc
+
+
+def nhap_kqb(c, nguon_id, ten, link, dl, ten_tep=""):
+    try:
+        trang_tinh = [("", doc_csv(dl))] if ten_tep.lower().endswith(".csv") else doc_xlsx(dl, moi_trang=True)
+    except (zipfile.BadZipFile, KeyError, ET.ParseError, StopIteration, ValueError, IndexError):
+        raise Loi(400, "Không đọc được file. Hãy dùng Google Sheet, file Excel .xlsx hoặc .csv.")
+    dong, truong, trang_doc = doc_kqb(trang_tinh, ten)
+    if not dong:
+        mau = next((h for _, hang in trang_tinh for h in hang[:15] if sum(1 for x in h if gon(x)) >= 3), [])
+        raise Loi(400, "Không tìm thấy bảng kết quả bán hàng. Hàng tiêu đề cần có cột Tên hàng (hoặc Mã hàng) và cột Số lượng "
+                       "(hoặc các cột tháng T1, T2…). Tiêu đề app thấy: " + ", ".join(gon(x) for x in mau if gon(x))[:400])
+    bay_gio = datetime.now().isoformat(timespec="seconds")
+    cot = ", ".join(TEN_COT_KQB[t] for t in TEN_COT_KQB if t in truong)
+    if nguon_id:
+        c.db.execute("UPDATE nguon_kqb SET ten = ?, so_dong = ?, cot = ?, cap_nhat = ? WHERE id = ?", (ten, len(dong), cot, bay_gio, nguon_id))
+        c.db.execute("DELETE FROM ket_qua_ban WHERE nguon_id = ?", (nguon_id,))
+    else:
+        nguon_id = c.db.them("INSERT INTO nguon_kqb (ten, link, so_dong, cot, cap_nhat) VALUES (?, ?, ?, ?, ?)",
+                             (ten, link, len(dong), cot, bay_gio))
+    c.db.executemany("INSERT INTO ket_qua_ban (nguon_id, ngay, trang, khach, ma, ten, nhan_hieu, dvt, nhan_vien, so_luong, gia_tri) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [[nguon_id] + d for d in dong])
+    c.db.commit()
+    khong_ngay = sum(1 for d in dong if not d[0])
+    return (f"Đã nhập {tien(len(dong))} dòng từ {len(trang_doc)} trang tính ({', '.join(trang_doc)[:200]}). "
+            f"Cột nhận được: {cot}." + (f" Có {tien(khong_ngay)} dòng không có ngày/tháng." if khong_ngay else ""))
+
+
+def kqb_nhap(c):
+    if c.method == "POST":
+        ten_tep, dl = c.tep.get("tep", ("", b""))
+        link = c.link("link", "Link Google Drive")
+        if not dl and not link:
+            raise Loi(400, "Chưa dán link và chưa chọn file.")
+        ten = (c.form.get("ten") or "").strip()[:200]
+        cu = c.db.execute("SELECT id, ten FROM nguon_kqb WHERE link = ?", (link,)).fetchone() if link and not dl else None
+        if not dl:
+            dl = tai_bang_tu_link(c, link)
+        tb = nhap_kqb(c, cu["id"] if cu else None, ten or (cu["ten"] if cu else "") or ten_tep or "Kết quả bán hàng",
+                      "" if ten_tep and dl and not link else link, dl, ten_tep or "")
+        return Chuyen("/ket-qua-ban", tb)
+    return trang(c, "Nhập kết quả bán hàng", f"""
+      <h1>Nhập kết quả bán hàng</h1>
+      <p class="mo">Dán link Google Sheet hoặc file Excel trên Drive. App tự tìm hàng tiêu đề trong mọi trang tính và nhận các cột:
+        Ngày / Tháng, Khách hàng, Mã hàng, Tên hàng, Nhãn hiệu, ĐVT, Số lượng, Đơn giá, Thành tiền, Nhân viên.
+        Bảng dạng mỗi tháng một cột (T1, T2… hoặc 01/2026…) cũng đọc được. Dán lại link đã nhập thì app thay dữ liệu cũ bằng bản mới.</p>
+      {"" if da_ket_noi(c) else '<p class="thong-bao loi">App chưa kết nối Google Drive nên chỉ đọc được file chia sẻ “Bất kỳ ai có đường liên kết”. Kết nối ở mục <a href="/mau-hop-dong">Mẫu hợp đồng</a>.</p>'}
+      <form method="post" enctype="multipart/form-data" class="the luoi-1">{an_csrf(c)}
+        <label>Link Google Sheet / file Excel trên Drive<input type="url" name="link" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
+        <label>Hoặc chọn file từ máy (.xlsx, .csv)<input type="file" name="tep" accept=".xlsx,.csv"></label>
+        <label>Tên gọi (không bắt buộc)<input name="ten" placeholder="VD: Kết quả bán hàng 2026"></label>
+        <div class="hang-nut"><button class="nut">Nhập</button> <a href="/ket-qua-ban">Hủy</a></div></form>""", "kqb")
+
+
+def kqb_cap_nhat(c, nid):
+    n = c.db.execute("SELECT * FROM nguon_kqb WHERE id = ?", (int(nid),)).fetchone()
+    if not n:
+        raise Loi(404, "Không tìm thấy nguồn dữ liệu.")
+    if not n["link"]:
+        raise Loi(400, "Nguồn này nhập từ file trên máy, không có link để cập nhật. Hãy nhập lại file mới.")
+    return Chuyen("/ket-qua-ban", nhap_kqb(c, n["id"], n["ten"], n["link"], tai_bang_tu_link(c, n["link"])))
+
+
+def kqb_xoa(c, nid):
+    c.db.execute("DELETE FROM ket_qua_ban WHERE nguon_id = ?", (int(nid),))
+    c.db.execute("DELETE FROM nguon_kqb WHERE id = ?", (int(nid),))
+    c.db.commit()
+    return Chuyen("/ket-qua-ban", "Đã xóa nguồn dữ liệu và các dòng của nó.")
+
+
+def bang_sl(tieu_de, cot, ds, co_tien, toi_da=None):
+    """ds = [(nhãn đã escape, số lượng, giá trị)] đã xếp giảm dần."""
+    if not ds:
+        return ""
+    lon = max(r[1] for r in ds) or 1
+    dong = "".join(f'<tr><td>{nhan}</td><td class="so">{sl(q)}</td>'
+                   f'<td><progress max="100" value="{round(100 * q / lon) if q > 0 else 0}"></progress></td>'
+                   + (f'<td class="so">{tien(v)}</td>' if co_tien else "") + "</tr>" for nhan, q, v in ds[:toi_da])
+    an = f'<p class="mo">Hiện {toi_da} / {len(ds)} dòng lớn nhất.</p>' if toi_da and len(ds) > toi_da else ""
+    return (f'<div class="the"><h2>{tieu_de}</h2><div class="cuon"><table><thead><tr><th>{cot}</th><th class="so">Số lượng</th><th></th>'
+            + ('<th class="so">Thành tiền (đ)</th>' if co_tien else "") + f'</tr></thead><tbody>{dong}</tbody></table></div>{an}</div>')
+
+
+def ket_qua_ban(c):
+    q = c.q
+    dk, ts = "", []
+    tu, den = q.get("tu", ""), q.get("den", "")
+    if re.fullmatch(r"\d{4}-\d{2}", tu):
+        dk += " AND ngay >= ?"; ts.append(tu + "-01")
+    if re.fullmatch(r"\d{4}-\d{2}", den):
+        dk += " AND ngay <= ?"; ts.append(den + "-31")
+    for k, cot in (("nv", "nhan_vien"), ("nh", "nhan_hieu"), ("kh", "khach")):
+        if q.get(k):
+            dk += f" AND {cot} = ?"; ts.append(q[k])
+    if q.get("ng", "").isdigit():
+        dk += " AND nguon_id = ?"; ts.append(int(q["ng"]))
+    if q.get("q"):
+        dk += " AND (ten LIKE ? OR ma LIKE ? OR khach LIKE ?)"; ts += [f"%{q['q'].strip()}%"] * 3
+    nhom = lambda cot: c.db.execute(f"SELECT {cot}, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
+                                    f"GROUP BY {cot} ORDER BY SUM(so_luong) DESC", ts).fetchall()
+    nguon = c.db.execute("SELECT * FROM nguon_kqb ORDER BY id").fetchall()
+    tong = c.db.execute(f"SELECT COUNT(*) AS n, SUM(so_luong) AS q, SUM(gia_tri) AS v, COUNT(DISTINCT khach) AS kh, "
+                        f"COUNT(DISTINCT ma || '|' || ten) AS hh FROM ket_qua_ban WHERE 1=1{dk}", ts).fetchone()
+    loc_tt = lambda cot: [(r["v"], r["v"]) for r in c.db.execute(
+        f"SELECT DISTINCT {cot} AS v FROM ket_qua_ban WHERE {cot} <> '' ORDER BY {cot}").fetchall()]
+    bo_loc = f"""<form class="bo-loc">
+        <label>Từ tháng <input type="month" name="tu" value="{e(tu)}"></label><label>Đến tháng <input type="month" name="den" value="{e(den)}"></label>
+        <label>Tìm hàng / khách <input name="q" value="{e(q.get('q', ''))}"></label>
+        <label>Nhân viên {chon("nv", loc_tt("nhan_vien"), q.get("nv", ""), "Tất cả")}</label>
+        <label>Nhãn hiệu {chon("nh", loc_tt("nhan_hieu"), q.get("nh", ""), "Tất cả")}</label>
+        {f'<label>Nguồn {chon("ng", [(n["id"], n["ten"]) for n in nguon], q.get("ng", ""), "Tất cả")}</label>' if len(nguon) > 1 else ""}
+        <button class="nut phu">Xem</button> <a href="/ket-qua-ban">Bỏ lọc</a></form>"""
+    if not tong["n"]:
+        than = ('<div class="the trong">Chưa có dữ liệu. ' + ('Bấm <a href="/ket-qua-ban/nhap">Nhập từ link Drive</a> để đưa kết quả bán hàng vào.'
+                if c.ql else "Nhờ quản lý nhập kết quả bán hàng từ link Drive.") + "</div>")
+    else:
+        co_tien = bool(tong["v"])
+        def nhan_loc(k, v):
+            return f'<a href="?{urllib.parse.urlencode({**q, k: v})}">{e(v)}</a>'
+        sp = [(f'{e(r["ten"])} <span class="mo">{e(r["ma"])}{" · " + e(r["dvt"]) if r["dvt"] else ""}</span>', r["q"] or 0, r["v"] or 0)
+              for r in c.db.execute(f"SELECT ma, ten, dvt, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
+                                    f"GROUP BY ma, ten, dvt ORDER BY SUM(so_luong) DESC", ts).fetchall()]
+        th = sorted(((r["thang"] or "", r["q"] or 0, r["v"] or 0) for r in c.db.execute(
+            f"SELECT SUBSTR(ngay, 1, 7) AS thang, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
+            f"GROUP BY SUBSTR(ngay, 1, 7)", ts).fetchall()), key=lambda x: x[0])
+        th = [(f"{k[5:]}/{k[:4]}" if k else "Không rõ tháng", v1, v2) for k, v1, v2 in th]
+        ds_nhom = lambda cot, k, rong: [(nhan_loc(k, r[cot]) if r[cot] else rong, r["q"] or 0, r["v"] or 0) for r in nhom(cot)]
+        than = f"""<div class="o-so">
+            <div class="the"><span>Tổng số lượng</span><b>{sl(tong["q"])}</b></div>
+            <div class="the"><span>Số mặt hàng</span><b>{tien(tong["hh"])}</b></div>
+            <div class="the"><span>Số khách hàng</span><b>{tien(tong["kh"])}</b></div>
+            {f'<div class="the"><span>Thành tiền (đ)</span><b>{tien(tong["v"])}</b></div>' if co_tien else ""}</div>
+          <div class="cach-tren">{bang_sl("Theo sản phẩm", "Sản phẩm", sp, co_tien, 50)}
+          {bang_sl("Theo khách hàng", "Khách hàng", ds_nhom("khach", "kh", "(không ghi khách)"), co_tien, 30)}
+          {bang_sl("Theo tháng", "Tháng", th, co_tien) if len(th) > 1 or th[0][0] != "Không rõ tháng" else ""}
+          {bang_sl("Theo nhân viên", "Nhân viên", ds_nhom("nhan_vien", "nv", "(không ghi)"), co_tien)}
+          {bang_sl("Theo nhãn hiệu", "Nhãn hiệu", ds_nhom("nhan_hieu", "nh", "(không ghi)"), co_tien)}</div>"""
+    ds_nguon = "".join(
+        f'<tr><td>{e(n["ten"])}<br><small class="mo">{e(n["cot"])}</small></td><td class="so">{tien(n["so_dong"])}</td>'
+        f'<td>{e(n["cap_nhat"].replace("T", " ")[:16])}</td><td class="thao-tac">'
+        + (f'<a href="{e(n["link"])}" target="_blank" rel="noopener noreferrer">Mở file</a>' if n["link"] else "")
+        + ((f'<form method="post" action="/ket-qua-ban/nguon/{n["id"]}/cap-nhat" class="trong-dong">{an_csrf(c)}<button class="nut-chu">Cập nhật từ Drive</button></form>'
+            if n["link"] else "")
+           + f'<form method="post" action="/ket-qua-ban/nguon/{n["id"]}/xoa" class="trong-dong" data-xac-nhan="Xóa nguồn này và toàn bộ dòng của nó?">{an_csrf(c)}'
+             f'<button class="nut-chu nguy">Xóa</button></form>' if c.ql else "") + "</td></tr>" for n in nguon)
+    bang_nguon = (f'<div class="the cuon"><table><thead><tr><th>Nguồn dữ liệu</th><th class="so">Số dòng</th><th>Cập nhật lúc</th><th></th></tr></thead>'
+                  f'<tbody>{ds_nguon}</tbody></table></div>') if nguon else ""
+    return trang(c, "Kết quả bán hàng", f"""
+      <div class="dau-trang"><h1>Kết quả bán hàng</h1>
+        {'<a class="nut" href="/ket-qua-ban/nhap">Nhập từ link Drive</a>' if c.ql else ""}</div>
+      <p class="mo">Số lượng bán theo sản phẩm, khách hàng, tháng, nhân viên — lấy từ file trên Drive. Sửa file trên Drive xong, bấm
+        <b>Cập nhật từ Drive</b> ở bảng nguồn cuối trang để lấy số mới.</p>
+      {bo_loc}{than}<h2>Nguồn dữ liệu</h2>{bang_nguon or '<p class="mo">Chưa có.</p>'}""", "kqb")
+
+
 TUYEN = [
     ("GET|POST", r"/thiet-lap", thiet_lap, "khach"),
     ("GET|POST", r"/dang-nhap", dang_nhap, "khach"),
@@ -5489,6 +5806,10 @@ TUYEN = [
     ("GET|POST", r"/tai-lieu/moi", tl_moi, "nd"),
     ("GET|POST", r"/tai-lieu/ho-so", tl_ho_so, "nd"),
     ("GET|POST", r"/tai-lieu/nhap-drive", tl_nhap_drive, "nd"),
+    ("GET", r"/ket-qua-ban", ket_qua_ban, "nd"),
+    ("GET|POST", r"/ket-qua-ban/nhap", kqb_nhap, "ql"),
+    ("POST", r"/ket-qua-ban/nguon/(\d+)/cap-nhat", kqb_cap_nhat, "ql"),
+    ("POST", r"/ket-qua-ban/nguon/(\d+)/xoa", kqb_xoa, "ql"),
     ("GET|POST", r"/tai-lieu/(\d+)", tl_xem, "nd"),
     ("GET", r"/tai-lieu/(\d+)/tai", tl_tai, "nd"),
     ("POST", r"/tai-lieu/(\d+)/xoa", tl_xoa, "ql"),
