@@ -5729,7 +5729,7 @@ def kqb_do(c):
         if c.q.get("buoc") == "doc":
             return Chuyen("/ket-qua-ban", json.dumps(kq))
         t = time.time()
-        c.db.execute("CREATE TEMP TABLE kqb_thu (LIKE ket_qua_ban)")
+        c.db.execute("CREATE TEMP TABLE kqb_thu (LIKE ket_qua_ban INCLUDING DEFAULTS)")
         c.db.chep("kqb_thu", ["nguon_id", "ngay", "trang", "khach", "ma", "ten", "nhan_hieu", "dvt", "nhan_vien", "so_luong", "gia_tri"],
                   ([0] + d for d in dong))
         kq["ghi_s"] = round(time.time() - t, 2)
