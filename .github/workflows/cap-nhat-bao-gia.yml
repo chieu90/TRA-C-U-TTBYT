@@ -45,7 +45,8 @@ jobs:
         continue-on-error: true
       - name: Đẩy dữ liệu nếu có thay đổi
         run: |
-          FILES="data/goi_thau.json data/bao_gia.json data/co_so_y_te.json data/trung_thau.json data/duong_huyet.json"
+          # kèm file KQ năm cũ (co_so_y_te.py tự lưu khi sang năm mới)
+          FILES="data/goi_thau.json data/bao_gia.json data/co_so_y_te.json data/trung_thau.json data/duong_huyet.json $(ls data/trung_thau_20*.json data/duong_huyet_20*.json 2>/dev/null | tr '\n' ' ')"
           CHANGED=$(python3 - $FILES <<'PY'
           import json, subprocess, sys
           for f in sys.argv[1:]:

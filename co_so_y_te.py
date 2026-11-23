@@ -26,7 +26,8 @@ TT_PATH = os.path.join(g.HERE, "data", "trung_thau.json")  # chi tiết từng m
 DH_PATH = os.path.join(g.HERE, "data", "duong_huyet.json")  # que thử đường huyết cho trang KQ Đường Huyết
 DH_NHOM = "Đường huyết"
 PRC_URL = g.HOST + "/o/egp-portal-winning-bid-data/services/smart/search_prc"
-YEAR = "2026"
+# năm hiện tại theo giờ Việt Nam: sang năm mới tự lấy kết quả năm mới (dữ liệu năm cũ được lưu riêng, xem luu_nam_cu)
+YEAR = str((datetime.now(timezone(timedelta(hours=7)))).year)
 DASH_BO = {"Que thử nước tiểu", "Đường huyết"}  # nhóm không đưa vào Dashboard trúng thầu (theo yêu cầu người dùng)
 DASH_BO_RE = re.compile(r"hba1c|hb a1c|hemoglobin a1c|\bcrp\b|c-reactive|protein phản ứng c")  # mặt hàng không đưa vào Dashboard
 DASH_TEN = {"Đường huyết / HbA1c": "Đường huyết", "Troponin / CRP": "Troponin"}
@@ -408,7 +409,24 @@ def bo_sung(year):
         return []
 
 
+def luu_nam_cu():
+    """Sang năm mới: data/trung_thau.json, data/duong_huyet.json còn là năm cũ -> lưu thành trung_thau_<năm cũ>.json,
+    duong_huyet_<năm cũ>.json (nếu chưa có) trước khi ghi đè bằng năm mới, để KQ / Tổng quan / dự trù hàng vẫn có năm cũ."""
+    for path in (TT_PATH, DH_PATH):
+        try:
+            nam = str(json.load(open(path, encoding="utf-8")).get("nam") or "")
+        except (OSError, ValueError):
+            continue
+        dst = path.replace(".json", f"_{nam}.json")
+        if nam and nam != YEAR and not os.path.exists(dst):
+            import shutil
+            shutil.copyfile(path, dst)
+            print(f"Lưu dữ liệu năm {nam} -> {dst}", file=sys.stderr)
+
+
 def build(paths=(TT_PATH, DH_PATH)):
+    if paths[0] == TT_PATH:
+        luu_nam_cu()
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
     kq, items, dh_items = results(kw)

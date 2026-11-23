@@ -191,14 +191,17 @@ const delta = (a, b) => { const p = pct(a, b); if (p == null) return '<span clas
   return `<span class="${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span>`; };
 
 // ---- dữ liệu ----
-const FILES = { 2026: ['/api/trung-thau', '/api/duong-huyet'] };
-const fileOf = y => FILES[y] || [`/trung_thau_${y}.json`, `/duong_huyet_${y}.json`];
-const YEARS = [2026, 2025, 2024];
+// năm tự theo lịch: năm hiện tại đọc /api/trung-thau (dữ liệu cập nhật hằng ngày), năm cũ đọc trung_thau_<năm>.json
+// (co_so_y_te.py tự lưu khi sang năm mới). Mỗi tệp có trường "nam" -> chỉ nhận tệp đúng năm.
+const CY = new Date().getFullYear();
+const YEARS = [CY, CY - 1, CY - 2];
+const srcOf = (y, k) => { const api = k === 'tt' ? '/api/trung-thau' : '/api/duong-huyet', arc = `/${k === 'tt' ? 'trung_thau' : 'duong_huyet'}_${y}.json`;
+  return y === CY ? [api, arc] : [arc, api]; };
 const CACHE = {};
 let MODE = (() => { try { return localStorage.getItem('tq_mode') || 'etc'; } catch (e) { return 'etc'; } })();
 const etc = () => MODE === 'etc' && !!BG;
 const VLBL = () => etc() ? 'Giá trị theo giá ETC' : 'Giá trị trúng thầu';
-let KHNV = null, NAM = 2026, PICK = new Set(BRANDS.map(b => b.id));
+let KHNV = null, NAM = CY, LUI_NAM = false, PICK = new Set(BRANDS.map(b => b.id));
 
 function brandOf(r) {
   const a = fold(r.hang_chuan);
@@ -212,10 +215,11 @@ async function loadYear(y) {
   if (CACHE[y]) return CACHE[y];
   const out = [];
   let cap = '';
-  for (const u of fileOf(y)) {
+  for (const u of ['tt', 'dh'].map(k => srcOf(y, k))) for (const src of u) {
     try {
-      const r = await fetch(u); if (!r.ok) continue;
+      const r = await fetch(src); if (!r.ok) continue;
       const d = await r.json(); if (!d || !Array.isArray(d.rows)) continue;
+      if (d.nam && String(d.nam) !== String(y)) continue;  // tệp của năm khác
       if (!cap || d.cap_nhat > cap) cap = d.cap_nhat;
       const ix = Object.fromEntries(d.cot.map((c, i) => [c, i]));
       for (const a of d.rows) {
@@ -225,6 +229,7 @@ async function loadYear(y) {
         out.push({ b, ma: a[ix.ma], cdt: a[ix.cdt] || '', tinh: a[ix.tinh] || '', ngay: a[ix.ngay] || '', nhom: a[ix.nhom] || '', ten: a[ix.ten] || '',
           sl, dg, gt: sl * dg, gtT: sl * dg, ky: a[ix.ky_ma] || '', tg: a[ix.tg_hd] || '', hg: (a[ix.hang] || '') + ' ' + (a[ix.nhan] || ''), dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
       }
+      break;  // đã có tệp đúng năm cho loại này (KQ Test / Đường huyết)
     } catch (e) {}
   }
   ghepGia(out);
@@ -457,6 +462,8 @@ $('#dtXlsx').addEventListener('click', xuatDuTru);
 async function render() {
   $('#status').textContent = 'Đang tải…';
   const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
+  // đầu năm mới, dữ liệu năm mới chưa có -> tự xem năm trước (1 lần)
+  if (!cur.rows.length && NAM === CY && !LUI_NAM) { LUI_NAM = true; NAM = CY - 1; $('#nam').value = String(NAM); return render(); }
   // trang có thể vẽ (vd đổi cỡ cửa sổ) trước khi bảng giá tải xong: ghép giá lại khi đã có
   for (const d of [cur, prv]) if (BG && d.rows && !d.bg) { ghepGia(d.rows); d.bg = true; }
   // giá trị dùng cho mọi bảng/biểu đồ: theo giá đại lý ETC (số lượng × giá ĐL; dòng chưa có giá ETC hoặc khác đơn vị = 0) hoặc theo giá trúng
