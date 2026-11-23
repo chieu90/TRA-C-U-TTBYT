@@ -149,7 +149,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   <section class="card" id="dtCard" style="margin-bottom:14px"><h2>Dự trù số lượng theo tháng<small id="dtSub"></small></h2>
     <div class="filters" style="margin-bottom:10px"><button type="button" class="chip" id="dtAll" aria-pressed="true">Xem tất cả mã</button><button type="button" class="chip" id="dtXlsx" aria-pressed="true">Tải Excel</button></div>
     <div class="tbl-wrap"><table id="tDt"></table></div>
-    <p class="note" id="dtNote">Mỗi dòng trúng thầu: số lượng (quy ra test/que) chia đều cho thời gian thực hiện hợp đồng, bắt đầu từ tháng sau ngày trúng thầu; không ghi thời gian thì tính 12 tháng. Gộp theo mã sản phẩm trong bảng giá đại lý (ghép theo mã, không có mã thì theo tên hàng). Lấy kết quả năm hiện tại và năm trước (hợp đồng còn hiệu lực), theo bộ lọc nhân viên / tỉnh / thương hiệu. Không tính que thử đường huyết Terumo (Medisafe).</p></section>
+    <p class="note" id="dtNote">Mỗi dòng trúng thầu: số lượng (quy ra test/que) chia đều cho thời gian thực hiện hợp đồng, bắt đầu từ tháng sau ngày trúng thầu; không ghi thời gian thì tính 12 tháng. Gộp theo mã sản phẩm trong bảng giá đại lý (ghép theo mã, không có mã thì theo tên hàng). Lấy kết quả năm hiện tại và năm trước (hợp đồng còn hiệu lực), theo bộ lọc nhân viên / tỉnh / thương hiệu. Không tính que thử đường huyết TaiDoc mang nhãn khác: Terumo (Medisafe), FORA / ForaCare, FaCare, ACS044.</p></section>
 
   <div class="row r-3">
     <section class="card"><h2>Top tỉnh / thành</h2><div class="hb" id="hTinh"></div></section>
@@ -420,7 +420,7 @@ async function veDuTru(ok) {
   const m = new Map();
   for (const d of ds) for (const r of d.rows) {
     if (!ok(r) || !r.ngay || !(r.slt > 0)) continue;
-    if (/terumo|medisafe/.test(fold(r.hg + ' ' + r.ky + ' ' + r.ten))) continue;  // que Terumo (TaiDoc sản xuất cho Terumo) không phải hàng công ty — bỏ khỏi dự trù 23/11/2026
+    if (/terumo|medisafe|\bfora|facare|acs ?044/.test(fold(r.hg + ' ' + r.ky + ' ' + r.ten))) continue;  // que TaiDoc mang nhãn khác (Terumo/Medisafe, FORA/ForaCare, FaCare, ACS044) không phải hàng U-Right của công ty — bỏ khỏi dự trù 23/11/2026
     const n = thangHd(r.tg), st = (+r.ngay.slice(0, 4)) * 12 + (+r.ngay.slice(5, 7) - 1) + 1, moi = r.slt / n;
     if (st + n - 1 < cols[0] || st > cols[11]) continue;  // hợp đồng đã hết hoặc chưa bắt đầu trong 12 tháng tới
     const key = r.p ? 'p|' + r.p.name : 'x|' + r.b + '|' + r.nhom;
