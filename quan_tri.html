@@ -61,6 +61,7 @@ tr.dirty td { background: var(--warn-bg); }
 @media (max-width: 760px) {
   thead { display: none; } tr { display: block; border-bottom: 1px solid var(--line); padding: 8px 0; }
   td { display: flex; justify-content: space-between; gap: 10px; border: 0; padding: 5px 0; }
+  .bgp thead { display: table-header-group; } .bgp tr { display: table-row; padding: 0; } .bgp td { display: table-cell; padding: 6px 8px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
   td::before { content: attr(data-l); color: var(--muted); font-size: 12.5px; }
 }
 </style>
@@ -80,6 +81,11 @@ tr.dirty td { background: var(--warn-bg); }
     <div class="acts" style="align-items:center"><input id="pcLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:240px">
       <button type="button" class="pri" id="pcSave">Lưu link và đọc ngay</button></div>
     <p class="cap" id="pcInfo" style="margin:8px 0 0"></p></section>
+  <section class="card"><h2>Bảng giá đại lý (kênh ETC)</h2>
+    <p class="cap">Dán link Google Sheet bảng giá đại lý, dùng để so với giá trúng thầu trên trang <b>Tổng quan sản phẩm</b>. Sheet chia sẻ "Bất kỳ ai có đường liên kết – Người xem"; nếu file có nhiều tab, mở đúng tab bảng giá rồi copy link (link có <b>#gid=</b>). Trang tự đọc lại mỗi 15 phút. Giá chỉ lưu trong cơ sở dữ liệu của trang, chỉ người có quyền KQ Test mới xem được.</p>
+    <div class="acts" style="align-items:center"><input id="bgLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=…" style="flex:1;min-width:240px">
+      <button type="button" class="pri" id="bgSave">Lưu link và đọc ngay</button></div>
+    <p class="cap" id="bgInfo" style="margin:8px 0 0"></p><div class="scroll" id="bgPrev"></div></section>
   <section class="card"><h2>Khách hàng theo nhân viên</h2>
     <p class="cap">Dùng cho bộ lọc "Nhân viên" trên KQ Test và KQ Đường huyết: lọc các dòng mà nhà thầu trúng là khách của nhân viên đó. Dán link Google Sheet (Drive) có cột <b>Tên khách hàng</b> và cột <b>Nhân viên BH</b>; một khách nhiều nhân viên thì ghi cách nhau bằng dấu phẩy. Sheet phải chia sẻ "Bất kỳ ai có đường liên kết – Người xem". Trang tự đọc lại sheet mỗi 15 phút, sửa trên Drive là xong.</p>
     <div class="acts" style="align-items:center"><input id="khLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:240px">
@@ -220,7 +226,22 @@ $('#pcSave').onclick = async () => {
   try { const d = await post('link-phan-cong', { link: $('#pcLink').value }); toast(d.so ? `Đã đọc ${d.so} cơ sở y tế có nhân viên phụ trách` : 'Đã bỏ link'); await pcLoad(); load(); }
   catch (err) { toast(err.message); } finally { b.disabled = false; }
 };
-Promise.all([khLoad(), pcLoad()]).then(load);
+// ---- bảng giá đại lý ETC ----
+async function bgLoad() {
+  const r = await fetch('/api/auth?action=bang-gia'); if (!r.ok) return;
+  const d = await r.json();
+  if (document.activeElement !== $('#bgLink')) $('#bgLink').value = d.link || '';
+  $('#bgInfo').textContent = (d.co_link ? `Đang dùng bảng giá: ${d.rows.length} dòng` + (d.cot_gia.length ? `, cột giá: ${d.cot_gia.map(i => d.cot[i]).join(', ')}. ` : '. Chưa thấy cột nào có chữ "giá". ') : 'Chưa gắn bảng giá. ') +
+    (d.luc ? 'Đọc lần cuối: ' + when(d.luc) + '. ' : '') + (d.loi ? 'Lỗi lần đọc gần nhất: ' + d.loi : '');
+  $('#bgPrev').innerHTML = d.rows.length ? `<table class="bgp" style="margin-top:8px"><thead><tr>${d.cot.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
+    d.rows.slice(0, 5).map(r => `<tr>${d.cot.map((_, i) => `<td>${esc(r[i] || '')}</td>`).join('')}</tr>`).join('') + `</tbody></table><p class="cap" style="margin:6px 0 0">5 dòng đầu để kiểm tra đã đọc đúng cột.</p>` : '';
+}
+$('#bgSave').onclick = async () => {
+  const b = $('#bgSave'); b.disabled = true;
+  try { const d = await post('link-bang-gia', { link: $('#bgLink').value }); toast(d.so ? `Đã đọc ${d.so} dòng bảng giá` : 'Đã bỏ link'); await bgLoad(); }
+  catch (err) { toast(err.message); } finally { b.disabled = false; }
+};
+Promise.all([khLoad(), pcLoad(), bgLoad()]).then(load);
 </script>
 <script src="/tai-khoan.js" defer></script>
 </body>

@@ -10,6 +10,7 @@
 //   GET  /api/auth?action=khach-nv         -> khách hàng theo nhân viên (người đã đăng nhập)
 //   GET  /api/auth?action=cong-viec        -> tab Quản lý công việc (gói thầu phân cho nhân viên, api/_cong_viec.js)
 //   POST /api/auth?action=cong-viec-luu    {ma, nv, khach, tham_gia, san_pham:[{ten,chao}], ket_qua, ghi_chu}
+//   GET bang-gia -> bảng giá đại lý ETC (quyền KQ Test) | Admin: POST link-bang-gia {link}
 //   Admin: POST link-phan-cong {link} (sheet phân công CSYT) | POST link-khach-nv {link} (Google Sheet, tự đọc lại mỗi 15 phút) | POST luu-khach-nv {ds:[{ten,nv}]} | GET ds | POST sua {id, vai_tro, trang_thai, tabs: ["goi-thau",...]} | POST xoa {id} | POST dat-mat-khau {id, mat_khau}
 const crypto = require("crypto");
 
@@ -250,6 +251,12 @@ module.exports = async (req, res) => {
     };
     const cv = () => require("./_cong_viec")({ sql, cfg, setCfg, parseCsv, docFile, me });
     if (action === "cong-viec") return send(res, 200, await cv().ds());
+    // bảng giá đại lý kênh ETC (giá nội bộ): người có quyền KQ Test hoặc admin
+    const bg = () => require("./_bang_gia")({ cfg, setCfg, parseCsv, me });
+    if (action === "bang-gia") {
+      if (me.vai_tro !== "admin" && !tabsOf(me).includes("trung-thau")) return send(res, 403, { loi: "Không có quyền xem bảng giá." });
+      return send(res, 200, await bg().xem());
+    }
     if (action === "cong-viec-luu" && req.method === "POST") { const [c, d] = await cv().luu(b); return send(res, c, d); }
 
     if (action === "kq") {
@@ -300,6 +307,7 @@ module.exports = async (req, res) => {
       await setCfg("khach_nv_luc", new Date().toISOString());
       return send(res, 200, { ok: true, so: ds.length });
     }
+    if (action === "link-bang-gia" && req.method === "POST") { const [c, d] = await bg().ganLink(b.link); return send(res, c, d); }
     if (action === "link-phan-cong" && req.method === "POST") { const [c, d] = await cv().ganLink(b.link); return send(res, c, d); }
     if (action === "link-khach-nv" && req.method === "POST") {  // lưu link Google Sheet và đọc ngay
       const link = String(b.link || "").trim();
