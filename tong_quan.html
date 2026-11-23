@@ -144,7 +144,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 
   <section class="card" id="bgCard" style="margin-bottom:14px" hidden><h2>Giá trúng thầu so với giá đại lý ETC<small id="bgSub"></small></h2>
     <div class="kpis" id="bgKpi" style="margin-bottom:12px"></div>
-    <div class="tbl-wrap"><table id="tBg"></table></div><p class="note" id="bgNote"></p></section>
+    <p class="note" id="bgNote"></p></section>
 
   <div class="row r-3">
     <section class="card"><h2>Top tỉnh / thành</h2><div class="hb" id="hTinh"></div></section>
@@ -396,16 +396,6 @@ function veGia(rows) {
     kpi(ICO.list, 0, 'Chênh lệch giá trúng – giá ĐL', c.p == null ? '—' : money(c.a - c.b), c.p == null ? '&nbsp;' : `<span class="${c.p >= 0 ? 'up' : 'down'}">${c.p >= 0 ? '+' : ''}${c.p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span> so với giá đại lý`, money(c.a - c.b, true)),
     kpi(ICO.pkg, 1, 'Lượt có giá đại lý', num(coGia.length) + ' / ' + num(rows.length), `${num(coGia.filter(r => !r.uoc).length)} theo mã · ${num(coGia.filter(r => r.uoc).length)} theo tên hàng · ${num(coGia.length - so.length)} khác đơn vị, không so`),
   ].join('');
-  const m = new Map();
-  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0, uoc: 0 });
-    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); if (r.uoc) o.uoc++; }
-  const ds = [...m.values()].sort((a, b) => b.gt - a.gt);
-  $('#tBg').innerHTML = `<thead><tr><th>Sản phẩm (bảng giá đại lý)</th><th class="n">Giá đại lý</th><th class="n">Giá trúng TB</th><th class="n">Thấp nhất – cao nhất</th><th class="n">Chênh lệch</th><th class="n">Lượt</th><th class="n">Số lượng</th></tr></thead><tbody>` +
-    (ds.length ? ds.slice(0, 30).map(o => { const tb = o.gt / o.sl, ch = (tb / o.p.gia - 1) * 100;
-      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}${o.uoc ? ` · ${o.uoc} lượt lấy theo tên hàng` : ''}</div></span></div></td>
-      <td class="n">${num(o.p.gia)}</td><td class="n"><b>${num(tb)}</b></td><td class="n">${num(o.mn)} – ${num(o.mx)}</td>
-      <td class="n"><span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span></td><td class="n">${num(o.n)}</td><td class="n">${num(o.sl)}</td></tr>`; }).join('')
-    : '<tr><td colspan="7" class="empty">Không có mặt hàng nào so được với bảng giá</td></tr>') + '</tbody>';
   const genesee = rows.some(r => r.b === 'genesee');
   $('#bgNote').textContent = 'Ưu tiên ghép theo mã sản phẩm trong bảng giá (vd ITP01003-DS50, W041-C, R0040S, TD-4279) ghi trong ký mã hiệu / tên hàng trúng thầu. Dòng không ghi mã thì lấy theo tên hàng: sản phẩm cùng hãng cùng loại xét nghiệm, nhiều quy cách thì chọn giá đại lý gần đơn giá trúng nhất (giá thấp → que, giá cao → khay). '
     + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee (CTK).' : '');
