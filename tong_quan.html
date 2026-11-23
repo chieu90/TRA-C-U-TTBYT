@@ -219,7 +219,7 @@ async function loadYear(y) {
     } catch (e) {}
   }
   ghepGia(out);
-  return CACHE[y] = { rows: out, cap };
+  return CACHE[y] = { rows: out, cap, bg: !!BG };
 }
 // ---- bảng giá đại lý kênh ETC (Quản trị → Bảng giá đại lý; chỉ quyền KQ Test xem được) ----
 // mỗi sản phẩm lấy giá của quy tắc mới nhất (ID lớn nhất), bỏ giá 0; hãng đoán từ tên / mã trong bảng giá
@@ -396,6 +396,8 @@ function veGia(rows) {
 async function render() {
   $('#status').textContent = 'Đang tải…';
   const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
+  // trang có thể vẽ (vd đổi cỡ cửa sổ) trước khi bảng giá tải xong: ghép giá lại khi đã có
+  for (const d of [cur, prv]) if (BG && d.rows && !d.bg) { ghepGia(d.rows); d.bg = true; }
   const nv = $('#nv').value, tinh = $('#tinh').value;
   // danh sách nhân viên / tỉnh theo năm đang xem
   const nvAll = agg(cur.rows, nvOf).map(o => o.k).sort((a, b) => (a === NV_NONE) - (b === NV_NONE) || a.localeCompare(b, 'vi'));
