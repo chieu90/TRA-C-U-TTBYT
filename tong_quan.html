@@ -146,6 +146,11 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
     <div class="kpis" id="bgKpi" style="margin-bottom:12px"></div>
     <p class="note" id="bgNote"></p></section>
 
+  <section class="card" id="dtCard" style="margin-bottom:14px"><h2>Dự trù số lượng theo tháng<small id="dtSub"></small></h2>
+    <div class="filters" style="margin-bottom:10px"><button type="button" class="chip" id="dtAll" aria-pressed="true">Xem tất cả mã</button><button type="button" class="chip" id="dtXlsx" aria-pressed="true">Tải Excel</button></div>
+    <div class="tbl-wrap"><table id="tDt"></table></div>
+    <p class="note" id="dtNote">Mỗi dòng trúng thầu: số lượng (quy ra test/que) chia đều cho thời gian thực hiện hợp đồng, bắt đầu từ tháng sau ngày trúng thầu; không ghi thời gian thì tính 12 tháng. Gộp theo mã sản phẩm trong bảng giá đại lý (ghép theo mã, không có mã thì theo tên hàng). Lấy kết quả năm hiện tại và năm trước (hợp đồng còn hiệu lực), theo bộ lọc nhân viên / tỉnh / thương hiệu.</p></section>
+
   <div class="row r-3">
     <section class="card"><h2>Top tỉnh / thành</h2><div class="hb" id="hTinh"></div></section>
     <section class="card"><h2>Top khách hàng (nhà thầu)</h2><div class="hb" id="hKhach"></div></section>
@@ -218,7 +223,7 @@ async function loadYear(y) {
         const b = brandOf(r0); if (!b) continue;
         const sl = +a[ix.sl] || 0, dg = +a[ix.don_gia] || 0;
         out.push({ b, ma: a[ix.ma], cdt: a[ix.cdt] || '', tinh: a[ix.tinh] || '', ngay: a[ix.ngay] || '', nhom: a[ix.nhom] || '', ten: a[ix.ten] || '',
-          sl, dg, gt: sl * dg, gtT: sl * dg, ky: a[ix.ky_ma] || '', dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
+          sl, dg, gt: sl * dg, gtT: sl * dg, ky: a[ix.ky_ma] || '', tg: a[ix.tg_hd] || '', dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
       }
     } catch (e) {}
   }
@@ -401,6 +406,53 @@ function veGia(rows) {
     + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee (CTK).' : '');
 }
 
+// ---- dự trù hàng: chia số lượng trúng thầu đều theo tháng của thời gian hợp đồng (yêu cầu 23/11/2026) ----
+const thangHd = t => { t = fold(t); const m = t.match(/(\d+)\s*thang/); if (m) return Math.max(1, +m[1]);
+  const d = t.match(/(\d+)\s*ngay/); return d ? Math.max(1, Math.round(+d[1] / 30.4)) : 12; };
+let DT_ALL = false, DT_ROWS = [], DT_COLS = [];
+async function veDuTru(ok) {
+  const now = new Date(), y0 = now.getFullYear(), m0 = now.getMonth();  // từ tháng hiện tại, 12 tháng
+  const cols = Array.from({ length: 12 }, (_, i) => { const d = new Date(y0, m0 + i, 1); return d.getFullYear() * 12 + d.getMonth(); });
+  const lab = k => `T${k % 12 + 1}/${String(Math.floor(k / 12)).slice(2)}`;
+  const nam = [y0, y0 - 1].filter(y => YEARS.includes(y));
+  const ds = (await Promise.all(nam.map(loadYear)));
+  for (const d of ds) if (BG && !d.bg) { ghepGia(d.rows); d.bg = true; }
+  const m = new Map();
+  for (const d of ds) for (const r of d.rows) {
+    if (!ok(r) || !r.ngay || !(r.slt > 0)) continue;
+    const n = thangHd(r.tg), st = (+r.ngay.slice(0, 4)) * 12 + (+r.ngay.slice(5, 7) - 1) + 1, moi = r.slt / n;
+    if (st + n - 1 < cols[0] || st > cols[11]) continue;  // hợp đồng đã hết hoặc chưa bắt đầu trong 12 tháng tới
+    const key = r.p ? 'p|' + r.p.name : 'x|' + r.b + '|' + r.nhom;
+    let o = m.get(key); if (!o) m.set(key, o = { p: r.p, b: r.b, nhom: r.nhom, q: Array(12).fill(0), hd: new Set() });
+    cols.forEach((k, i) => { if (k >= st && k < st + n) o.q[i] += moi; });
+    o.hd.add(r.ma + '|' + r.ten);
+  }
+  const rows = [...m.values()].map(o => ({ ...o, tong: o.q.reduce((a, b) => a + b, 0) })).filter(o => o.tong > 0.5).sort((a, b) => b.tong - a.tong);
+  DT_ROWS = rows; DT_COLS = cols.map(lab);
+  const tenSp = o => o.p ? (o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || o.p.ten.slice(0, 40) : '(chưa khớp mã)';
+  const moTa = o => o.p ? o.p.ten : `${B(o.b).ten} · ${o.nhom}`;
+  const show = DT_ALL ? rows : rows.slice(0, 30);
+  $('#dtSub').textContent = `${DT_COLS[0]} – ${DT_COLS[11]} · ${num(rows.length)} mã`;
+  $('#dtAll').textContent = DT_ALL ? 'Chỉ 30 mã nhiều nhất' : `Xem tất cả ${num(rows.length)} mã`;
+  const tot = Array(12).fill(0); rows.forEach(o => o.q.forEach((v, i) => tot[i] += v));
+  $('#tDt').innerHTML = `<thead><tr><th>Mã / sản phẩm</th>${DT_COLS.map(c => `<th class="n">${c}</th>`).join('')}<th class="n">12 tháng</th></tr></thead><tbody>` +
+    (show.length ? show.map(o => `<tr data-tip="<b>${esc(tenSp(o))}</b><br>${esc(moTa(o))}<br>${o.hd.size} dòng trúng thầu đang thực hiện"><td><div class="nm">${sw(o.b)}<span>${esc(tenSp(o))}<div class="sub2">${esc(moTa(o).length > 60 ? moTa(o).slice(0, 60) + '…' : moTa(o))}</div></span></div></td>${o.q.map(v => `<td class="n">${v >= 0.5 ? num(v) : '<span class="sub2">–</span>'}</td>`).join('')}<td class="n"><b>${num(o.tong)}</b></td></tr>`).join('')
+      + `<tr><td><b>Tổng${DT_ALL ? '' : ' (tất cả mã)'}</b></td>${tot.map(v => `<td class="n"><b>${num(v)}</b></td>`).join('')}<td class="n"><b>${num(tot.reduce((a, b) => a + b, 0))}</b></td></tr>`
+      : '<tr><td colspan="14" class="empty">Không có hợp đồng nào đang thực hiện trong 12 tháng tới</td></tr>') + '</tbody>';
+}
+function xuatDuTru() {
+  const tenSp = o => o.p ? (o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || '' : '';
+  const rows = [['Mã sản phẩm', 'Sản phẩm', 'Thương hiệu', 'Nhóm', ...DT_COLS, 'Tổng 12 tháng', 'Số dòng trúng thầu']]
+    .concat(DT_ROWS.map(o => [tenSp(o), o.p ? o.p.ten : '(chưa khớp mã)', B(o.b).ten, o.nhom, ...o.q.map(v => Math.round(v)), Math.round(o.tong), o.hd.size]));
+  const go = () => { const ws = XLSX.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map((_, i) => ({ wch: i === 1 ? 60 : i < 4 ? 16 : 10 }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Du tru'); XLSX.writeFile(wb, 'du-tru-hang-' + new Date().toISOString().slice(0, 10) + '.xlsx'); };
+  if (window.XLSX) return go();
+  const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = go;
+  sc.onerror = () => alert('Không tải được thư viện Excel, vui lòng thử lại.'); document.head.appendChild(sc);
+}
+$('#dtAll').addEventListener('click', () => { DT_ALL = !DT_ALL; render(); });
+$('#dtXlsx').addEventListener('click', xuatDuTru);
+
 async function render() {
   $('#status').textContent = 'Đang tải…';
   const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
@@ -474,6 +526,7 @@ async function render() {
     : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
 
   veGia(rows);
+  veDuTru(ok);
 
   const byT = agg(rows, r => r.tinh || '(không rõ tỉnh)'), byK = agg(rows, kh), byC = agg(rows, r => r.cdt);
   hbars('#hTinh', byT, 10); hbars('#hKhach', byK, 10); hbars('#hCdt', byC, 10);
