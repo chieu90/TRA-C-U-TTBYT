@@ -275,9 +275,11 @@ module.exports = async (req, res) => {
       if (!loai.length) return send(res, 403, { loi: "Tài khoản chưa được xem tab Kết quả." });
       const mine = await khachCua(), ds = [];
       let nhom_hang = [];
-      await Promise.all(loai.flatMap(([l, f]) => ["", "_2025", "_2024"].map(async y => {
+      const Y = new Date(Date.now() + 7 * 3600e3).getUTCFullYear();  // năm hiện tại giờ VN; năm cũ ở <tệp>_<năm>.json
+      await Promise.all(loai.flatMap(([l, f]) => ["", `_${Y - 1}`, `_${Y - 2}`].map(async y => {
         const d = await docKq(`/${f}${y}.json`, mine).catch(() => null);
-        if (d) { ds.push({ loai: l, nam: d.nam, cot: d.cot, rows: d.rows }); if (l === "test" && !y) nhom_hang = d.nhom || []; }
+        if (d && !ds.some(x => x.loai === l && String(x.nam) === String(d.nam))) {  // đầu năm mới tệp chính có thể vẫn là năm cũ -> bỏ trùng
+          ds.push({ loai: l, nam: d.nam, cot: d.cot, rows: d.rows }); if (l === "test" && !y) nhom_hang = d.nhom || []; }
       })));
       try {
         const out = await require("./_kq_ai").hoi({ ds, messages: b.messages, pham_vi: kqOf(me), nhom_hang });

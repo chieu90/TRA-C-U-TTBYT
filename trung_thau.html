@@ -467,18 +467,25 @@ const PG = DH
       focus: [['taidoc', 'TaiDoc'], ['acon', 'ACON'], ['roche', 'Roche']] }
   : { api: '/api/trung-thau', path: '/trung-thau', doc: 'KQ Test', title: 'Kết quả trúng thầu test nhanh', what: 'test nhanh',
       focus: [['intec', 'InTec'], ['wondfo', 'Wondfo'], ['genesee', 'Genesee']] };
-const NAM_MOI = '2026', NAM = new URLSearchParams(location.search).get('nam') || NAM_MOI;
-const CMP = location.pathname.startsWith('/so-sanh'), NAM_CU = '2025';  // so sánh năm trước với năm nay
+// năm tự theo lịch (sang năm mới tự thành so sánh năm trước – năm nay); dữ liệu năm cũ ở trung_thau_<năm>.json (co_so_y_te.py tự lưu)
+const NAM_MOI = String(new Date().getFullYear()), NAM = new URLSearchParams(location.search).get('nam') || NAM_MOI;
+const CMP = location.pathname.startsWith('/so-sanh'), NAM_CU = String(+NAM_MOI - 1);  // so sánh năm trước với năm nay
 PG.cmp = DH ? '/so-sanh-duong-huyet' : '/so-sanh';
 const FILE = y => PG.api.replace('/api/', '/').replace('-', '_') + '_' + y + '.json';
 const SRC = NAM === NAM_MOI || CMP ? PG.api : FILE(NAM);
 const ALL = !CMP && NAM === 'all';  // tất cả năm: gộp dữ liệu 2025 + 2026
+// chữ năm viết sẵn trong trang (2025 / 2026) -> năm trước / năm nay theo lịch
+(() => { const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const f = t => t.replace(/\b2026\b/g, '\u0000').replace(/\b2025\b/g, NAM_CU).replace(/\u0000/g, NAM_MOI);
+  for (let n; (n = w.nextNode());) if (/\b202[56]\b/.test(n.nodeValue) && !n.parentElement.closest('script,style')) n.nodeValue = f(n.nodeValue);
+  document.querySelectorAll('[aria-label]').forEach(e => e.setAttribute('aria-label', f(e.getAttribute('aria-label'))));
+  $('#nam').innerHTML = `<option value="all">Tất cả năm</option><option value="${NAM_MOI}">Năm ${NAM_MOI}</option><option value="${NAM_CU}">Năm ${NAM_CU}</option>`; })();
 // nút So sánh: sang trang so sánh (giữ bộ lọc đang chọn); ở trang so sánh thì là nút quay về dashboard
 if (CMP) { $('#cmpBtn').href = PG.path; $('#cmpBtn').querySelector('span').textContent = '‹ Về Dashboard ' + PG.doc; }
 $('#cmpBtn').addEventListener('click', e => { e.preventDefault(); const p = state(); p.delete('nam'); p.delete('from'); p.delete('to');
   location.href = (CMP ? PG.path : PG.cmp) + (p.toString() ? '?' + p : ''); });
 let CUT = '';  // ngày (MM-DD) mới nhất của năm nay -> mốc "cùng kỳ" cho năm trước
-document.title = CMP ? 'So sánh 2025–2026 – ' + PG.doc : PG.doc; $('#h1').textContent = CMP ? PG.title.replace('Kết quả trúng thầu', 'So sánh trúng thầu') + ' 2025–2026' : PG.title;
+document.title = CMP ? `So sánh ${NAM_CU}–${NAM_MOI} – ` + PG.doc : PG.doc; $('#h1').textContent = CMP ? PG.title.replace('Kết quả trúng thầu', 'So sánh trúng thầu') + ` ${NAM_CU}–${NAM_MOI}` : PG.title;
 PG.focus.forEach((f, i) => $('#f' + (i + 1)).textContent = f[1]);
 document.querySelectorAll('.nav a').forEach(a => { if (a.getAttribute('href') === PG.path && !CMP) a.remove(); });
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -755,7 +762,7 @@ function renderCmp() {
   const lastB = cu.findIndex(z => z.m > CUT.slice(0, 2)), cuB = lastB < 0 ? cu : cu.slice(0, lastB);
   const W = 640, H = 200, L = 52, T = 10, B = 24, tp = nice(Math.max(ca, cb, 1)), X = i => L + (W - L - 10) * (cu.length < 2 ? .5 : i / (cu.length - 1)), Y = v => T + (H - T - B) * (1 - v / tp);
   const pts = (arr, k) => arr.map((z, i) => `${X(i)},${Y(z[k])}`).join(' ');
-  $('#cum').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Giá trị cộng dồn 2025 và 2026">`
+  $('#cum').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Giá trị cộng dồn ${NAM_CU} và ${NAM_MOI}">`
     + [0, .5, 1].map(f => `<line class="gd" x1="${L}" x2="${W - 10}" y1="${Y(tp * f)}" y2="${Y(tp * f)}"/><text x="${L - 6}" y="${Y(tp * f) + 4}" text-anchor="end">${f ? show(tp * f) : '0'}</text>`).join('')
     + cu.map((z, i) => `<text x="${X(i)}" y="${H - 6}" text-anchor="middle">T${+z.m}</text>`).join('')
     + `<polyline class="ln" stroke="var(--y1)" points="${pts(cu, 'a')}"/><polyline class="ln" stroke="var(--y2)" points="${pts(cuB, 'b')}"/>`
@@ -907,9 +914,14 @@ function drawMap() {
 
 $('#nam').value = NAM;
 $('#nam').addEventListener('change', e => { location.href = PG.path + (e.target.value === NAM_MOI ? '' : '?nam=' + e.target.value); });
-(CMP ? Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.json()))).then(([a, b]) =>
+// tải năm nay + năm trước; đầu năm mới khi máy chủ chưa kịp lấy dữ liệu năm mới thì tệp chính vẫn là năm trước
+const haiNam = () => Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.ok ? r.json() : null).catch(() => null))).then(([a, b]) => {
+  if (a && String(a.nam) !== NAM_MOI) { b = String(a.nam) === NAM_CU ? a : b; a = { ...(b || a), nam: NAM_MOI, rows: [] }; }
+  b = b && b.rows ? b : { ...a, nam: NAM_CU, rows: [] };
+  return [a, b]; });
+(CMP ? haiNam().then(([a, b]) =>
     ({ ...a, cot: [...a.cot, 'y'], rows: [...a.rows.map(r => [...r, NAM_MOI]), ...b.rows.map(r => [...r, NAM_CU])] }))
-  : ALL ? Promise.all([PG.api, FILE(NAM_CU)].map(u => fetch(u).then(r => r.json()))).then(([a, b]) =>
+  : ALL ? haiNam().then(([a, b]) =>
     ({ ...a, nam: NAM_CU + '–' + NAM_MOI, nhom: [...new Set([...a.nhom, ...b.nhom])], rows: [...a.rows, ...b.rows] }))
   : fetch(SRC).then(r => r.json())).then(load).catch(() => { $('#kpis').innerHTML = '<div class="empty">Không tải được dữ liệu.</div>'; });
 let tmr;
@@ -1079,13 +1091,14 @@ if ('serviceWorker' in navigator) fetch('/sw.js', { method: 'HEAD' }).then(r => 
     }
     return out.join('');
   }
-  const GOI = ['Top 10 nhà thầu trúng nhiều nhất năm 2026', 'Hãng nào chiếm thị phần lớn nhất nhóm HIV?', 'Giá trúng thấp nhất của test Cúm A/B năm nay',
-    'So sánh giá trị trúng thầu 2025 và 2026 theo nhóm hàng', '10 gói trúng thầu mới nhất'];
+  const Y = new Date().getFullYear();
+  const GOI = [`Top 10 nhà thầu trúng nhiều nhất năm ${Y}`, 'Hãng nào chiếm thị phần lớn nhất nhóm HIV?', 'Giá trúng thấp nhất của test Cúm A/B năm nay',
+    `So sánh giá trị trúng thầu ${Y - 1} và ${Y} theo nhóm hàng`, '10 gói trúng thầu mới nhất'];
   function add(cls, html) { const d = document.createElement('div'); d.className = 'ai-m ' + cls; d.innerHTML = html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
   function render() {
     log.innerHTML = '';
     if (!hist.length) {
-      add('a', '<p>Chào anh/chị, tôi trả lời các câu hỏi về <b>kết quả trúng thầu Test và Đường huyết</b> (2024–2026): nhà thầu, hãng, cơ sở y tế, tỉnh, đơn giá, giá trị…</p>');
+      add('a', `<p>Chào anh/chị, tôi trả lời các câu hỏi về <b>kết quả trúng thầu Test và Đường huyết</b> (${Y - 2}–${Y}): nhà thầu, hãng, cơ sở y tế, tỉnh, đơn giá, giá trị…</p>`);
       const g = document.createElement('div'); g.className = 'ai-goi';
       GOI.forEach(t => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t; b.onclick = () => ask(t); g.appendChild(b); });
       log.appendChild(g);
