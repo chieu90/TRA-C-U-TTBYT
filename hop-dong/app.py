@@ -5729,10 +5729,11 @@ def kqb_do(c):
         if c.q.get("buoc") == "doc":
             return Chuyen("/ket-qua-ban", json.dumps(kq))
         t = time.time()
-        with c.db.c.cursor().copy("COPY (SELECT 1) TO STDOUT") as cp:
-            for _ in cp:
-                pass
-        kq["db_s"] = round(time.time() - t, 2)
+        c.db.execute("CREATE TEMP TABLE kqb_thu (LIKE ket_qua_ban)")
+        c.db.chep("kqb_thu", ["nguon_id", "ngay", "trang", "khach", "ma", "ten", "nhan_hieu", "dvt", "nhan_vien", "so_luong", "gia_tri"],
+                  ([0] + d for d in dong))
+        kq["ghi_s"] = round(time.time() - t, 2)
+        c.db.c.rollback()
     except Exception as x:
         kq["loi"] = repr(x)[:300]
     return Tep(json.dumps(kq).encode(), "kq.json", "application/json") if False else Chuyen("/ket-qua-ban", json.dumps(kq))
