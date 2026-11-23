@@ -12,16 +12,16 @@
 :root { --bg: #f2f6fb; --surface: #fff; --text: #13233f; --muted: #5b6b82; --faint: #8a98ad; --line: #e2e8f0; --line-2: #eef2f7;
   --brand: #0b5cad; --brand-d: #083e78; --gold: #f2b705; --gold-soft: #fff6d6; --gold-ink: #8a6100; --accent-soft: #e7f0fb;
   --up: #15803d; --down: #c2410c; --grid: #e8edf4;
-  --b1: #0b3d91; --b2: #2f7fe0; --b3: #f2b705; --b4: #8cc0f5; --b5: #b7791f;
+  --b1: #dc2626; --b2: #eab308; --b3: #1e3a8a; --b4: #f97316; --b5: #16a34a;
   --shadow: 0 1px 2px rgba(16,35,70,.05), 0 8px 24px rgba(16,35,70,.06); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0c1420; --surface: #131d2c; --text: #e6ecf4; --muted: #9aabc0; --faint: #6f819a; --line: #243247; --line-2: #1a2537;
   --brand: #4a95e6; --brand-d: #8fbff2; --gold: #f5c437; --gold-soft: #33290d; --gold-ink: #f5d27a; --accent-soft: #15304f;
   --up: #4ade80; --down: #fb923c; --grid: #223047;
-  --b1: #5b9cf0; --b2: #9cc8ff; --b3: #f5c437; --b4: #2c6bc0; --b5: #d69a3a; } }
+  --b1: #f87171; --b2: #facc15; --b3: #6b9cf5; --b4: #fb923c; --b5: #4ade80; } }
 :root[data-theme="dark"] { --bg: #0c1420; --surface: #131d2c; --text: #e6ecf4; --muted: #9aabc0; --faint: #6f819a; --line: #243247; --line-2: #1a2537;
   --brand: #4a95e6; --brand-d: #8fbff2; --gold: #f5c437; --gold-soft: #33290d; --gold-ink: #f5d27a; --accent-soft: #15304f;
-  --up: #4ade80; --down: #fb923c; --grid: #223047; --b1: #5b9cf0; --b2: #9cc8ff; --b3: #f5c437; --b4: #2c6bc0; --b5: #d69a3a; }
+  --up: #4ade80; --down: #fb923c; --grid: #223047; --b1: #f87171; --b2: #facc15; --b3: #6b9cf5; --b4: #fb923c; --b5: #4ade80; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif; font-size: 14px; }
 a { color: var(--brand); }
@@ -151,6 +151,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 <div class="tip" id="tip"></div>
 
 <script>
+// màu hãng theo yêu cầu 23/11/2026: InTec đỏ, Genesee vàng, Wondfo xanh đậm, Orient Gene cam, TaiDoc xanh lá
 // Hãng của công ty: khớp theo tên hãng chuẩn hóa (hang_chuan) hoặc hãng / nhãn hiệu ghi trong kết quả
 const BRANDS = [
   { id: 'intec', ten: 'InTec', re: /\bintec\b/, c: '--b1' },
