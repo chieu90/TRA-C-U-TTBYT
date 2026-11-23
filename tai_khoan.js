@@ -77,6 +77,10 @@
       try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
       location.replace('/dang-nhap');
     };
+    // nút Lên đầu trang + Trợ lý AI trên mọi trang (trang nào đã có thì tro-ly.js tự bỏ qua) — yêu cầu 23/11/2026
+    if (!document.getElementById('toTop') || !document.getElementById('aiBtn')) {
+      const sc = document.createElement('script'); sc.src = '/tro-ly.js'; sc.onload = () => window.TroLy && window.TroLy(u); document.body.appendChild(sc);
+    }
     box.querySelector('[data-a=mk]').onclick = async () => {
       const cu = prompt('Mật khẩu hiện tại:'); if (!cu) return;
       const moi = prompt('Mật khẩu mới (tối thiểu 8 ký tự):'); if (!moi) return;
