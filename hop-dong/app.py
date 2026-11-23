@@ -5713,9 +5713,14 @@ def kqb_do(c):
         with urllib.request.urlopen(urllib.request.Request(
                 f"https://docs.google.com/spreadsheets/d/{m.group(1) or m.group(2)}/export?format=csv&gid={g.group(1)}",
                 headers={"User-Agent": "hop-dong-app"}), timeout=40) as r:
-            kq["kieu"], dl = r.headers.get("Content-Type", ""), r.read(80_000_000)
+            kq["kieu"], kq["dau_s"] = r.headers.get("Content-Type", ""), round(time.time() - t, 2)
+            dl = r.read(80_000_000)
         kq["tai_s"], kq["byte"] = round(time.time() - t, 2), len(dl)
+        if c.q.get("buoc") == "tai":
+            return Chuyen("/ket-qua-ban", json.dumps(kq))
         t = time.time(); hang = doc_csv(dl); kq["csv_s"] = round(time.time() - t, 2)
+        if c.q.get("buoc") == "csv":
+            return Chuyen("/ket-qua-ban", json.dumps(kq))
         t = time.time(); dong, _, _ = doc_kqb([("", hang)], "x"); kq["doc_s"], kq["dong"] = round(time.time() - t, 2), len(dong)
         t = time.time()
         with c.db.c.cursor().copy("COPY (SELECT 1) TO STDOUT") as cp:
