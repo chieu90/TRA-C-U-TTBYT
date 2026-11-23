@@ -249,7 +249,7 @@ function napBangGia(d) {
   }).filter(p => p.b);
   if (!BG.length) BG = null;
 }
-// gắn giá đại lý cho từng dòng trúng thầu — CHỈ theo mã sản phẩm (yêu cầu 23/11/2026): mã đầy đủ trong ký mã hiệu / tên hàng,
+// gắn giá đại lý cho từng dòng trúng thầu — ưu tiên theo mã sản phẩm (yêu cầu 23/11/2026): mã đầy đủ trong ký mã hiệu / tên hàng,
 // hoặc mã gốc (bỏ đuôi quy cách -DS50/-TC40) khi hãng chỉ có 1 sản phẩm mang mã gốc đó, hoặc model que TD-xxxx. Không có mã thì để trống.
 function ghepGia(rows) {
   if (!BG) return;
@@ -258,7 +258,20 @@ function ghepGia(rows) {
     const t = fold(r.ky + ' ' + r.ten), c = BG.filter(p => p.b === r.b);
     const p = c.find(p => p.reFull && p.reFull.test(t)) || c.find(p => p.reBase && goc.get(p.b + '|' + p.reBase.source) === 1 && p.reBase.test(t))
       || c.find(p => p.reModel && p.que && p.reModel.test(t));
-    if (p) r.p = p;
+    if (p) { r.p = p; r.uoc = false; }
+  }
+  // dòng không ghi mã: lấy theo tên hàng (yêu cầu 23/11/2026) — sản phẩm cùng hãng cùng loại xét nghiệm (nhóm) đã khớp mã ở dòng khác;
+  // có nhiều quy cách (vd HBsAg que ITP01003-DS50 / khay ITP01003-TC40) thì chọn giá đại lý gần đơn giá trúng nhất: giá thấp -> que, giá cao -> khay
+  const loai = new Map();  // sản phẩm -> nhóm hay gặp nhất
+  { const dem = new Map(); for (const r of rows) if (r.p) { const m = dem.get(r.p) || new Map(); m.set(r.nhom, (m.get(r.nhom) || 0) + 1); dem.set(r.p, m); }
+    for (const [p, m] of dem) loai.set(p, [...m].sort((a, b) => b[1] - a[1])[0][0]); }
+  const ung = new Map();  // hãng|nhóm -> các sản phẩm
+  for (const [p, nh] of loai) { const k = p.b + '|' + nh; (ung.get(k) || ung.set(k, []).get(k)).push(p); }
+  for (const r of rows) {
+    if (r.p) continue;
+    const ds = ung.get(r.b + '|' + r.nhom); if (!ds) continue;
+    r.p = r.dg > 0 ? ds.reduce((a, p) => Math.abs(Math.log(r.dg / p.gia)) < Math.abs(Math.log(r.dg / a.gia)) ? p : a) : ds[0];
+    r.uoc = true;
   }
   // so được khi đơn vị tính là test/que/khay... và đơn giá không lệch quá 5 lần (lệch hơn thường là giá theo hộp)
   for (const r of rows) if (r.p) { const x = r.dg / r.p.gia; r.so = r.dg > 0 && !/^(hop|bo|thung|kit)$/.test(fold(r.dvt).trim()) && x >= 0.2 && x <= 5; }
@@ -377,20 +390,20 @@ function veGia(rows) {
     kpi(ICO.money, 0, 'Giá trị theo giá trúng', money(c.a), `${num(c.n)} lượt so được`, money(c.a, true)),
     kpi(ICO.money, 1, 'Cùng số lượng × giá đại lý', money(c.b), '&nbsp;', money(c.b, true)),
     kpi(ICO.list, 0, 'Chênh lệch giá trúng – giá ĐL', c.p == null ? '—' : money(c.a - c.b), c.p == null ? '&nbsp;' : `<span class="${c.p >= 0 ? 'up' : 'down'}">${c.p >= 0 ? '+' : ''}${c.p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span> so với giá đại lý`, money(c.a - c.b, true)),
-    kpi(ICO.pkg, 1, 'Lượt có giá đại lý', num(coGia.length) + ' / ' + num(rows.length), `${num(coGia.length - so.length)} lượt khác đơn vị, không so`),
+    kpi(ICO.pkg, 1, 'Lượt có giá đại lý', num(coGia.length) + ' / ' + num(rows.length), `${num(coGia.filter(r => !r.uoc).length)} theo mã · ${num(coGia.filter(r => r.uoc).length)} theo tên hàng · ${num(coGia.length - so.length)} khác đơn vị, không so`),
   ].join('');
   const m = new Map();
-  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0 });
-    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); }
+  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0, uoc: 0 });
+    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); if (r.uoc) o.uoc++; }
   const ds = [...m.values()].sort((a, b) => b.gt - a.gt);
   $('#tBg').innerHTML = `<thead><tr><th>Sản phẩm (bảng giá đại lý)</th><th class="n">Giá đại lý</th><th class="n">Giá trúng TB</th><th class="n">Thấp nhất – cao nhất</th><th class="n">Chênh lệch</th><th class="n">Lượt</th><th class="n">Số lượng</th></tr></thead><tbody>` +
     (ds.length ? ds.slice(0, 30).map(o => { const tb = o.gt / o.sl, ch = (tb / o.p.gia - 1) * 100;
-      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}</div></span></div></td>
+      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}${o.uoc ? ` · ${o.uoc} lượt lấy theo tên hàng` : ''}</div></span></div></td>
       <td class="n">${num(o.p.gia)}</td><td class="n"><b>${num(tb)}</b></td><td class="n">${num(o.mn)} – ${num(o.mx)}</td>
       <td class="n"><span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span></td><td class="n">${num(o.n)}</td><td class="n">${num(o.sl)}</td></tr>`; }).join('')
     : '<tr><td colspan="7" class="empty">Không có mặt hàng nào so được với bảng giá</td></tr>') + '</tbody>';
   const genesee = rows.some(r => r.b === 'genesee');
-  $('#bgNote').textContent = 'Chỉ ghép theo mã sản phẩm trong bảng giá (vd ITP01003-DS50, W041-C, R0040S, TD-4279) có ghi trong ký mã hiệu / tên hàng trúng thầu; dòng không ghi mã thì không so. '
+  $('#bgNote').textContent = 'Ưu tiên ghép theo mã sản phẩm trong bảng giá (vd ITP01003-DS50, W041-C, R0040S, TD-4279) ghi trong ký mã hiệu / tên hàng trúng thầu. Dòng không ghi mã thì lấy theo tên hàng: sản phẩm cùng hãng cùng loại xét nghiệm, nhiều quy cách thì chọn giá đại lý gần đơn giá trúng nhất (giá thấp → que, giá cao → khay). '
     + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee (CTK).' : '');
 }
 
