@@ -136,3 +136,10 @@ document.addEventListener("DOMContentLoaded", function () {
       "Không nhận ra thông tin nào. Hãy viết theo dạng \"Mã số thuế: …\" mỗi dòng.";
   });
 })();
+
+// ô "chọn hết" ở đầu bảng: tích / bỏ tích mọi ô chọn trong cùng bảng
+document.querySelectorAll("[data-chon-het]").forEach((o) => {
+  o.addEventListener("change", () => {
+    o.closest("table").querySelectorAll("tbody input[type=checkbox]").forEach((x) => { x.checked = o.checked; });
+  });
+});

@@ -22,6 +22,7 @@ function doPost(e) {
     else if (rq.viec === 'lay_mau') kq = layMau_(rq.url);
     else if (rq.viec === 'tao_doc') kq = taoDoc_(rq);
     else if (rq.viec === 'tao_sheet') kq = taoSheet_(rq);
+    else if (rq.viec === 'liet_ke') kq = lietKe_(rq);
     else throw new Error('Yêu cầu không hợp lệ.');
   } catch (err) {
     kq = { ok: false, loi: String((err && err.message) || err) };
@@ -97,4 +98,44 @@ function taoTep_(rq, noiDungB64, loaiDich, loaiNguon, tienTo, tenLoai) {
 function layThuMuc_(ten) {
   const it = DriveApp.getRootFolder().getFoldersByName(ten);
   return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(ten);
+}
+
+/** Liệt kê file trong một thư mục Drive (kể cả thư mục con, tối đa 4 tầng, 800 file) để app nhập tài liệu hàng hóa. */
+function lietKe_(rq) {
+  const url = String(rq.url || '');
+  const m = url.match(/\/folders\/([\w-]{20,})/) || url.match(/\/d\/([\w-]{20,})/) || url.match(/[?&]id=([\w-]{20,})/);
+  if (!m) throw new Error('Link không phải link thư mục / file Google Drive.');
+  const ds = [];
+  let ten;
+  try {
+    const goc = DriveApp.getFolderById(m[1]);
+    ten = goc.getName();
+    duyetThuMuc_(goc, [], ds, 0, rq.mo_quyen);
+  } catch (err) {
+    if (ds.length) throw err;
+    const f = DriveApp.getFileById(m[1]);                     // link một file lẻ
+    ten = f.getName();
+    themTep_(f, [], ds, rq.mo_quyen);
+  }
+  return { ok: true, ten: ten, tep: ds };
+}
+
+function duyetThuMuc_(tm, duong, ds, sau, moQuyen) {
+  const it = tm.getFiles();
+  while (it.hasNext() && ds.length < 800) themTep_(it.next(), duong, ds, moQuyen);
+  if (sau >= 4) return;
+  const con = tm.getFolders();
+  while (con.hasNext() && ds.length < 800) {
+    const s = con.next();
+    duyetThuMuc_(s, duong.concat([s.getName()]), ds, sau + 1, moQuyen);
+  }
+}
+
+function themTep_(f, duong, ds, moQuyen) {
+  if (f.getMimeType() === 'application/vnd.google-apps.shortcut') return;
+  if (moQuyen) {
+    try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* file của người khác */ }
+  }
+  ds.push({ id: f.getId(), ten: f.getName(), loai: f.getMimeType(), co: f.getSize(), url: f.getUrl(),
+            thu_muc: duong.join(' / '), sua: f.getLastUpdated().toISOString() });
 }

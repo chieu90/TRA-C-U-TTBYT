@@ -4931,6 +4931,7 @@ UNG_DUNG += [
     ("tai-lieu", "Tài liệu", "tai_lieu", [
         ("/tai-lieu", "Tài liệu hàng hóa", "tld", "tai_lieu", False),
         ("/tai-lieu/moi", "Thêm tài liệu", "tlm", "soan", False),
+        ("/tai-lieu/nhap-drive", "Nhập từ Google Drive", "tlr", "nhap", False),
         ("/tai-lieu/ho-so", "Bộ hồ sơ dự thầu", "tlh", "ho_so", False)]),
 ]
 
@@ -5093,11 +5094,11 @@ def ds_tai_lieu(c):
     elif tong:
         bang = '<div class="the trong">Không có tài liệu nào khớp.</div>'
     else:
-        bang = ('<div class="the trong">Chưa có tài liệu. Bấm <b>Thêm tài liệu</b> để tải lên TSKT, số lưu hành, thư ủy quyền, '
+        bang = ('<div class="the trong">Chưa có tài liệu. Bấm <b>Nhập từ Google Drive</b> để lấy cả thư mục, hoặc <b>Thêm tài liệu</b> để tải lên TSKT, số lưu hành, thư ủy quyền, '
                 'ISO… của từng mã hàng. Tài liệu dùng chung cho cả hãng (ISO, ủy quyền) thì để trống ô ký mã hiệu.</div>')
     return trang(c, "Tài liệu hàng hóa", f"""
       <div class="dau-trang"><h1>Tài liệu hàng hóa <span class="dem">{len(ds)}</span></h1>
-        <div><a class="nut" href="/tai-lieu/moi">Thêm tài liệu</a> <a class="nut phu" href="/tai-lieu/ho-so">Bộ hồ sơ dự thầu</a></div></div>
+        <div><a class="nut" href="/tai-lieu/moi">Thêm tài liệu</a> <a class="nut phu" href="/tai-lieu/nhap-drive">Nhập từ Google Drive</a> <a class="nut phu" href="/tai-lieu/ho-so">Bộ hồ sơ dự thầu</a></div></div>
       {canh}
       <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Tên tài liệu, ký mã hiệu, số giấy…">
         {chon("loai", LOAI_TL, loai, "Mọi loại")}{chon("nh", [(x, x) for x in cac_nh], nh, "Mọi nhãn hiệu")}
@@ -5243,6 +5244,158 @@ def tl_ho_so(c):
       {than}""", "tlh")
 
 
+# nhập tài liệu từ link thư mục Google Drive (qua Apps Script của người dùng, đọc được cả thư mục không chia sẻ)
+LOAI_THEO_TU = [            # (loại, các cụm chữ trong tên file / thư mục, đã bỏ dấu)
+    ("uq", ("uy quyen", "uq ", "uq-", "uq_", "authoriz", "maf", "letter of auth")),
+    ("iso", ("iso",)),
+    ("ce", ("cfs", "cfg", "free sale", "fda", " ce ", "ce-", "ce_", "ce mark", "ec cert", "ivdr", "doc ce", "declaration of conf")),
+    ("lh", ("luu hanh", "phan loai", "cong bo", "so dang ky", "sdk", "gpnk", "giay phep")),
+    ("coq", ("co cq", "co-cq", "c/o", "cq ", "certificate of origin", "certificate of quality")),
+    ("ifu", ("ifu", "huong dan su dung", "hdsd", "instruction", "package insert")),
+    ("cat", ("catalog", "brochure", "to roi", "leaflet")),
+    ("nc", ("bao cao", "report", "nghien cuu", "study", "evaluation", "danh gia", "clinical")),
+    ("tskt", ("tskt", "thong so", "spec", "technical", "full")),
+]
+
+
+def doan_loai_tl(chu):
+    g = " " + gap(chu).replace("_", " ") + " "
+    for loai, tu in LOAI_THEO_TU:
+        if any(t in g for t in tu):
+            return loai
+    return ""
+
+
+def bo_ma_biet(c):
+    """Các ký mã hiệu đã có trong danh mục / TSKT: {mã gọn: (mã gốc, nhãn hiệu)} — mã dài xét trước."""
+    ds = {}
+    for bang in ("hang_hoa", "thong_so"):
+        for r in c.db.execute(f"SELECT ma, nhan_hieu FROM {bang} WHERE ma <> ''").fetchall():
+            k = gap(r["ma"]).replace(" ", "")
+            if len(k) >= 4 and (k not in ds or not ds[k][1]):
+                ds[k] = (r["ma"].strip(), r["nhan_hieu"] or "")
+    return dict(sorted(ds.items(), key=lambda kv: -len(kv[0])))
+
+
+def doan_tl(ten_tep, thu_muc, ma_biet, cac_hang):
+    """Đoán loại, ký mã hiệu, nhãn hiệu từ tên file và đường dẫn thư mục."""
+    ten_goc = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", ten_tep)
+    gon_ten = gap(ten_goc).replace(" ", "")
+    ma, nh, con = [], "", gon_ten
+    for k, (m, h) in ma_biet.items():
+        if k in con:
+            ma.append(m)
+            nh = nh or h
+            con = con.replace(k, " ")
+    duong = gap(thu_muc)
+    if not nh:
+        for h in cac_hang:
+            gh = gap(h)
+            if gh and (gh in duong or gh in gap(ten_goc) or gh.split()[0] in duong.split()):
+                nh = h
+                break
+    if not nh and thu_muc:
+        nh = re.sub(r"\s*-\s*có dấu$", "", thu_muc.split(" / ")[0], flags=re.I).strip()
+    loai = doan_loai_tl(ten_goc) or doan_loai_tl(thu_muc.split(" / ")[-1] if thu_muc else "") or ("tskt" if ma else "khac")
+    if loai in ("uq", "iso", "ce") and not ma:
+        ma = []                                         # tài liệu chung của hãng
+    return {"ten": ten_goc.strip()[:300], "loai": loai, "ma": ", ".join(ma), "nhan_hieu": nh[:200]}
+
+
+def tl_nhap_drive(c):
+    buoc = c.form.get("buoc", "") if c.method == "POST" else ""
+    if buoc == "luu":
+        try:
+            n = min(int(c.form.get("n") or 0), 800)
+        except ValueError:
+            n = 0
+        bay_gio, them = datetime.now().isoformat(timespec="seconds"), 0
+        co_san = {r["link"] for r in c.db.execute("SELECT link FROM tai_lieu WHERE link <> ''").fetchall()}
+        for i in range(n):
+            if c.form.get(f"chon_{i}") != "1":
+                continue
+            link = (c.form.get(f"url_{i}") or "").strip()[:1000]
+            loai = c.form.get(f"loai_{i}", "khac")
+            if not re.match(r"^https://(drive|docs)\.google\.com/", link) or link in co_san:
+                continue
+            c.db.execute(f"INSERT INTO tai_lieu ({', '.join(COT_TL)}, nguoi_id, cap_nhat) VALUES ({', '.join('?' * (len(COT_TL) + 2))})",
+                         [loai if loai in TEN_LOAI_TL else "khac", (c.form.get(f"ten_{i}") or "Tài liệu").strip()[:300],
+                          ", ".join(m.strip() for m in re.split(r"[,;]+", c.form.get(f"ma_{i}") or "") if m.strip())[:3000],
+                          (c.form.get(f"nh_{i}") or "").strip()[:200], "", "", c.ngay(f"hh_{i}", "Hết hạn"), link,
+                          f"Nhập từ Drive: {(c.form.get(f'tm_{i}') or '').strip()}"[:2000], c.user["id"], bay_gio])
+            co_san.add(link)
+            them += 1
+        c.db.commit()
+        return Chuyen("/tai-lieu", f"Đã nhập {them} tài liệu từ Google Drive.")
+    xem = ""
+    url = (c.form.get("url") or "").strip()[:1000] if buoc == "xem" else ""
+    if buoc == "xem":
+        if not re.match(r"^https://(drive|docs)\.google\.com/", url):
+            raise Loi(400, "Hãy dán link thư mục Google Drive (https://drive.google.com/drive/folders/…).")
+        try:
+            kq = goi_google(c, "liet_ke", url=url, mo_quyen=c.form.get("mo_quyen") == "1")
+        except Loi as loi:
+            if "Yêu cầu không hợp lệ" in loi.tb:
+                raise Loi(400, "Đoạn mã Apps Script đang chạy là bản cũ, chưa có chức năng đọc thư mục. Quản lý vào "
+                               "Hợp đồng → Mẫu hợp đồng, chép lại đoạn mã mới, dán đè vào Apps Script, bấm Lưu, rồi "
+                               "Triển khai → Quản lý các lần triển khai → bút chì → Phiên bản: Phiên bản mới → Triển khai. "
+                               "Link /exec giữ nguyên.")
+            raise
+        tep = [t for t in kq.get("tep") or [] if t.get("url")]
+        if not tep:
+            raise Loi(400, f"Thư mục “{kq.get('ten', '')}” không có file nào.")
+        ma_biet = bo_ma_biet(c)
+        cac_hang = sorted({r["v"] for bang in ("thong_so", "hang_hoa", "tai_lieu") for r in c.db.execute(
+            f"SELECT DISTINCT nhan_hieu AS v FROM {bang} WHERE nhan_hieu <> ''").fetchall()}, key=lambda h: -len(h))
+        co_san = {r["link"] for r in c.db.execute("SELECT link FROM tai_lieu WHERE link <> ''").fetchall()}
+        id_co_san = {m.group(1) for l in co_san for m in [re.search(r"/d/([\w-]{20,})", l)] if m}
+        dong = ""
+        tep.sort(key=lambda t: (gap(t.get("thu_muc", "")), gap(t["ten"])))
+        moi = 0
+        for i, t in enumerate(tep):
+            d = doan_tl(t["ten"], t.get("thu_muc", ""), ma_biet, cac_hang)
+            da_co = t["url"] in co_san or t.get("id") in id_co_san
+            moi += not da_co
+            dong += (f'<tr{" class=mo" if da_co else ""}><td><input type="checkbox" name="chon_{i}" value="1"{"" if da_co else " checked"} '
+                     f'aria-label="Chọn"></td>'
+                     f'<td><input name="ten_{i}" value="{e(d["ten"])}" aria-label="Tên tài liệu">'
+                     f'<br><small class="mo">{e(t.get("thu_muc") or "(thư mục gốc)")}'
+                     f'{" · <b>đã có trong app</b>" if da_co else ""} · <a href="{e(t["url"])}" target="_blank" rel="noopener noreferrer">mở</a></small>'
+                     f'<input type="hidden" name="url_{i}" value="{e(t["url"])}"><input type="hidden" name="tm_{i}" value="{e(t.get("thu_muc", ""))}"></td>'
+                     f'<td>{chon(f"loai_{i}", LOAI_TL, d["loai"])}</td>'
+                     f'<td><input name="ma_{i}" value="{e(d["ma"])}" placeholder="Cả hãng" aria-label="Ký mã hiệu"></td>'
+                     f'<td><input name="nh_{i}" value="{e(d["nhan_hieu"])}" list="ds-nhan-hieu" aria-label="Nhãn hiệu"></td>'
+                     f'<td><input type="date" name="hh_{i}" aria-label="Hết hạn"></td></tr>')
+        xem = f"""
+      <form method="post" class="the">{an_csrf(c)}<input type="hidden" name="buoc" value="luu"><input type="hidden" name="n" value="{len(tep)}">
+        <div class="dau-trang"><h2>Thư mục “{e(kq.get("ten", ""))}”: {len(tep)} file, {moi} file mới</h2>
+          <button class="nut">Nhập các file đã chọn</button></div>
+        <p class="mo">App đã đoán loại, ký mã hiệu và hãng theo tên file và tên thư mục. Sửa lại ô nào sai trước khi nhập.
+          Ô ký mã hiệu để trống = tài liệu dùng chung cho cả hãng (ISO, ủy quyền…). File đã có trong app thì bỏ tích sẵn.</p>
+        <div class="cuon"><table class="bang-nhap"><thead><tr><th><input type="checkbox" data-chon-het aria-label="Chọn hết"></th>
+          <th>Tên tài liệu</th><th>Loại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Hết hạn</th></tr></thead>
+          <tbody>{dong}</tbody></table></div>
+        <div class="hang-nut"><button class="nut">Nhập các file đã chọn</button></div>{goi_y_nhan_hieu(c)}</form>"""
+    ket_noi = da_ket_noi(c)
+    chua = "" if ket_noi else (
+        '<p class="thong-bao loi">App chưa kết nối Google Drive. ' +
+        ('Vào <a href="/mau-hop-dong">Mẫu hợp đồng</a> để kết nối (làm một lần).' if c.ql else 'Nhờ quản lý kết nối ở mục Mẫu hợp đồng.') + '</p>')
+    return trang(c, "Nhập tài liệu từ Google Drive", f"""
+      <h1>Nhập tài liệu từ Google Drive</h1>
+      <p class="mo">Dán link thư mục Drive (ví dụ thư mục hồ sơ CTK, WONDFO…). App đọc tên mọi file, kể cả trong thư mục con, đoán
+        loại tài liệu và ký mã hiệu, rồi lưu dạng link. File vẫn nằm trên Drive nên không tốn chỗ database của app.</p>
+      {chua}
+      <form method="post" class="the luoi-1">{an_csrf(c)}<input type="hidden" name="buoc" value="xem">
+        <label>Link thư mục Google Drive<input type="url" name="url" value="{e(url)}" required
+          placeholder="https://drive.google.com/drive/folders/…"></label>
+        <label class="o-tich"><input type="checkbox" name="mo_quyen" value="1"{" checked" if c.form.get("mo_quyen") == "1" else ""}>
+          Mở quyền “Ai có link đều xem được” cho các file này (để nhân viên không cần xin quyền khi bấm mở)</label>
+        <div class="hang-nut"><button class="nut"{"" if ket_noi else " disabled"}>Đọc thư mục</button>
+          <a href="/tai-lieu">Hủy</a></div></form>
+      {xem}""", "tlr")
+
+
+
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
@@ -5298,6 +5451,7 @@ TUYEN = [
     ("GET", r"/tai-lieu", ds_tai_lieu, "nd"),
     ("GET|POST", r"/tai-lieu/moi", tl_moi, "nd"),
     ("GET|POST", r"/tai-lieu/ho-so", tl_ho_so, "nd"),
+    ("GET|POST", r"/tai-lieu/nhap-drive", tl_nhap_drive, "nd"),
     ("GET|POST", r"/tai-lieu/(\d+)", tl_xem, "nd"),
     ("GET", r"/tai-lieu/(\d+)/tai", tl_tai, "nd"),
     ("POST", r"/tai-lieu/(\d+)/xoa", tl_xoa, "ql"),
