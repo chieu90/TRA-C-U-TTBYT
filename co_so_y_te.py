@@ -401,6 +401,14 @@ def build_year(year):
 BS_PATH = os.path.join(g.HERE, "data", "kq_bo_sung.json")
 
 
+def lien_danh():
+    """{mã TBMT: tên nhà thầu được tính} cho gói liên danh (người dùng chốt thành viên là khách của công ty)."""
+    try:
+        return json.load(open(os.path.join(g.HERE, "data", "kq_lien_danh.json"), encoding="utf-8")).get("chi_tinh", {})
+    except (OSError, ValueError):
+        return {}
+
+
 def bo_sung(year):
     """Các gói trúng thầu nhập tay (chủ đầu tư chỉ đăng danh sách hàng dạng PDF) của một năm."""
     try:
@@ -447,6 +455,11 @@ def build(paths=(TT_PATH, DH_PATH)):
         co = {r[0] for r in rows}
         for b in bo_sung(YEAR):
             rows += [list(r) for r in b.get("trung_thau" if path == paths[0] else "duong_huyet", []) if r[0] not in co]
+        # gói liên danh: chỉ tính cho thành viên là khách của công ty (data/kq_lien_danh.json)
+        ld = lien_danh()
+        for r in rows:
+            if r[0] in ld:
+                r[13] = ld[r[0]]
         rows.sort(key=lambda r: r[3], reverse=True)
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
