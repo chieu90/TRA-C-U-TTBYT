@@ -58,6 +58,7 @@ main { max-width: 1040px; margin: 0 auto; padding: 28px 20px 48px; }
 <script>
 // Icon tự vẽ: hình phẳng nhiều màu chồng lên nhau (viewBox 64x64)
 const I = {
+  'tong-quan': `<rect x="6" y="8" width="52" height="48" rx="7" fill="#0b5cad"/><rect x="14" y="34" width="7" height="14" rx="2" fill="#8cc0f5"/><rect x="25" y="26" width="7" height="22" rx="2" fill="#fff"/><rect x="36" y="30" width="7" height="18" rx="2" fill="#8cc0f5"/><path d="M14 24l11-7 10 5 13-8" stroke="#f2b705" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="48" cy="14" r="4" fill="#f2b705"/>`,
   'goi-thau': `<rect x="14" y="8" width="32" height="42" rx="4" fill="#8b5cf6"/><path d="M22 14h22l8 8v34a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" fill="#f97316"/><path d="M44 14v8h8z" fill="#fdba74"/><rect x="25" y="32" width="20" height="4" rx="2" fill="#fff"/><rect x="25" y="41" width="14" height="4" rx="2" fill="#fff"/>`,
   'bao-gia': `<path d="M8 30V12a4 4 0 0 1 4-4h18l26 26-22 22z" fill="#14b8a6"/><circle cx="20" cy="20" r="5" fill="#fff"/><circle cx="44" cy="44" r="13" fill="#fbbf24" fill-opacity=".92"/><path d="M44 37v14M40 40.5c0-1.6 1.8-2.5 4-2.5s4 .9 4 2.5-1.8 2.3-4 2.7-4 1.1-4 2.8 1.8 2.5 4 2.5 4-.9 4-2.5" stroke="#92400e" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
   'co-so-y-te': `<path d="M10 56V22l22-12 22 12v34z" fill="#0e7490"/><rect x="18" y="30" width="28" height="26" fill="#22d3ee" fill-opacity=".85"/><path d="M28 18h8v6h6v8h-6v6h-8v-6h-6v-8h6z" fill="#f43f5e"/><rect x="27" y="44" width="10" height="12" fill="#0e7490"/>`,
@@ -70,6 +71,7 @@ const I = {
   'hop-dong': `<path d="M14 8h26l10 10v38H14z" fill="#14b8a6"/><path d="M40 8v10h10z" fill="#99f6e4"/><rect x="20" y="24" width="20" height="3.5" rx="1.7" fill="#fff"/><rect x="20" y="32" width="14" height="3.5" rx="1.7" fill="#fff"/><path d="M26 50c4-8 6 2 10-4s6 1 10-2" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="48" cy="46" r="8" fill="#f43f5e" fill-opacity=".9"/>`,
 };
 const APPS = [
+  { id: 'tong-quan', tab: 'trung-thau', ten: 'Tổng quan sản phẩm', href: '/tong-quan' },
   { id: 'goi-thau', ten: 'Gói thầu', href: '/goi-thau' },
   { id: 'bao-gia', ten: 'Báo giá', href: '/bao-gia' },
   { id: 'co-so-y-te', ten: 'Cơ sở y tế', href: '/co-so-y-te' },
@@ -88,7 +90,7 @@ const $ = s => document.querySelector(s);
 $('#today').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 function draw(u, cho) {
   const tabs = u ? u.tabs : APPS.map(a => a.id), ql = !u || u.vai_tro === 'admin' || u.vai_tro === 'quan_ly';
-  const ds = APPS.filter(a => a.admin ? u && u.vai_tro === 'admin' : a.ql ? ql : a.luon || tabs.includes(a.id));
+  const ds = APPS.filter(a => a.admin ? u && u.vai_tro === 'admin' : a.ql ? ql : a.luon || tabs.includes(a.tab || a.id));
   $('#apps').innerHTML = ds.map(a => tile(a, a.id === 'quan-tri' ? cho : 0)).join('');
 }
 draw(null, 0);

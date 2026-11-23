@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tổng quan sản phẩm – Muasamcong ADC</title>
+<meta name="theme-color" content="#0b5cad">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #f2f6fb; --surface: #fff; --text: #13233f; --muted: #5b6b82; --faint: #8a98ad; --line: #e2e8f0; --line-2: #eef2f7;
+  --brand: #0b5cad; --brand-d: #083e78; --gold: #f2b705; --gold-soft: #fff6d6; --gold-ink: #8a6100; --accent-soft: #e7f0fb;
+  --up: #15803d; --down: #c2410c; --grid: #e8edf4;
+  --b1: #0b3d91; --b2: #2f7fe0; --b3: #f2b705; --b4: #8cc0f5; --b5: #b7791f;
+  --shadow: 0 1px 2px rgba(16,35,70,.05), 0 8px 24px rgba(16,35,70,.06); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c1420; --surface: #131d2c; --text: #e6ecf4; --muted: #9aabc0; --faint: #6f819a; --line: #243247; --line-2: #1a2537;
+  --brand: #4a95e6; --brand-d: #8fbff2; --gold: #f5c437; --gold-soft: #33290d; --gold-ink: #f5d27a; --accent-soft: #15304f;
+  --up: #4ade80; --down: #fb923c; --grid: #223047;
+  --b1: #5b9cf0; --b2: #9cc8ff; --b3: #f5c437; --b4: #2c6bc0; --b5: #d69a3a; } }
+:root[data-theme="dark"] { --bg: #0c1420; --surface: #131d2c; --text: #e6ecf4; --muted: #9aabc0; --faint: #6f819a; --line: #243247; --line-2: #1a2537;
+  --brand: #4a95e6; --brand-d: #8fbff2; --gold: #f5c437; --gold-soft: #33290d; --gold-ink: #f5d27a; --accent-soft: #15304f;
+  --up: #4ade80; --down: #fb923c; --grid: #223047; --b1: #5b9cf0; --b2: #9cc8ff; --b3: #f5c437; --b4: #2c6bc0; --b5: #d69a3a; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif; font-size: 14px; }
+a { color: var(--brand); }
+.hero { background: linear-gradient(120deg, #0b5cad 0%, #083e78 55%, #0b5cad 100%); color: #fff; padding: 22px 16px 78px; position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(242,183,5,.45), rgba(242,183,5,0) 70%); }
+.hero-in { max-width: 1240px; margin: 0 auto; position: relative; z-index: 1; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.nav a { color: #fff; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500; background: rgba(255,255,255,.14); }
+.hero h1 { margin: 18px 0 0; font-size: 24px; letter-spacing: -.01em; }
+.hero h1 span { color: var(--gold); }
+.hero .sub { margin: 6px 0 0; opacity: .88; font-size: 13.5px; }
+.brands { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.brands span { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
+.wrap { max-width: 1240px; margin: -56px auto 40px; padding: 0 16px; position: relative; z-index: 2; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; min-width: 0; }
+.card h2 { margin: 0 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-d); display: flex; align-items: center; gap: 8px; }
+.card h2::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: var(--gold); }
+.card h2 small { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--faint); font-size: 12px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.filters select { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); min-width: 130px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.chip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.chip[aria-pressed="false"] { opacity: .45; }
+.status { font-size: 12.5px; color: var(--muted); margin-left: auto; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.kpi { display: flex; gap: 12px; align-items: flex-start; }
+.kpi .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--brand); }
+.kpi .ic.g { background: var(--gold-soft); color: var(--gold-ink); }
+.kpi .ic svg { width: 22px; height: 22px; }
+.kpi .l { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.kpi .v { font-size: 22px; font-weight: 700; margin-top: 2px; letter-spacing: -.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kpi .d { font-size: 12px; margin-top: 2px; color: var(--faint); }
+.up { color: var(--up); font-weight: 600; } .down { color: var(--down); font-weight: 600; }
+.row { display: grid; gap: 14px; margin-bottom: 14px; }
+.r-2-1 { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); }
+.r-1-1 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.r-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+svg text { font-family: inherit; }
+.chart { width: 100%; height: 260px; display: block; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.donut-wrap { display: flex; align-items: center; gap: 16px; }
+.donut-wrap svg { width: 180px; height: 180px; flex: none; }
+.dl { flex: 1; display: grid; gap: 8px; font-size: 13px; }
+.dl div { display: flex; align-items: center; gap: 8px; }
+.dl i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.dl b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.dl small { color: var(--faint); width: 74px; text-align: right; font-variant-numeric: tabular-nums; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 10px; background: var(--line-2); white-space: nowrap; }
+th:first-child { border-radius: 8px 0 0 8px; } th:last-child { border-radius: 0 8px 8px 0; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nm { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.nm i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.sub2 { font-size: 12px; color: var(--faint); font-weight: 400; }
+.bar { height: 6px; border-radius: 3px; background: var(--line-2); margin-top: 5px; overflow: hidden; }
+.bar > b { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
+.hb { display: grid; gap: 9px; }
+.hb .it { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 13px; cursor: default; }
+.hb .it span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb .it b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.hb .it .bar { grid-column: 1 / -1; margin-top: 0; }
+.insights { background: linear-gradient(120deg, var(--gold-soft), var(--surface) 70%); }
+.ins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 0; padding: 0; list-style: none; }
+.ins li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
+.ins li::before { content: "✓"; flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 12px; display: grid; place-items: center; margin-top: 1px; }
+.empty { padding: 30px; text-align: center; color: var(--muted); }
+.tip { position: fixed; pointer-events: none; z-index: 60; background: #13233f; color: #fff; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.2); display: none; line-height: 1.5; max-width: 280px; }
+.tip b { font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .r-3 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 820px) { .r-2-1, .r-1-1, .r-3 { grid-template-columns: 1fr; } .ins { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi .v { font-size: 19px; } .kpi .ic { display: none; }
+  .donut-wrap { flex-direction: column; } .hero h1 { font-size: 20px; } .filters select { min-width: 0; width: 100%; } .filters label { flex: 1 1 45%; } }
+</style>
+</head>
+<body>
+<header class="hero"><div class="hero-in"><div class="top">
+  <nav class="nav"><a href="/trang-chu">Trang chủ</a></nav>
+</div>
+  <h1>Tổng quan <span>sản phẩm của công ty</span></h1>
+  <p class="sub" id="sub">Kết quả trúng thầu các hãng công ty phân phối trên muasamcong.mof.gov.vn</p>
+  <div class="brands" id="brandTags"></div>
+</div></header>
+
+<main class="wrap">
+  <section class="card" style="margin-bottom:14px">
+    <div class="filters">
+      <label>Năm<select id="nam"></select></label>
+      <label>Nhân viên<select id="nv"><option value="">Tất cả</option></select></label>
+      <label>Tỉnh/TP<select id="tinh"><option value="">Tất cả</option></select></label>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--muted);font-weight:600">Thương hiệu</span><div class="chips" id="chips"></div></div>
+      <span class="status" id="status">Đang tải…</span>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="row r-2-1">
+    <section class="card"><h2>Giá trị trúng thầu theo tháng<small id="lineSub"></small></h2><svg class="chart" id="line" role="img" aria-label="Giá trị trúng thầu theo tháng"></svg><div class="legend" id="lineLg"></div></section>
+    <section class="card"><h2>Tỷ trọng theo thương hiệu</h2><div class="donut-wrap"><svg id="donut" viewBox="0 0 180 180" role="img" aria-label="Tỷ trọng theo thương hiệu"></svg><div class="dl" id="donutLg"></div></div></section>
+  </div>
+
+  <section class="card" style="margin-bottom:14px"><h2>Hiệu quả theo thương hiệu<small id="cmpNote"></small></h2><div class="tbl-wrap"><table id="tBrand"></table></div></section>
+
+  <div class="row r-1-1">
+    <section class="card"><h2>Theo nhân viên<small>khách (nhà thầu) do nhân viên phụ trách</small></h2><div class="tbl-wrap"><table id="tNv"></table></div><p class="note" id="nvNote"></p></section>
+    <section class="card"><h2>Sản phẩm trúng nhiều nhất<small>theo giá trị</small></h2><div class="tbl-wrap"><table id="tSp"></table></div></section>
+  </div>
+
+  <div class="row r-3">
+    <section class="card"><h2>Top tỉnh / thành</h2><div class="hb" id="hTinh"></div></section>
+    <section class="card"><h2>Top khách hàng (nhà thầu)</h2><div class="hb" id="hKhach"></div></section>
+    <section class="card"><h2>Top cơ sở y tế</h2><div class="hb" id="hCdt"></div></section>
+  </div>
+
+  <section class="card insights"><h2>Nhận xét nhanh</h2><ul class="ins" id="ins"></ul>
+    <p class="note">Giá trị = số lượng × đơn giá trúng thầu của từng mặt hàng. "Cùng kỳ" so với cùng khoảng ngày của năm trước. Nhân viên được gán theo danh sách "Khách hàng theo nhân viên" ở Quản trị.</p></section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+// Hãng của công ty: khớp theo tên hãng chuẩn hóa (hang_chuan) hoặc hãng / nhãn hiệu ghi trong kết quả
+const BRANDS = [
+  { id: 'intec', ten: 'InTec', re: /\bintec\b/, c: '--b1' },
+  { id: 'genesee', ten: 'Genesee', re: /genesee/, c: '--b2' },
+  { id: 'wondfo', ten: 'Wondfo', re: /wondfo/, c: '--b3' },
+  { id: 'orient', ten: 'Orient Gene', re: /orient ?gene|zhejiang orient|^orient$/, c: '--b4' },
+  { id: 'taidoc', ten: 'TaiDoc', re: /taidoc|\bfora\b/, c: '--b5' },
+];
+const NV_NONE = 'Chưa gán nhân viên';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fold = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+const kfold = s => fold(s).replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|thuong mai|va|dich vu|xuat nhap khau|tm|dv|xnk|chi nhanh)\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const num = n => Math.round(n || 0).toLocaleString('vi-VN');
+function money(v, full) {
+  v = v || 0;
+  if (full) return num(v) + ' đ';
+  if (Math.abs(v) >= 1e9) return (v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + ' tỷ';
+  if (Math.abs(v) >= 1e6) return (v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' tr';
+  return num(v) + ' đ';
+}
+const pct = (a, b) => b ? (a - b) / b * 100 : null;
+const delta = (a, b) => { const p = pct(a, b); if (p == null) return '<span class="sub2">—</span>';
+  return `<span class="${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span>`; };
+
+// ---- dữ liệu ----
+const FILES = { 2026: ['/api/trung-thau', '/api/duong-huyet'] };
+const fileOf = y => FILES[y] || [`/trung_thau_${y}.json`, `/duong_huyet_${y}.json`];
+const YEARS = [2026, 2025, 2024];
+const CACHE = {};
+let KHNV = null, NAM = 2026, PICK = new Set(BRANDS.map(b => b.id));
+
+function brandOf(r) {
+  const a = fold(r.hang_chuan);
+  for (const b of BRANDS) if (a && b.re.test(a)) return b.id;
+  if (a) return null;
+  const t = fold((r.hang || '') + ' ' + (r.nhan || ''));
+  for (const b of BRANDS) if (b.re.test(t)) return b.id;
+  return null;
+}
+async function loadYear(y) {
+  if (CACHE[y]) return CACHE[y];
+  const out = [];
+  let cap = '';
+  for (const u of fileOf(y)) {
+    try {
+      const r = await fetch(u); if (!r.ok) continue;
+      const d = await r.json(); if (!d || !Array.isArray(d.rows)) continue;
+      if (!cap || d.cap_nhat > cap) cap = d.cap_nhat;
+      const ix = Object.fromEntries(d.cot.map((c, i) => [c, i]));
+      for (const a of d.rows) {
+        const r0 = { hang_chuan: a[ix.hang_chuan], hang: a[ix.hang], nhan: a[ix.nhan] };
+        const b = brandOf(r0); if (!b) continue;
+        const sl = +a[ix.sl] || 0, dg = +a[ix.don_gia] || 0;
+        out.push({ b, ma: a[ix.ma], cdt: a[ix.cdt] || '', tinh: a[ix.tinh] || '', ngay: a[ix.ngay] || '', nhom: a[ix.nhom] || '', ten: a[ix.ten] || '',
+          sl, gt: sl * dg, slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
+      }
+    } catch (e) {}
+  }
+  return CACHE[y] = { rows: out, cap };
+}
+function nvOf(r) {
+  if (!KHNV) return [NV_NONE];
+  if (!r._nv) { const s = new Set(); r.nt.forEach(n => (KHNV.get(kfold(n)) || []).forEach(v => s.add(v))); r._nv = s.size ? [...s] : [NV_NONE]; }
+  return r._nv;
+}
+
+// ---- gom nhóm ----
+function agg(rows, key) {
+  const m = new Map();
+  for (const r of rows) for (const k of [].concat(key(r))) {
+    if (!k) continue;
+    let o = m.get(k); if (!o) m.set(k, o = { k, gt: 0, n: 0, sl: 0, slt: 0, ma: new Set(), cdt: new Set(), kh: new Set(), b: new Map() });
+    o.gt += r.gt; o.n++; o.sl += r.sl; o.slt += r.slt; o.ma.add(r.ma); o.cdt.add(r.cdt); r.nt.forEach(x => o.kh.add(x)); o.b.set(r.b, (o.b.get(r.b) || 0) + r.gt);
+  }
+  return [...m.values()].sort((a, b) => b.gt - a.gt);
+}
+const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
+const uniq = (rows, f) => new Set(rows.flatMap(r => [].concat(f(r)))).size;
+
+// ---- tooltip ----
+const tip = $('#tip');
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight; let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14; if (y + h > innerHeight - 8) y = e.clientY - h - 14;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+const hideTip = () => tip.style.display = 'none';
+document.addEventListener('mousemove', e => { const t = e.target.closest('[data-tip]'); t ? showTip(e, t.dataset.tip) : (e.target.closest('#line') || hideTip()); });
+
+// ---- vẽ ----
+const B = id => BRANDS.find(b => b.id === id);
+const sw = id => `<i style="background:var(${B(id).c})"></i>`;
+function kpi(ic, gold, l, v, d, title) {
+  return `<div class="card kpi"${title ? ` data-tip="${esc(title)}"` : ''}><div class="ic${gold ? ' g' : ''}">${ic}</div><div><div class="l">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div></div>`;
+}
+const ICO = {
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c0-1.4-1.3-2.2-3-2.2s-3 .8-3 2.2 1.4 2 3 2.4 3 1 3 2.4-1.3 2.4-3 2.4-3-.9-3-2.3M12 5.5v13"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+  pkg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>',
+  hosp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21V6l8-3 8 3v15M9 21v-5h6v5M12 7v5M9.5 9.5h5"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg>',
+  test: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="2.5" width="8" height="19" rx="2"/><path d="M8 8h8M10.5 12h3M10.5 15h3"/></svg>',
+};
+
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+
+function drawLine(cur, prev, year, lastM) {
+  const svg = $('#line'), W = svg.clientWidth || 700, H = 260, L = 54, R = 14, T = 14, Bm = 28;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const mc = Array(12).fill(0), mp = Array(12).fill(0);
+  cur.forEach(r => { const m = +r.ngay.slice(5, 7) - 1; if (m >= 0) mc[m] += r.gt; });
+  prev.forEach(r => { const m = +r.ngay.slice(5, 7) - 1; if (m >= 0) mp[m] += r.gt; });
+  const nCur = lastM, max = niceMax(Math.max(...mc.slice(0, nCur), ...(prev.length ? mp : [0]), 1));
+  const x = i => L + (W - L - R) * (i + .5) / 12, y = v => T + (H - T - Bm) * (1 - v / max);
+  const g = css('--grid'), mu = css('--faint'), c1 = css('--brand'), c2 = css('--gold');
+  let s = '';
+  for (let i = 0; i <= 4; i++) { const v = max * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${g}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="${mu}">${i ? money(v) : '0'}</text>`; }
+  for (let i = 0; i < 12; i++) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${mu}">T${i + 1}</text>`;
+  const path = (arr, n) => arr.slice(0, n).map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  if (prev.length) s += `<path d="${path(mp, 12)}" fill="none" stroke="${c2}" stroke-width="2" stroke-dasharray="5 4"/>`;
+  s += `<path d="${path(mc, nCur)}L${x(nCur - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="${c1}" fill-opacity=".09"/>`;
+  s += `<path d="${path(mc, nCur)}" fill="none" stroke="${c1}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  for (let i = 0; i < nCur; i++) s += `<circle cx="${x(i)}" cy="${y(mc[i])}" r="4" fill="${c1}" stroke="${css('--surface')}" stroke-width="2"/>`;
+  s += `<line id="cross" x1="0" x2="0" y1="${T}" y2="${H - Bm}" stroke="${mu}" stroke-dasharray="3 3" visibility="hidden"/>`;
+  svg.innerHTML = s;
+  $('#lineLg').innerHTML = `<span><i style="background:${c1}"></i>${year}</span>` + (prev.length ? `<span><i style="background:${c2}"></i>${year - 1}</span>` : '');
+  svg.onmousemove = e => { const bb = svg.getBoundingClientRect(), px = (e.clientX - bb.left) * W / bb.width;
+    const i = Math.max(0, Math.min(11, Math.floor((px - L) / ((W - L - R) / 12)))); const cr = svg.querySelector('#cross');
+    cr.setAttribute('x1', x(i)); cr.setAttribute('x2', x(i)); cr.setAttribute('visibility', 'visible');
+    showTip(e, `<b>Tháng ${i + 1}</b><br>${year}: <b>${i < nCur ? money(mc[i], true) : '—'}</b>` + (prev.length ? `<br>${year - 1}: <b>${money(mp[i], true)}</b>` : '')); };
+  svg.onmouseleave = () => { hideTip(); const cr = svg.querySelector('#cross'); if (cr) cr.setAttribute('visibility', 'hidden'); };
+}
+
+function drawDonut(byB, total) {
+  const cx = 90, cy = 90, r = 74, w = 26, surf = css('--surface');
+  let a0 = -Math.PI / 2, s = '';
+  if (!total) { $('#donut').innerHTML = ''; $('#donutLg').innerHTML = '<div class="sub2">Không có dữ liệu</div>'; return; }
+  for (const o of byB) {
+    const f = o.gt / total; if (f <= 0) continue;
+    const a1 = a0 + f * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0, ri = r - w;
+    const p = (rad, ang) => `${(cx + rad * Math.cos(ang)).toFixed(2)},${(cy + rad * Math.sin(ang)).toFixed(2)}`;
+    const d = f > .9999 ? `M${cx},${cy - r}A${r},${r} 0 1 1 ${cx - .01},${cy - r}L${cx - .01},${cy - ri}A${ri},${ri} 0 1 0 ${cx},${cy - ri}Z`
+      : `M${p(r, a0)}A${r},${r} 0 ${big} 1 ${p(r, a1)}L${p(ri, a1)}A${ri},${ri} 0 ${big} 0 ${p(ri, a0)}Z`;
+    s += `<path d="${d}" fill="var(${B(o.k).c})" stroke="${surf}" stroke-width="2" data-tip="<b>${esc(B(o.k).ten)}</b><br>${esc(money(o.gt, true))}<br>${(f * 100).toFixed(1)}% tổng giá trị"/>`;
+    a0 = a1;
+  }
+  s += `<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="17" font-weight="700" fill="${css('--text')}">${money(total)}</text><text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" fill="${css('--faint')}">tổng giá trị</text>`;
+  $('#donut').innerHTML = s;
+  $('#donutLg').innerHTML = byB.map(o => `<div>${sw(o.k)}<span>${esc(B(o.k).ten)}</span><b>${(o.gt / total * 100).toFixed(1)}%</b><small>${money(o.gt)}</small></div>`).join('');
+}
+
+function hbars(el, list, n, label) {
+  const top = list.slice(0, n), max = top[0] ? top[0].gt : 1;
+  $(el).innerHTML = top.length ? top.map(o => `<div class="it" data-tip="<b>${esc(o.k)}</b><br>${esc(money(o.gt, true))}<br>${o.n} lượt trúng · ${o.ma.size} gói">
+    <span>${esc(label ? label(o) : o.k)}</span><b>${money(o.gt)}</b><div class="bar"><b style="width:${(o.gt / max * 100).toFixed(1)}%"></b></div></div>`).join('') : '<div class="sub2">Không có dữ liệu</div>';
+}
+
+async function render() {
+  $('#status').textContent = 'Đang tải…';
+  const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
+  const nv = $('#nv').value, tinh = $('#tinh').value;
+  // danh sách nhân viên / tỉnh theo năm đang xem
+  const nvAll = agg(cur.rows, nvOf).map(o => o.k).sort((a, b) => (a === NV_NONE) - (b === NV_NONE) || a.localeCompare(b, 'vi'));
+  $('#nv').innerHTML = '<option value="">Tất cả</option>' + nvAll.map(k => `<option${k === nv ? ' selected' : ''}>${esc(k)}</option>`).join('');
+  const tinhAll = [...new Set(cur.rows.map(r => r.tinh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+  $('#tinh').innerHTML = '<option value="">Tất cả</option>' + tinhAll.map(k => `<option${k === tinh ? ' selected' : ''}>${esc(k)}</option>`).join('');
+  const ok = r => PICK.has(r.b) && (!nv || nvOf(r).includes(nv)) && (!tinh || r.tinh === tinh);
+  const rows = cur.rows.filter(ok);
+  // cùng kỳ năm trước: tới cùng ngày-tháng của ngày trúng thầu mới nhất năm đang xem
+  const lastDay = cur.rows.reduce((m, r) => r.ngay > m ? r.ngay : m, '');
+  const cut = lastDay ? (NAM - 1) + lastDay.slice(4) : '';
+  const isFull = !lastDay || lastDay.slice(5) >= '12-25';
+  const prevAll = prv.rows.filter(ok), prev = isFull ? prevAll : prevAll.filter(r => r.ngay <= cut);
+  const cmpTxt = prv.rows.length ? (isFull ? `so với cả năm ${NAM - 1}` : `so với cùng kỳ ${NAM - 1} (đến ${cut.slice(8, 10)}/${cut.slice(5, 7)})`) : 'chưa có dữ liệu năm trước';
+  $('#status').textContent = `${num(rows.length)} lượt trúng · cập nhật ${cur.cap ? cur.cap.slice(8, 10) + '/' + cur.cap.slice(5, 7) + '/' + cur.cap.slice(0, 4) : '—'}`;
+  $('#sub').textContent = `Kết quả trúng thầu năm ${NAM} các hãng công ty phân phối trên muasamcong.mof.gov.vn` + (lastDay ? ` · dữ liệu đến ${lastDay.slice(8, 10)}/${lastDay.slice(5, 7)}/${lastDay.slice(0, 4)}` : '');
+  $('#cmpNote').textContent = cmpTxt; $('#lineSub').textContent = prv.rows.length ? `${NAM} so với ${NAM - 1}` : String(NAM);
+
+  if (!cur.rows.length) { $('#kpis').innerHTML = '<div class="card empty" style="grid-column:1/-1">Không tải được dữ liệu kết quả trúng thầu (tài khoản cần quyền xem KQ Test).</div>'; return; }
+
+  const T = sum(rows, r => r.gt), Tp = sum(prev, r => r.gt);
+  const kh = r => r.nt;
+  const D = (a, b) => prv.rows.length ? `${delta(a, b)} ${isFull ? 'so với năm trước' : 'so với cùng kỳ'}` : '&nbsp;';
+  $('#kpis').innerHTML = [
+    kpi(ICO.money, 0, 'Giá trị trúng thầu', money(T), D(T, Tp), money(T, true)),
+    kpi(ICO.list, 1, 'Lượt mặt hàng trúng', num(rows.length), D(rows.length, prev.length)),
+    kpi(ICO.pkg, 0, 'Gói thầu', num(uniq(rows, r => r.ma)), D(uniq(rows, r => r.ma), uniq(prev, r => r.ma))),
+    kpi(ICO.hosp, 1, 'Cơ sở y tế', num(uniq(rows, r => r.cdt)), D(uniq(rows, r => r.cdt), uniq(prev, r => r.cdt))),
+    kpi(ICO.user, 0, 'Khách hàng (nhà thầu)', num(uniq(rows, kh)), D(uniq(rows, kh), uniq(prev, kh))),
+    kpi(ICO.test, 1, 'Số lượng (test/que)', num(sum(rows, r => r.slt)), D(sum(rows, r => r.slt), sum(prev, r => r.slt))),
+  ].join('');
+
+  const lastM = lastDay ? +lastDay.slice(5, 7) : 12;
+  drawLine(rows, prevAll, NAM, NAM < new Date().getFullYear() ? 12 : lastM);
+
+  const byB = agg(rows, r => r.b), byBp = new Map(agg(prev, r => r.b).map(o => [o.k, o]));
+  drawDonut(byB, T);
+  $('#tBrand').innerHTML = `<thead><tr><th>Thương hiệu</th><th class="n">Giá trị trúng thầu</th><th class="n">Tăng/giảm</th><th class="n">Tỷ trọng</th><th class="n">Lượt trúng</th><th class="n">Gói thầu</th><th class="n">Cơ sở y tế</th><th class="n">Khách hàng</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th></tr></thead><tbody>` +
+    (byB.length ? byB.map(o => { const p = byBp.get(o.k); return `<tr><td><div class="nm">${sw(o.k)}${esc(B(o.k).ten)}</div></td><td class="n"><b>${money(o.gt, true)}</b></td>
+      <td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${(o.gt / T * 100).toFixed(1)}%</td><td class="n">${num(o.n)}</td><td class="n">${num(o.ma.size)}</td>
+      <td class="n">${num(o.cdt.size)}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) + ' đ' : '—'}</td></tr>`; }).join('')
+    : '<tr><td colspan="10" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+
+  const byN = agg(rows, nvOf), byNp = new Map(agg(prev, nvOf).map(o => [o.k, o])), maxN = byN[0] ? byN[0].gt : 1;
+  $('#tNv').innerHTML = `<thead><tr><th>Nhân viên</th><th class="n">Giá trị</th><th class="n">Tăng/giảm</th><th class="n">Khách</th><th class="n">CSYT</th></tr></thead><tbody>` +
+    (byN.length ? byN.map(o => { const p = byNp.get(o.k), mix = [...o.b.entries()].sort((a, b) => b[1] - a[1]);
+      return `<tr data-tip="<b>${esc(o.k)}</b><br>${mix.map(([b, v]) => esc(B(b).ten) + ': ' + esc(money(v))).join('<br>')}"><td><div class="nm" style="font-weight:${o.k === NV_NONE ? 400 : 600}">${esc(o.k)}</div>
+      <div class="bar" style="display:flex;gap:0">${mix.map(([b, v]) => `<b style="width:${(v / maxN * 100).toFixed(1)}%;background:var(${B(b).c});border-radius:0"></b>`).join('')}</div></td>
+      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.cdt.size)}</td></tr>`; }).join('')
+    : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+  $('#nvNote').textContent = KHNV ? 'Thanh màu = tỷ trọng từng thương hiệu trong giá trị của nhân viên. Một gói liên danh nhiều khách có thể tính cho nhiều nhân viên.'
+    : 'Chưa có danh sách khách hàng theo nhân viên (Quản trị → Khách hàng theo nhân viên).';
+
+  const byS = agg(rows, r => r.b + '|' + r.nhom);
+  $('#tSp').innerHTML = `<thead><tr><th>Sản phẩm</th><th class="n">Giá trị</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th><th class="n">Gói</th></tr></thead><tbody>` +
+    (byS.length ? byS.slice(0, 10).map(o => { const [b, nh] = o.k.split('|'); return `<tr><td><div class="nm">${sw(b)}<span>${esc(nh)}<div class="sub2">${esc(B(b).ten)}</div></span></div></td>
+      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) : '—'}</td><td class="n">${num(o.ma.size)}</td></tr>`; }).join('')
+    : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+
+  const byT = agg(rows, r => r.tinh || '(không rõ tỉnh)'), byK = agg(rows, kh), byC = agg(rows, r => r.cdt);
+  hbars('#hTinh', byT, 10); hbars('#hKhach', byK, 10); hbars('#hCdt', byC, 10);
+
+  // nhận xét tự động
+  const ins = [];
+  if (prv.rows.length && Tp) ins.push(`Tổng giá trị trúng thầu ${money(T)}, ${T >= Tp ? 'tăng' : 'giảm'} ${Math.abs(pct(T, Tp)).toFixed(1)}% ${isFull ? 'so với năm ' + (NAM - 1) : 'so với cùng kỳ ' + (NAM - 1)}.`);
+  else ins.push(`Tổng giá trị trúng thầu ${money(T)} với ${num(uniq(rows, r => r.ma))} gói thầu.`);
+  if (byB[0]) ins.push(`${B(byB[0].k).ten} dẫn đầu, chiếm ${(byB[0].gt / T * 100).toFixed(1)}% tổng giá trị (${money(byB[0].gt)}).`);
+  if (prv.rows.length) { const g = byB.map(o => ({ o, p: pct(o.gt, (byBp.get(o.k) || {}).gt || 0) })).filter(x => x.p != null).sort((a, b) => b.p - a.p);
+    if (g[0]) ins.push(`${B(g[0].o.k).ten} tăng trưởng mạnh nhất: ${g[0].p >= 0 ? '+' : ''}${g[0].p.toFixed(1)}%.`);
+    const w = g[g.length - 1]; if (w && g.length > 1 && w.p < 0) ins.push(`${B(w.o.k).ten} giảm ${Math.abs(w.p).toFixed(1)}% — cần xem lại khách và địa bàn.`); }
+  const nvTop = byN.find(o => o.k !== NV_NONE); if (nvTop) ins.push(`Nhân viên có giá trị cao nhất: ${nvTop.k} (${money(nvTop.gt)}, ${num(nvTop.kh.size)} khách).`);
+  if (byT[0]) ins.push(`Tỉnh/thành dẫn đầu: ${byT[0].k} (${money(byT[0].gt)}); sản phẩm trúng nhiều nhất: ${byS[0] ? byS[0].k.split('|')[1] + ' ' + B(byS[0].k.split('|')[0]).ten : '—'}.`);
+  const none = byN.find(o => o.k === NV_NONE); if (none && KHNV && none.gt / T > .1) ins.push(`${(none.gt / T * 100).toFixed(0)}% giá trị thuộc khách chưa gán nhân viên — nên bổ sung danh sách khách.`);
+  $('#ins').innerHTML = ins.map(t => `<li>${esc(t)}</li>`).join('');
+}
+
+// ---- khởi động ----
+$('#brandTags').innerHTML = BRANDS.map(b => `<span>${esc(b.ten)}</span>`).join('');
+$('#nam').innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
+$('#chips').innerHTML = BRANDS.map(b => `<button type="button" class="chip" aria-pressed="true" data-b="${b.id}"><i style="background:var(${b.c})"></i>${esc(b.ten)}</button>`).join('');
+$('#chips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return;
+  const on = c.getAttribute('aria-pressed') === 'true'; if (on && PICK.size === 1) return;  // giữ ít nhất 1 hãng
+  c.setAttribute('aria-pressed', String(!on)); on ? PICK.delete(c.dataset.b) : PICK.add(c.dataset.b); render(); });
+$('#nam').addEventListener('change', () => { NAM = +$('#nam').value; $('#tinh').value = ''; render(); });
+['#nv', '#tinh'].forEach(s => $(s).addEventListener('change', render));
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 250); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).catch(() => null).then(d => {
+  if (d && d.ds && d.ds.length) { KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean))); }
+  render();
+});
+</script>
+<script src="/tai-khoan.js" defer></script>
+</body>
+</html>

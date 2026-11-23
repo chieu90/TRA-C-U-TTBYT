@@ -2,7 +2,7 @@
 // Ẩn các tab người dùng không có quyền. Việc chặn thật nằm ở middleware.js (máy chủ).
 (() => {
   const TAB_OF = { '/goi-thau': 'goi-thau', '/bao-gia': 'bao-gia', '/co-so-y-te': 'co-so-y-te', '/trung-thau': 'trung-thau',
-    '/duong-huyet': 'duong-huyet', '/so-sanh': 'so-sanh', '/so-sanh-duong-huyet': 'so-sanh' };
+    '/duong-huyet': 'duong-huyet', '/tong-quan': 'trung-thau', '/so-sanh': 'so-sanh', '/so-sanh-duong-huyet': 'so-sanh' };
   const css = `.acct{position:relative;margin-left:auto}.acct>button{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.16);color:#fff;
     border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:7px 12px;font:inherit;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
     .acct .dot{background:#f97316;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px;font-weight:700}

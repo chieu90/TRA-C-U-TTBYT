@@ -10,7 +10,7 @@ const TABS = {
   "goi-thau": ["/goi-thau", "/goi_thau", "/api/goi-thau"],
   "bao-gia": ["/bao-gia", "/bao_gia", "/api/bao-gia"],
   "co-so-y-te": ["/co-so-y-te", "/co_so_y_te", "/api/co-so-y-te"],
-  "trung-thau": ["/trung-thau", "/trung_thau", "/api/trung-thau"],
+  "trung-thau": ["/trung-thau", "/trung_thau", "/api/trung-thau", "/tong-quan"],
   "duong-huyet": ["/duong-huyet", "/duong_huyet", "/api/duong-huyet"],
   "so-sanh": ["/so-sanh"],
 };
