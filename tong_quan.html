@@ -527,13 +527,13 @@ async function render() {
     : '<tr><td colspan="11" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
 
   const byN = agg(rows, nvOf), byNp = new Map(agg(prev, nvOf).map(o => [o.k, o])), maxN = byN[0] ? byN[0].gt : 1;
-  $('#tNv').innerHTML = `<thead><tr><th>Nhân viên</th><th class="n">Giá trị</th><th class="n">Tăng/giảm</th><th class="n">Khách</th><th class="n">CSYT</th>${BG ? '<th class="n" title="Số lượng × giá đại lý ETC; dưới: giá trúng cao/thấp hơn bao nhiêu %">Theo giá ĐL</th>' : ''}</tr></thead><tbody>` +
+  $('#tNv').innerHTML = `<thead><tr><th>Nhân viên</th><th class="n">Giá trị</th><th class="n">Tăng/giảm</th><th class="n">Khách</th><th class="n">CSYT</th><th class="n" title="Giá trị của nhân viên ÷ tổng giá trị đang xem">Tỷ lệ</th></tr></thead><tbody>` +
     (byN.length ? byN.map(o => { const p = byNp.get(o.k), mix = [...o.b.entries()].sort((a, b) => b[1] - a[1]);
       return `<tr data-tip="<b>${esc(o.k)}</b><br>${mix.map(([b, v]) => esc(B(b).ten) + ': ' + esc(money(v))).join('<br>')}"><td><div class="nm" style="font-weight:${o.k === NV_NONE ? 400 : 600}">${esc(o.k)}</div>
       <div class="bar" style="display:flex;gap:0">${mix.map(([b, v]) => `<b style="width:${(v / maxN * 100).toFixed(1)}%;background:var(${B(b).c});border-radius:0"></b>`).join('')}</div></td>
-      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.cdt.size)}</td>${BG ? `<td class="n">${(ch => ch.n ? chTxt(ch) : '<span class="sub2">—</span>')(chenh(rows.filter(r => nvOf(r).includes(o.k))))}</td>` : ''}</tr>`; }).join('')
-    : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
-  $('#nvNote').textContent = KHNV ? 'Thanh màu = tỷ trọng từng thương hiệu trong giá trị của nhân viên. Một gói liên danh nhiều khách có thể tính cho nhiều nhân viên.'
+      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.cdt.size)}</td><td class="n"><b>${T ? (o.gt / T * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%' : '—'}</b></td></tr>`; }).join('')
+    : '<tr><td colspan="6" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+  $('#nvNote').textContent = KHNV ? 'Thanh màu = tỷ trọng từng thương hiệu trong giá trị của nhân viên. Tỷ lệ = giá trị của nhân viên ÷ tổng giá trị đang xem. Một gói liên danh nhiều khách có thể tính cho nhiều nhân viên nên cộng các tỷ lệ có thể hơn 100%.'
     : 'Chưa có danh sách khách hàng theo nhân viên (Quản trị → Khách hàng theo nhân viên).';
 
   const byS = agg(rows, r => r.b + '|' + r.nhom);
