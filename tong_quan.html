@@ -24,6 +24,15 @@
   --up: #4ade80; --down: #fb923c; --grid: #223047; --b1: #f87171; --b2: #facc15; --b3: #6b9cf5; --b4: #fb923c; --b5: #4ade80; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: "Be Vietnam Pro", system-ui, sans-serif; font-size: 14px; }
+/* nền nhạt xanh – vàng (yêu cầu 23/11/2026): chuyển màu dịu + họa tiết biểu đồ mờ, cố định khi cuộn; thẻ trắng nổi lên trên */
+:root { --bg-a: #e6f0fc; --bg-b: #fff4cf; --bg-c: #f6f9fd; --bg-d: #fdf8e8; --pat-op: 1; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg-a: #12243d; --bg-b: #2c2610; --bg-c: #0c1420; --bg-d: #13161a; --pat-op: .45; } }
+:root[data-theme="dark"] { --bg-a: #12243d; --bg-b: #2c2610; --bg-c: #0c1420; --bg-d: #13161a; --pat-op: .45; }
+body { background: radial-gradient(900px 520px at 0% 18%, var(--bg-b) 0%, transparent 65%), radial-gradient(1000px 640px at 100% 55%, var(--bg-a) 0%, transparent 62%),
+  radial-gradient(700px 500px at 30% 100%, var(--bg-b) 0%, transparent 60%), linear-gradient(180deg, var(--bg-c) 0%, var(--bg-d) 100%); background-attachment: fixed; min-height: 100vh; }
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: var(--pat-op);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='320' viewBox='0 0 420 320'><g fill='none' stroke-linecap='round' stroke-linejoin='round'><path d='M20 250 L80 210 L130 228 L190 160 L250 182 L310 120 L370 136' stroke='%230b5cad' stroke-opacity='.07' stroke-width='3'/><path d='M40 300 h60 M40 280 h40' stroke='%23f2b705' stroke-opacity='.18' stroke-width='3'/><rect x='300' y='230' width='14' height='50' rx='3' fill='%230b5cad' fill-opacity='.05'/><rect x='322' y='205' width='14' height='75' rx='3' fill='%23f2b705' fill-opacity='.12'/><rect x='344' y='245' width='14' height='35' rx='3' fill='%230b5cad' fill-opacity='.05'/></g><g fill='%23f2b705' fill-opacity='.22'><circle cx='60' cy='60' r='3'/><circle cx='230' cy='40' r='2'/><circle cx='390' cy='80' r='2.5'/></g><g fill='%230b5cad' fill-opacity='.10'><circle cx='150' cy='90' r='2.5'/><circle cx='280' cy='290' r='2'/></g><path d='M200 270 l4 -9 l4 9 l9 4 l-9 4 l-4 9 l-4 -9 l-9 -4z' fill='%23f2b705' fill-opacity='.25'/></svg>"); background-size: 420px 320px; }
+.card { background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(2px); }
 a { color: var(--brand); }
 .hero { background: linear-gradient(120deg, #0b5cad 0%, #083e78 55%, #0b5cad 100%); color: #fff; padding: 22px 16px 78px; position: relative; overflow: hidden; }
 .hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgba(242,183,5,.45), rgba(242,183,5,0) 70%); }
