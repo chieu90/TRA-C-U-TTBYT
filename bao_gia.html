@@ -358,7 +358,8 @@ $('#list').addEventListener('click', e => { const s = e.target.closest('.spec');
 $('#groups').addEventListener('change', e => { e.target.checked ? picked.add(e.target.value) : picked.delete(e.target.value); render(); });
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
 { const ma = new URLSearchParams(location.search).get('ma'); if (ma) $('#noi').value = ma; }  // link từ email thông báo
-['#q', '#noi'].forEach(s => $(s).addEventListener('input', render));
+let tmr;  // chờ ngừng gõ 200ms rồi mới lọc để gõ không bị giật
+['#q', '#noi'].forEach(s => $(s).addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(render, 200); }));
 ['#tinh', '#coGia', '#conHan', '#onlyNew', '#sort'].forEach(s => $(s).addEventListener('change', render));
 $('#csv').addEventListener('click', csv);
 
