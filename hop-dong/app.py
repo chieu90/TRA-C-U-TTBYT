@@ -5705,38 +5705,6 @@ def kqb_xoa(c, nid):
 
 
 
-def kqb_do(c):
-    """Tạm: đo từng bước nhập trên máy chủ (chỉ đọc, không ghi)."""
-    link, kq, t = c.q.get("link", ""), {}, time.time()
-    m, g = ID_GOOGLE_RE.search(link), re.search(r"[#?&]gid=(\d+)", link)
-    try:
-        with urllib.request.urlopen(urllib.request.Request(
-                f"https://docs.google.com/spreadsheets/d/{m.group(1) or m.group(2)}/export?format=csv&gid={g.group(1)}",
-                headers={"User-Agent": "hop-dong-app"}), timeout=40) as r:
-            kq["kieu"], kq["dau_s"] = r.headers.get("Content-Type", ""), round(time.time() - t, 2)
-            dl = r.read(80_000_000)
-        kq["tai_s"], kq["byte"] = round(time.time() - t, 2), len(dl)
-        if c.q.get("buoc") == "tai":
-            return Chuyen("/ket-qua-ban", json.dumps(kq))
-        t = time.time(); hang = doc_csv(dl); kq["csv_s"] = round(time.time() - t, 2)
-        if c.q.get("buoc") == "csv":
-            return Chuyen("/ket-qua-ban", json.dumps(kq))
-        import resource
-        kq["ram_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
-        n = int(c.q.get("n") or 0) or len(hang)
-        t = time.time(); dong, _, _ = doc_kqb([("", hang[:n])], "x"); kq["doc_s"], kq["dong"] = round(time.time() - t, 2), len(dong)
-        kq["ram2_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
-        if c.q.get("buoc") == "doc":
-            return Chuyen("/ket-qua-ban", json.dumps(kq))
-        t = time.time()
-        c.db.execute("CREATE TEMP TABLE kqb_thu (LIKE ket_qua_ban INCLUDING DEFAULTS)")
-        c.db.chep("kqb_thu", ["nguon_id", "ngay", "trang", "khach", "ma", "ten", "nhan_hieu", "dvt", "nhan_vien", "so_luong", "gia_tri"],
-                  ([0] + d for d in dong))
-        kq["ghi_s"] = round(time.time() - t, 2)
-        c.db.c.rollback()
-    except Exception as x:
-        kq["loi"] = repr(x)[:300]
-    return Tep(json.dumps(kq).encode(), "kq.json", "application/json") if False else Chuyen("/ket-qua-ban", json.dumps(kq))
 
 def bang_sl(tieu_de, cot, ds, co_tien, toi_da=None):
     """ds = [(nhãn đã escape, số lượng, giá trị)] đã xếp giảm dần."""
@@ -5880,7 +5848,6 @@ TUYEN = [
     ("GET|POST", r"/ket-qua-ban/nhap", kqb_nhap, "ql"),
     ("POST", r"/ket-qua-ban/nguon/(\d+)/cap-nhat", kqb_cap_nhat, "ql"),
     ("POST", r"/ket-qua-ban/nguon/(\d+)/xoa", kqb_xoa, "ql"),
-    ("GET", r"/ket-qua-ban/do", kqb_do, "ql"),
     ("GET|POST", r"/tai-lieu/(\d+)", tl_xem, "nd"),
     ("GET", r"/tai-lieu/(\d+)/tai", tl_tai, "nd"),
     ("POST", r"/tai-lieu/(\d+)/xoa", tl_xoa, "ql"),
