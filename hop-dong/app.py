@@ -5721,7 +5721,13 @@ def kqb_do(c):
         t = time.time(); hang = doc_csv(dl); kq["csv_s"] = round(time.time() - t, 2)
         if c.q.get("buoc") == "csv":
             return Chuyen("/ket-qua-ban", json.dumps(kq))
-        t = time.time(); dong, _, _ = doc_kqb([("", hang)], "x"); kq["doc_s"], kq["dong"] = round(time.time() - t, 2), len(dong)
+        import resource
+        kq["ram_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+        n = int(c.q.get("n") or 0) or len(hang)
+        t = time.time(); dong, _, _ = doc_kqb([("", hang[:n])], "x"); kq["doc_s"], kq["dong"] = round(time.time() - t, 2), len(dong)
+        kq["ram2_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+        if c.q.get("buoc") == "doc":
+            return Chuyen("/ket-qua-ban", json.dumps(kq))
         t = time.time()
         with c.db.c.cursor().copy("COPY (SELECT 1) TO STDOUT") as cp:
             for _ in cp:
