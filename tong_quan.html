@@ -120,6 +120,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   <section class="card" style="margin-bottom:14px">
     <div class="filters">
       <label>Năm<select id="nam"></select></label>
+      <label id="modeLbl" hidden>Tính giá trị theo<select id="mode"><option value="etc">Giá đại lý ETC</option><option value="trung">Giá trúng thầu</option></select></label>
       <label>Nhân viên<select id="nv"><option value="">Tất cả</option></select></label>
       <label>Tỉnh/TP<select id="tinh"><option value="">Tất cả</option></select></label>
       <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:var(--muted);font-weight:600">Thương hiệu</span><div class="chips" id="chips"></div></div>
@@ -130,7 +131,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   <section class="kpis" id="kpis"></section>
 
   <div class="row r-2-1">
-    <section class="card"><h2>Giá trị trúng thầu theo tháng<small id="lineSub"></small></h2><svg class="chart" id="line" role="img" aria-label="Giá trị trúng thầu theo tháng"></svg><div class="legend" id="lineLg"></div></section>
+    <section class="card"><h2><span class="vLbl">Giá trị trúng thầu</span> theo tháng<small id="lineSub"></small></h2><svg class="chart" id="line" role="img" aria-label="Giá trị trúng thầu theo tháng"></svg><div class="legend" id="lineLg"></div></section>
     <section class="card"><h2>Tỷ trọng theo thương hiệu</h2><div class="donut-wrap"><svg id="donut" viewBox="0 0 180 180" role="img" aria-label="Tỷ trọng theo thương hiệu"></svg><div class="dl" id="donutLg"></div></div></section>
   </div>
 
@@ -152,7 +153,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
   </div>
 
   <section class="card insights"><h2>Nhận xét nhanh</h2><ul class="ins" id="ins"></ul>
-    <p class="note">Giá trị = số lượng × đơn giá trúng thầu của từng mặt hàng. "Cùng kỳ" so với cùng khoảng ngày của năm trước. Nhân viên được gán theo danh sách "Khách hàng theo nhân viên" ở Quản trị.</p></section>
+    <p class="note" id="valNote">Giá trị = số lượng × đơn giá trúng thầu của từng mặt hàng. "Cùng kỳ" so với cùng khoảng ngày của năm trước. Nhân viên được gán theo danh sách "Khách hàng theo nhân viên" ở Quản trị.</p></section>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -189,6 +190,9 @@ const FILES = { 2026: ['/api/trung-thau', '/api/duong-huyet'] };
 const fileOf = y => FILES[y] || [`/trung_thau_${y}.json`, `/duong_huyet_${y}.json`];
 const YEARS = [2026, 2025, 2024];
 const CACHE = {};
+let MODE = (() => { try { return localStorage.getItem('tq_mode') || 'etc'; } catch (e) { return 'etc'; } })();
+const etc = () => MODE === 'etc' && !!BG;
+const VLBL = () => etc() ? 'Giá trị theo giá ETC' : 'Giá trị trúng thầu';
 let KHNV = null, NAM = 2026, PICK = new Set(BRANDS.map(b => b.id));
 
 function brandOf(r) {
@@ -214,7 +218,7 @@ async function loadYear(y) {
         const b = brandOf(r0); if (!b) continue;
         const sl = +a[ix.sl] || 0, dg = +a[ix.don_gia] || 0;
         out.push({ b, ma: a[ix.ma], cdt: a[ix.cdt] || '', tinh: a[ix.tinh] || '', ngay: a[ix.ngay] || '', nhom: a[ix.nhom] || '', ten: a[ix.ten] || '',
-          sl, dg, gt: sl * dg, ky: a[ix.ky_ma] || '', dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
+          sl, dg, gt: sl * dg, gtT: sl * dg, ky: a[ix.ky_ma] || '', dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
       }
     } catch (e) {}
   }
@@ -412,6 +416,14 @@ async function render() {
   const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
   // trang có thể vẽ (vd đổi cỡ cửa sổ) trước khi bảng giá tải xong: ghép giá lại khi đã có
   for (const d of [cur, prv]) if (BG && d.rows && !d.bg) { ghepGia(d.rows); d.bg = true; }
+  // giá trị dùng cho mọi bảng/biểu đồ: theo giá đại lý ETC (số lượng × giá ĐL; dòng chưa có giá ETC hoặc khác đơn vị = 0) hoặc theo giá trúng
+  const E = etc();
+  for (const d of [cur, prv]) for (const r of d.rows || []) r.gt = E ? (r.so ? r.sl * r.p.gia : 0) : r.gtT;
+  $('#modeLbl').hidden = !BG; if (BG) $('#mode').value = MODE;
+  document.querySelectorAll('.vLbl').forEach(e => e.textContent = VLBL());
+  { const thieu = E ? cur.rows.filter(r => PICK.has(r.b) && !r.so).length : 0;
+    $('#valNote').textContent = (E ? `Giá trị = số lượng × giá đại lý ETC của sản phẩm (ghép theo mã, không có mã thì theo tên hàng). ${num(thieu)} lượt chưa có giá ETC hoặc khác đơn vị tính (hộp/bộ) được tính 0. `
+      : 'Giá trị = số lượng × đơn giá trúng thầu của từng mặt hàng. ') + '"Cùng kỳ" so với cùng khoảng ngày của năm trước. Nhân viên được gán theo danh sách "Khách hàng theo nhân viên" ở Quản trị.'; }
   const nv = $('#nv').value, tinh = $('#tinh').value;
   // danh sách nhân viên / tỉnh theo năm đang xem
   const nvAll = agg(cur.rows, nvOf).map(o => o.k).sort((a, b) => (a === NV_NONE) - (b === NV_NONE) || a.localeCompare(b, 'vi'));
@@ -436,7 +448,7 @@ async function render() {
   const kh = r => r.nt;
   const D = (a, b) => prv.rows.length ? `${delta(a, b)} ${isFull ? 'so với năm trước' : 'so với cùng kỳ'}` : '&nbsp;';
   $('#kpis').innerHTML = [
-    kpi(ICO.money, 0, 'Giá trị trúng thầu', money(T), D(T, Tp), money(T, true)),
+    kpi(ICO.money, 0, VLBL(), money(T), D(T, Tp), money(T, true)),
     kpi(ICO.list, 1, 'Lượt mặt hàng trúng', num(rows.length), D(rows.length, prev.length)),
     kpi(ICO.pkg, 0, 'Gói thầu', num(uniq(rows, r => r.ma)), D(uniq(rows, r => r.ma), uniq(prev, r => r.ma))),
     kpi(ICO.hosp, 1, 'Cơ sở y tế', num(uniq(rows, r => r.cdt)), D(uniq(rows, r => r.cdt), uniq(prev, r => r.cdt))),
@@ -449,7 +461,7 @@ async function render() {
 
   const byB = agg(rows, r => r.b), byBp = new Map(agg(prev, r => r.b).map(o => [o.k, o]));
   drawDonut(byB, T);
-  $('#tBrand').innerHTML = `<thead><tr><th>Thương hiệu</th><th class="n">Giá trị trúng thầu</th><th class="n">Tăng/giảm</th><th class="n">Tỷ trọng</th><th class="n">Lượt trúng</th><th class="n">Gói thầu</th><th class="n">Cơ sở y tế</th><th class="n">Khách hàng</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th>${BG ? '<th class="n" title="Số lượng × giá đại lý ETC (lượt có mã sản phẩm); dưới: giá trúng cao/thấp hơn bao nhiêu %">Theo giá ĐL</th>' : ''}</tr></thead><tbody>` +
+  $('#tBrand').innerHTML = `<thead><tr><th>Thương hiệu</th><th class="n">${VLBL()}</th><th class="n">Tăng/giảm</th><th class="n">Tỷ trọng</th><th class="n">Lượt trúng</th><th class="n">Gói thầu</th><th class="n">Cơ sở y tế</th><th class="n">Khách hàng</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th>${BG ? '<th class="n" title="Số lượng × giá đại lý ETC (lượt có mã sản phẩm); dưới: giá trúng cao/thấp hơn bao nhiêu %">Theo giá ĐL</th>' : ''}</tr></thead><tbody>` +
     (byB.length ? byB.map(o => { const p = byBp.get(o.k), ch = chenh(rows.filter(r => r.b === o.k)); return `<tr><td><div class="nm">${sw(o.k)}${esc(B(o.k).ten)}</div></td><td class="n"><b>${money(o.gt, true)}</b></td>
       <td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${(o.gt / T * 100).toFixed(1)}%</td><td class="n">${num(o.n)}</td><td class="n">${num(o.ma.size)}</td>
       <td class="n">${num(o.cdt.size)}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) + ' đ' : '—'}</td>${BG ? `<td class="n">${ch.n ? chTxt(ch) : '<span class="sub2">chưa có giá</span>'}</td>` : ''}</tr>`; }).join('')
@@ -478,8 +490,8 @@ async function render() {
 
   // nhận xét tự động
   const ins = [];
-  if (prv.rows.length && Tp) ins.push(`Tổng giá trị trúng thầu ${money(T)}, ${T >= Tp ? 'tăng' : 'giảm'} ${Math.abs(pct(T, Tp)).toFixed(1)}% ${isFull ? 'so với năm ' + (NAM - 1) : 'so với cùng kỳ ' + (NAM - 1)}.`);
-  else ins.push(`Tổng giá trị trúng thầu ${money(T)} với ${num(uniq(rows, r => r.ma))} gói thầu.`);
+  if (prv.rows.length && Tp) ins.push(`Tổng ${VLBL().toLowerCase()} ${money(T)}, ${T >= Tp ? 'tăng' : 'giảm'} ${Math.abs(pct(T, Tp)).toFixed(1)}% ${isFull ? 'so với năm ' + (NAM - 1) : 'so với cùng kỳ ' + (NAM - 1)}.`);
+  else ins.push(`Tổng ${VLBL().toLowerCase()} ${money(T)} với ${num(uniq(rows, r => r.ma))} gói thầu.`);
   if (byB[0]) ins.push(`${B(byB[0].k).ten} dẫn đầu, chiếm ${(byB[0].gt / T * 100).toFixed(1)}% tổng giá trị (${money(byB[0].gt)}).`);
   if (prv.rows.length) { const g = byB.map(o => ({ o, p: pct(o.gt, (byBp.get(o.k) || {}).gt || 0) })).filter(x => x.p != null).sort((a, b) => b.p - a.p);
     if (g[0]) ins.push(`${B(g[0].o.k).ten} tăng trưởng mạnh nhất: ${g[0].p >= 0 ? '+' : ''}${g[0].p.toFixed(1)}%.`);
@@ -499,6 +511,7 @@ $('#chips').addEventListener('click', e => { const c = e.target.closest('.chip')
   c.setAttribute('aria-pressed', String(!on)); on ? PICK.delete(c.dataset.b) : PICK.add(c.dataset.b); render(); });
 $('#nam').addEventListener('change', () => { NAM = +$('#nam').value; $('#tinh').value = ''; render(); });
 ['#nv', '#tinh'].forEach(s => $(s).addEventListener('change', render));
+$('#mode').addEventListener('change', () => { MODE = $('#mode').value; try { localStorage.setItem('tq_mode', MODE); } catch (e) {} render(); });
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 250); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 Promise.all(['khach-nv', 'bang-gia'].map(a => fetch('/api/auth?action=' + a).then(r => r.ok ? r.json() : null).catch(() => null))).then(([d, g]) => {
