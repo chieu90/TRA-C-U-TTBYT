@@ -5319,14 +5319,26 @@ def tl_nhap_drive(c):
             n = min(int(c.form.get("n") or 0), 800)
         except ValueError:
             n = 0
-        bay_gio, them = datetime.now().isoformat(timespec="seconds"), 0
+        bay_gio, them, sua = datetime.now().isoformat(timespec="seconds"), 0, 0
         co_san = {r["link"] for r in c.db.execute("SELECT link FROM tai_lieu WHERE link <> ''").fetchall()}
+        theo_id = {m.group(1): l for l in co_san for m in [re.search(r"/d/([\w-]{20,})", l)] if m}
         for i in range(n):
             if c.form.get(f"chon_{i}") != "1":
                 continue
             link = (c.form.get(f"url_{i}") or "").strip()[:1000]
             loai = c.form.get(f"loai_{i}", "khac")
-            if not re.match(r"^https://(drive|docs)\.google\.com/", link) or link in co_san:
+            if not re.match(r"^https://(drive|docs)\.google\.com/", link):
+                continue
+            m_id = re.search(r"/d/([\w-]{20,})", link)
+            cu = link if link in co_san else theo_id.get(m_id.group(1)) if m_id else None
+            if cu:                                       # file đã có: cập nhật loại / tên / mã / hãng theo bảng vừa sửa
+                hh = c.ngay(f"hh_{i}", "Hết hạn")
+                c.db.execute("UPDATE tai_lieu SET loai = ?, ten = ?, ma_hang = ?, nhan_hieu = ?, "
+                             "het_han = CASE WHEN ? <> '' THEN ? ELSE het_han END, cap_nhat = ? WHERE link = ?",
+                             [loai if loai in TEN_LOAI_TL else "khac", (c.form.get(f"ten_{i}") or "Tài liệu").strip()[:300],
+                              ", ".join(m.strip() for m in re.split(r"[,;]+", c.form.get(f"ma_{i}") or "") if m.strip())[:3000],
+                              (c.form.get(f"nh_{i}") or "").strip()[:200], hh, hh, bay_gio, cu])
+                sua += 1
                 continue
             c.db.execute(f"INSERT INTO tai_lieu ({', '.join(COT_TL)}, nguoi_id, cap_nhat) VALUES ({', '.join('?' * (len(COT_TL) + 2))})",
                          [loai if loai in TEN_LOAI_TL else "khac", (c.form.get(f"ten_{i}") or "Tài liệu").strip()[:300],
@@ -5336,7 +5348,7 @@ def tl_nhap_drive(c):
             co_san.add(link)
             them += 1
         c.db.commit()
-        return Chuyen("/tai-lieu", f"Đã nhập {them} tài liệu từ Google Drive.")
+        return Chuyen("/tai-lieu", f"Đã nhập {them} tài liệu mới từ Google Drive" + (f", cập nhật {sua} tài liệu đã có." if sua else "."))
     xem = ""
     url = (c.form.get("url") or "").strip()[:1000] if buoc == "xem" else ""
     if buoc == "xem":
@@ -5396,7 +5408,7 @@ def tl_nhap_drive(c):
         <div class="dau-trang"><h2>Thư mục “{e(kq.get("ten", ""))}”: {len(tep)} file, {moi} file mới</h2>
           <button class="nut">Nhập các file đã chọn</button></div>
         <p class="mo">App đã đoán loại, ký mã hiệu và hãng theo tên file và tên thư mục. Sửa lại ô nào sai trước khi nhập.
-          Ô ký mã hiệu để trống = tài liệu dùng chung cho cả hãng (ISO, ủy quyền…). File đã có trong app thì bỏ tích sẵn.</p>
+          Ô ký mã hiệu để trống = tài liệu dùng chung cho cả hãng (ISO, ủy quyền…). File đã có trong app thì bỏ tích sẵn; tích vào thì app cập nhật lại tài liệu đó theo bảng này.</p>
         <div class="cuon"><table class="bang-nhap"><thead><tr><th><input type="checkbox" data-chon-het aria-label="Chọn hết"></th>
           <th>Tên tài liệu</th><th>Loại</th><th>Ký mã hiệu</th><th>Nhãn hiệu</th><th>Hết hạn</th></tr></thead>
           <tbody>{dong}</tbody></table></div>
