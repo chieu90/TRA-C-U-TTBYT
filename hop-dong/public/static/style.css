@@ -182,3 +182,9 @@ td input.o-bang.rong { min-width: 14rem; }
 @media (max-width: 760px) { .ai-nut { right: 14px; bottom: 14px; }
   .ai-hop { left: 8px; right: 8px; width: auto; bottom: 8px; top: 8px; height: auto; } }
 @media print { .ai-nut, .ai-hop { display: none !important; } }
+
+/* tài liệu hàng hóa */
+.the.canh { background: var(--vang-nen); border-color: transparent; color: var(--vang); }
+.the.canh a { color: inherit; text-decoration: underline; }
+.the .dau-trang h2 { margin: 0; }
+.cuon { overflow-x: auto; }

@@ -143,6 +143,13 @@ CREATE TABLE IF NOT EXISTS uy_quyen_dong (
   id INTEGER PRIMARY KEY, uy_quyen_id INTEGER NOT NULL REFERENCES uy_quyen(id) ON DELETE CASCADE, tt INTEGER DEFAULT 0,
   stt_mt TEXT DEFAULT '', ma TEXT DEFAULT '', ten_tm TEXT DEFAULT '', quy_cach TEXT DEFAULT '', nha_sx TEXT DEFAULT '',
   xuat_xu TEXT DEFAULT '', dvt TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS tai_lieu (
+  id INTEGER PRIMARY KEY, loai TEXT NOT NULL DEFAULT 'khac', ten TEXT NOT NULL, ma_hang TEXT DEFAULT '',
+  nhan_hieu TEXT DEFAULT '', so_hieu TEXT DEFAULT '', ngay_cap TEXT DEFAULT '', het_han TEXT DEFAULT '',
+  link TEXT DEFAULT '', ghi_chu TEXT DEFAULT '', tep_ten TEXT DEFAULT '', tep_kieu TEXT DEFAULT '', tep_co INTEGER DEFAULT 0,
+  nguoi_id INTEGER REFERENCES nguoi_dung(id), cap_nhat TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS tai_lieu_tep (
+  tai_lieu_id INTEGER NOT NULL UNIQUE REFERENCES tai_lieu(id) ON DELETE CASCADE, noi_dung BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS chi_tien (
   id INTEGER PRIMARY KEY, so_pc TEXT UNIQUE NOT NULL, ngay TEXT NOT NULL,
   nha_cung_cap_id INTEGER NOT NULL REFERENCES nha_cung_cap(id), so_tien REAL NOT NULL, hinh_thuc TEXT DEFAULT '',
@@ -196,8 +203,8 @@ class Json:
 
 class Tep:
     """Trả về một file để trình duyệt tải xuống."""
-    def __init__(self, ten, du_lieu, kieu="application/octet-stream"):
-        self.ten, self.du_lieu, self.kieu = ten, du_lieu, kieu
+    def __init__(self, ten, du_lieu, kieu="application/octet-stream", xem=False):
+        self.ten, self.du_lieu, self.kieu, self.xem = ten, du_lieu, kieu, xem
 
 
 def gap(s):
@@ -278,7 +285,7 @@ def mo_db():
     if not _san_sang:
         # trên PostgreSQL chỉ chạy khi thiếu cột thêm gần đây nhất (đổi bảng / cột này mỗi lần thêm bảng / cột)
         if not PG_URL or not db.execute("SELECT 1 AS v FROM information_schema.columns WHERE table_name = ? "
-                                        "AND column_name = ?", ("thong_so", "ma_ib")).fetchone():
+                                        "AND column_name = ?", ("tai_lieu_tep", "noi_dung")).fetchone():
             db.khoi_tao()
         _san_sang = True
     return db
@@ -4897,6 +4904,345 @@ def uq_google(c, qid):
     return Chuyen(f"/uy-quyen/{qid}", "Đã tạo link Google Docs (thư mục Ủy quyền bán hàng trong Drive).")
 
 
+# ───────────────────────── tài liệu hàng hóa (kênh đấu thầu) ─────────────────────────
+
+LOAI_TL = [
+    ("tskt", "Thông số kỹ thuật (TSKT)"), ("lh", "Số lưu hành / Phân loại / Công bố"),
+    ("uq", "Thư ủy quyền hãng (MAF)"), ("iso", "ISO 13485"), ("ce", "CE / CFS / FDA"),
+    ("coq", "CO / CQ"), ("ifu", "Hướng dẫn sử dụng (IFU)"), ("cat", "Catalogue / tờ rơi"),
+    ("nc", "Báo cáo nghiên cứu / đánh giá"), ("khac", "Khác"),
+]
+TEN_LOAI_TL = dict(LOAI_TL)
+LOAI_CAN_THAU = ("tskt", "lh", "uq", "iso")      # bộ hồ sơ dự thầu tối thiểu: thiếu thì báo đỏ
+TL_TOI_DA = 4_000_000                            # Vercel nhận tối đa ~4,5 MB mỗi lần gửi
+HIEU_LUC_TL = [("con", "Còn hạn"), ("sap", f"Sắp hết hạn (≤ {SAP_HET_HAN} ngày)"), ("het", "Đã hết hạn"),
+               ("khong", "Không thời hạn")]
+
+ICON["tai_lieu"] = _svg('<path d="M5 12a4 4 0 0 1 4-4h10l4 5h16a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z" fill="#fbb945"/>'
+                        '<rect x="12" y="4" width="22" height="26" rx="3" fill="#fff" stroke="#2ea8f5" stroke-width="2"/>'
+                        + _DONG.format(x=16, y=10, w=14).replace("#fff", "#2ea8f5")
+                        + _DONG.format(x=16, y=16, w=10).replace("#fff", "#2ea8f5")
+                        + '<path d="M5 20h38v17a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z" fill="#f58220"/>')
+ICON["ho_so"] = _svg('<rect x="6" y="8" width="36" height="32" rx="5" fill="#1d7a6b"/>'
+                     + "".join(f'<path d="M12 {y}l2.5 2.5 4.5-5" fill="none" stroke="#fbb945" stroke-width="2.6" '
+                               f'stroke-linecap="round" stroke-linejoin="round"/>' + _DONG.format(x=23, y=y - 1, w=13)
+                               for y in (17, 25, 33)))
+UNG_DUNG += [
+    ("tai-lieu", "Tài liệu", "tai_lieu", [
+        ("/tai-lieu", "Tài liệu hàng hóa", "tld", "tai_lieu", False),
+        ("/tai-lieu/moi", "Thêm tài liệu", "tlm", "soan", False),
+        ("/tai-lieu/ho-so", "Bộ hồ sơ dự thầu", "tlh", "ho_so", False)]),
+]
+
+
+def tach_ma(s):
+    """Tách chuỗi nhiều mã (phẩy, chấm phẩy, xuống dòng, khoảng trắng) thành danh sách mã đã chuẩn hóa để so."""
+    return [x for x in (gap(m).replace(" ", "") for m in re.split(r"[,;\n\r\t ]+", s or "")) if x]
+
+
+def con_ngay_tl(t):
+    try:
+        return (date.fromisoformat(t["het_han"]) - date.today()).days
+    except (TypeError, ValueError):
+        return None
+
+
+def hl_tl(t):
+    con = con_ngay_tl(t)
+    if con is None:
+        return "khong"
+    return "het" if con < 0 else "sap" if con <= SAP_HET_HAN else "con"
+
+
+def nhan_hl_tl(t):
+    con = con_ngay_tl(t)
+    if con is None:
+        return '<span class="nhan xam">Không thời hạn</span>'
+    if con < 0:
+        return f'<span class="nhan do">Hết hạn {ngay(t["het_han"])}</span>'
+    if con <= SAP_HET_HAN:
+        return f'<span class="nhan vang">Còn {con} ngày · {ngay(t["het_han"])}</span>'
+    return f'<span class="nhan xanh">Đến {ngay(t["het_han"])}</span>'
+
+
+def nut_mo_tl(t):
+    ra = []
+    if t["tep_ten"]:
+        ra.append(f'<a href="/tai-lieu/{t["id"]}/tai" target="_blank" rel="noopener">Mở file</a>')
+    if t["link"]:
+        ra.append(f'<a href="{e(t["link"])}" target="_blank" rel="noopener noreferrer">Mở link</a>')
+    return " · ".join(ra) or '<span class="mo">Chưa có file</span>'
+
+
+def lay_tl(c, tid):
+    t = c.db.execute("SELECT * FROM tai_lieu WHERE id = ?", (tid,)).fetchone()
+    if not t:
+        raise Loi(404, "Không tìm thấy tài liệu.")
+    return t
+
+
+def goi_y_nhan_hieu(c):
+    ds = sorted({r["v"] for bang in ("thong_so", "hang_hoa", "tai_lieu") for r in c.db.execute(
+        f"SELECT DISTINCT nhan_hieu AS v FROM {bang} WHERE nhan_hieu <> ''").fetchall()}, key=gap)
+    return '<datalist id="ds-nhan-hieu">' + "".join(f'<option value="{e(x)}">' for x in ds) + '</datalist>'
+
+
+def o_tl(c, t=None):
+    g = (lambda f: t[f] if t else "")
+    co_tep = f'<p class="mo">File hiện có: <b>{e(t["tep_ten"])}</b> ({sl(round(t["tep_co"] / 1024))} KB). Chọn file mới để thay.</p>' \
+        if t and t["tep_ten"] else ""
+    return f"""
+      <label>Loại tài liệu <b class="sao">*</b>{chon("loai", LOAI_TL, g("loai") or "tskt")}</label>
+      {o("Tên tài liệu", "ten", g("ten"), bat_buoc=True, them='placeholder="VD: ISO 13485 CTK Biotech 2025"')}
+      <label class="rong">Ký mã hiệu áp dụng<textarea name="ma_hang" rows="2"
+        placeholder="Mỗi mã cách nhau bằng dấu phẩy. Để trống nếu dùng chung cho cả hãng (ISO, thư ủy quyền…)">{e(g("ma_hang"))}</textarea></label>
+      {o("Nhãn hiệu / hãng", "nhan_hieu", g("nhan_hieu"), them='list="ds-nhan-hieu"')}
+      {o("Số hiệu / số giấy", "so_hieu", g("so_hieu"))}
+      {o("Ngày cấp", "ngay_cap", g("ngay_cap"), "date")}
+      {o("Hết hạn (để trống nếu không thời hạn)", "het_han", g("het_han"), "date")}
+      <label class="rong">File (PDF, Word, Excel, ảnh — tối đa 4 MB)<input type="file" name="tep"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip">{co_tep}</label>
+      {o("Hoặc link Google Drive (file lớn hơn 4 MB)", "link", g("link"), "url", them='placeholder="https://drive.google.com/…"')}
+      <label class="rong">Ghi chú<textarea name="ghi_chu" rows="2">{e(g("ghi_chu"))}</textarea></label>
+      {goi_y_nhan_hieu(c)}"""
+
+
+def doc_tl(c):
+    loai = c.chu("loai", "Loại tài liệu", True)
+    if loai not in TEN_LOAI_TL:
+        raise Loi(400, "Loại tài liệu không hợp lệ.")
+    d = {"loai": loai, "ten": c.chu("ten", "Tên tài liệu", True, 300),
+         "ma_hang": ", ".join(m.strip() for m in re.split(r"[,;\n\r]+", c.chu("ma_hang", "Ký mã hiệu", toi_da=3000)) if m.strip()),
+         "nhan_hieu": c.chu("nhan_hieu", "Nhãn hiệu", toi_da=200), "so_hieu": c.chu("so_hieu", "Số hiệu", toi_da=200),
+         "ngay_cap": c.ngay("ngay_cap", "Ngày cấp"), "het_han": c.ngay("het_han", "Hết hạn"),
+         "link": c.link("link", "Link"), "ghi_chu": c.chu("ghi_chu", "Ghi chú", toi_da=2000)}
+    ten_tep, dl = c.tep.get("tep", ("", b""))
+    tep = None
+    if ten_tep and dl:
+        if len(dl) > TL_TOI_DA:
+            raise Loi(400, "File lớn hơn 4 MB. Hãy để file trên Google Drive rồi dán link vào ô bên dưới.")
+        ten_tep = os.path.basename(ten_tep.replace("\\", "/"))[:200] or "tai-lieu"
+        tep = (ten_tep, mimetypes.guess_type(ten_tep)[0] or "application/octet-stream", dl)
+    return d, tep
+
+
+COT_TL = ("loai", "ten", "ma_hang", "nhan_hieu", "so_hieu", "ngay_cap", "het_han", "link", "ghi_chu")
+
+
+def luu_tep_tl(c, tid, tep):
+    if not tep:
+        return
+    ten, kieu, dl = tep
+    c.db.execute("DELETE FROM tai_lieu_tep WHERE tai_lieu_id = ?", (tid,))
+    c.db.execute("INSERT INTO tai_lieu_tep (tai_lieu_id, noi_dung) VALUES (?, ?)", (tid, dl))
+    c.db.execute("UPDATE tai_lieu SET tep_ten = ?, tep_kieu = ?, tep_co = ? WHERE id = ?", (ten, kieu, len(dl), tid))
+
+
+def tl_moi(c):
+    if c.method == "POST":
+        d, tep = doc_tl(c)
+        if not tep and not d["link"]:
+            raise Loi(400, "Hãy chọn file hoặc dán link Google Drive của tài liệu.")
+        tid = c.db.them(f"INSERT INTO tai_lieu ({', '.join(COT_TL)}, nguoi_id, cap_nhat) VALUES ({', '.join('?' * (len(COT_TL) + 2))})",
+                        [d[f] for f in COT_TL] + [c.user["id"], datetime.now().isoformat(timespec="seconds")])
+        luu_tep_tl(c, tid, tep)
+        c.db.commit()
+        if c.form.get("tiep") == "1":
+            return Chuyen("/tai-lieu/moi", f"Đã thêm “{d['ten']}”. Thêm tài liệu tiếp theo.")
+        return Chuyen(f"/tai-lieu/{tid}", "Đã thêm tài liệu.")
+    return trang(c, "Thêm tài liệu", f"""
+      <h1>Thêm tài liệu</h1>
+      <div class="the"><form method="post" enctype="multipart/form-data" class="luoi">{an_csrf(c)}{o_tl(c)}
+        <div class="hang-nut"><button class="nut">Lưu</button>
+        <button class="nut phu" name="tiep" value="1">Lưu và thêm tiếp</button><a href="/tai-lieu">Hủy</a></div></form></div>""", "tlm")
+
+
+def ds_tai_lieu(c):
+    tu, loai, nh, hl = c.q.get("q", ""), c.q.get("loai", ""), c.q.get("nh", ""), c.q.get("hl", "")
+    dk, ts = "", []
+    for x in tu.split()[:8]:
+        dk += " AND (ten LIKE ? OR ma_hang LIKE ? OR nhan_hieu LIKE ? OR so_hieu LIKE ? OR ghi_chu LIKE ?)"
+        ts += [f"%{x}%"] * 5
+    if loai:
+        dk += " AND loai = ?"
+        ts.append(loai)
+    if nh:
+        dk += " AND nhan_hieu = ?"
+        ts.append(nh)
+    ds = c.db.execute(f"SELECT * FROM tai_lieu WHERE 1=1{dk} ORDER BY nhan_hieu, loai, ten", ts).fetchall()
+    if hl:
+        ds = [t for t in ds if hl_tl(t) == hl]
+    tong = c.db.execute("SELECT COUNT(*) AS n FROM tai_lieu").fetchone()["n"]
+    sap = [t for t in c.db.execute("SELECT * FROM tai_lieu WHERE het_han <> ''").fetchall() if hl_tl(t) in ("sap", "het")]
+    cac_nh = [r["nhan_hieu"] for r in c.db.execute(
+        "SELECT DISTINCT nhan_hieu FROM tai_lieu WHERE nhan_hieu <> '' ORDER BY nhan_hieu").fetchall()]
+    canh = ""
+    if sap and not hl:
+        n_het = sum(1 for t in sap if hl_tl(t) == "het")
+        canh = (f'<div class="the canh"><b>Cần gia hạn:</b> {n_het} tài liệu đã hết hạn, {len(sap) - n_het} tài liệu còn ≤ {SAP_HET_HAN} ngày. '
+                f'<a href="/tai-lieu?hl=het">Xem đã hết hạn</a> · <a href="/tai-lieu?hl=sap">Xem sắp hết hạn</a></div>')
+    if ds:
+        dong = "".join(
+            f'<tr><td><a href="/tai-lieu/{t["id"]}">{e(t["ten"])}</a>'
+            f'{f"<br><small class=mo>Số: {e(t["so_hieu"])}</small>" if t["so_hieu"] else ""}</td>'
+            f'<td>{e(TEN_LOAI_TL.get(t["loai"], t["loai"]))}</td><td>{e(t["nhan_hieu"])}</td>'
+            f'<td>{e(t["ma_hang"]) or "<span class=mo>Cả hãng</span>"}</td><td>{nhan_hl_tl(t)}</td><td>{nut_mo_tl(t)}</td></tr>'
+            for t in ds)
+        bang = ('<div class="the cuon"><table><thead><tr><th>Tài liệu</th><th>Loại</th><th>Nhãn hiệu</th><th>Ký mã hiệu</th>'
+                f'<th>Hiệu lực</th><th></th></tr></thead><tbody>{dong}</tbody></table></div>')
+    elif tong:
+        bang = '<div class="the trong">Không có tài liệu nào khớp.</div>'
+    else:
+        bang = ('<div class="the trong">Chưa có tài liệu. Bấm <b>Thêm tài liệu</b> để tải lên TSKT, số lưu hành, thư ủy quyền, '
+                'ISO… của từng mã hàng. Tài liệu dùng chung cho cả hãng (ISO, ủy quyền) thì để trống ô ký mã hiệu.</div>')
+    return trang(c, "Tài liệu hàng hóa", f"""
+      <div class="dau-trang"><h1>Tài liệu hàng hóa <span class="dem">{len(ds)}</span></h1>
+        <div><a class="nut" href="/tai-lieu/moi">Thêm tài liệu</a> <a class="nut phu" href="/tai-lieu/ho-so">Bộ hồ sơ dự thầu</a></div></div>
+      {canh}
+      <form class="bo-loc"><input type="search" name="q" value="{e(tu)}" placeholder="Tên tài liệu, ký mã hiệu, số giấy…">
+        {chon("loai", LOAI_TL, loai, "Mọi loại")}{chon("nh", [(x, x) for x in cac_nh], nh, "Mọi nhãn hiệu")}
+        {chon("hl", HIEU_LUC_TL, hl, "Mọi hiệu lực")}
+        <button class="nut phu">Lọc</button>{'<a href="/tai-lieu">Bỏ lọc</a>' if c.q else ""}</form>
+      {bang}""", "tld")
+
+
+def tl_xem(c, tid):
+    t = lay_tl(c, tid)
+    if c.method == "POST":
+        d, tep = doc_tl(c)
+        if not tep and not d["link"] and not t["tep_ten"]:
+            raise Loi(400, "Hãy chọn file hoặc dán link Google Drive của tài liệu.")
+        c.db.execute(f"UPDATE tai_lieu SET {', '.join(f + ' = ?' for f in COT_TL)}, cap_nhat = ? WHERE id = ?",
+                     [d[f] for f in COT_TL] + [datetime.now().isoformat(timespec="seconds"), tid])
+        luu_tep_tl(c, tid, tep)
+        c.db.commit()
+        return Chuyen(f"/tai-lieu/{tid}", "Đã lưu tài liệu.")
+    nguoi = c.db.execute("SELECT ho_ten FROM nguoi_dung WHERE id = ?", (t["nguoi_id"],)).fetchone()
+    hang = [("Loại", e(TEN_LOAI_TL.get(t["loai"], t["loai"]))), ("Nhãn hiệu / hãng", e(t["nhan_hieu"])),
+            ("Ký mã hiệu áp dụng", e(t["ma_hang"]) or '<span class="mo">Dùng chung cho cả hãng</span>'),
+            ("Số hiệu / số giấy", e(t["so_hieu"])), ("Ngày cấp", ngay(t["ngay_cap"])), ("Hiệu lực", nhan_hl_tl(t)),
+            ("File", f'{nut_mo_tl(t)}' + (f' <small class="mo">({e(t["tep_ten"])})</small>' if t["tep_ten"] else "")),
+            ("Ghi chú", e(t["ghi_chu"]).replace("\n", "<br>")),
+            ("Cập nhật", f'{e(nguoi["ho_ten"]) if nguoi else ""} · {e((t["cap_nhat"] or "").replace("T", " "))}')]
+    dong = "".join(f'<tr><th>{k}</th><td>{v}</td></tr>' for k, v in hang)
+    xoa = nut_xoa(c, f"/tai-lieu/{tid}/xoa", f"Xóa tài liệu “{t['ten']}”?", "Xóa tài liệu") if c.ql else ""
+    return trang(c, t["ten"], f"""
+      <div class="dau-trang"><h1>{e(t["ten"])}</h1><div>{nut_mo_tl(t)}</div></div>
+      <div class="the cuon"><table><tbody>{dong}</tbody></table></div>
+      <details class="the"><summary>Sửa tài liệu</summary>
+        <form method="post" enctype="multipart/form-data" class="luoi">{an_csrf(c)}{o_tl(c, t)}
+        <div class="hang-nut"><button class="nut">Lưu</button></div></form></details>{xoa}
+      <p><a href="/tai-lieu" data-quay-lai>← Quay lại</a></p>""", "tld")
+
+
+def tl_tai(c, tid):
+    t = lay_tl(c, tid)
+    r = c.db.execute("SELECT noi_dung FROM tai_lieu_tep WHERE tai_lieu_id = ?", (tid,)).fetchone()
+    if not r:
+        raise Loi(404, "Tài liệu này chưa có file tải lên.")
+    return Tep(t["tep_ten"], bytes(r["noi_dung"]), t["tep_kieu"] or "application/octet-stream", xem=True)
+
+
+def tl_xoa(c, tid):
+    t = lay_tl(c, tid)
+    c.db.execute("DELETE FROM tai_lieu_tep WHERE tai_lieu_id = ?", (tid,))
+    c.db.execute("DELETE FROM tai_lieu WHERE id = ?", (tid,))
+    c.db.commit()
+    return Chuyen("/tai-lieu", f"Đã xóa tài liệu “{t['ten']}”.")
+
+
+def gom_ho_so(c, chuoi_ma):
+    """Mỗi mã: thông tin hàng (nhãn hiệu, tên) + các tài liệu riêng của mã + tài liệu dùng chung của hãng."""
+    ma_goc = [m.strip() for m in re.split(r"[,;\n\r\t]+|\s{2,}", chuoi_ma or "") if m.strip()]
+    if len(ma_goc) == 1 and " " in ma_goc[0]:              # gõ "A B C" một dòng: coi mỗi từ là một mã
+        ma_goc = ma_goc[0].split()
+    ma_goc = list(dict.fromkeys(ma_goc))[:60]
+    sp = {}
+    for bang, cot_ten in (("hang_hoa", "COALESCE(NULLIF(ten_tm, ''), ten)"), ("thong_so", "COALESCE(NULLIF(ten_tm, ''), ten)")):
+        for r in c.db.execute(f"SELECT ma, nhan_hieu, {cot_ten} AS ten FROM {bang} WHERE ma <> ''").fetchall():
+            k = gap(r["ma"]).replace(" ", "")
+            if k not in sp or (not sp[k]["nhan_hieu"] and r["nhan_hieu"]):
+                sp[k] = {"nhan_hieu": r["nhan_hieu"] or "", "ten": r["ten"] or ""}
+    tat_ca = c.db.execute("SELECT * FROM tai_lieu ORDER BY loai, ten").fetchall()
+    ket_qua = []
+    for m in ma_goc:
+        k = gap(m).replace(" ", "")
+        info = sp.get(k, {"nhan_hieu": "", "ten": ""})
+        nh = gap(info["nhan_hieu"])
+        rieng = [t for t in tat_ca if k in tach_ma(t["ma_hang"])]
+        if not nh and rieng:                                # mã chưa có trong danh mục: lấy hãng từ tài liệu của mã
+            nh = gap(next((t["nhan_hieu"] for t in rieng if t["nhan_hieu"]), ""))
+            info = {**info, "nhan_hieu": next((t["nhan_hieu"] for t in rieng if t["nhan_hieu"]), "")}
+        chung = [t for t in tat_ca if not t["ma_hang"].strip() and nh and gap(t["nhan_hieu"]) == nh]
+        ket_qua.append({"ma": m, "ten": info["ten"], "nhan_hieu": info["nhan_hieu"], "tl": rieng + chung})
+    return ket_qua
+
+
+def tl_ho_so(c):
+    chuoi = c.form.get("ma") if c.method == "POST" else c.q.get("ma", "")
+    chuoi = (chuoi or "").strip()[:3000]
+    ket_qua = gom_ho_so(c, chuoi) if chuoi else []
+    if c.method == "POST" and c.form.get("zip") == "1":
+        ids = sorted({t["id"] for kq in ket_qua for t in kq["tl"] if t["tep_ten"]})
+        if not ids:
+            raise Loi(400, "Các mã này chưa có file nào tải lên app để gom.")
+        if sum(t["tep_co"] or 0 for kq in ket_qua for t in kq["tl"] if t["tep_ten"]) > TL_TOI_DA:
+            raise Loi(400, "Tổng các file lớn hơn 4 MB nên không gom được một file ZIP. Hãy bấm Mở file từng tài liệu, "
+                           "hoặc chọn ít mã hơn.")
+        bo = io.BytesIO()
+        with zipfile.ZipFile(bo, "w", zipfile.ZIP_DEFLATED) as z:
+            for kq in ket_qua:
+                thu_muc = re.sub(r'[\\/:*?"<>|]+', "_", kq["ma"]) or "ma"
+                links = []
+                for t in kq["tl"]:
+                    tl_loai = re.sub(r'[\\/:*?"<>|]+', "_", TEN_LOAI_TL.get(t["loai"], t["loai"]))
+                    if t["tep_ten"]:
+                        r = c.db.execute("SELECT noi_dung FROM tai_lieu_tep WHERE tai_lieu_id = ?", (t["id"],)).fetchone()
+                        if r:
+                            z.writestr(f"{thu_muc}/{tl_loai} - {t['tep_ten']}", bytes(r["noi_dung"]))
+                    if t["link"]:
+                        links.append(f"{TEN_LOAI_TL.get(t['loai'], t['loai'])} - {t['ten']}: {t['link']}")
+                if links:
+                    z.writestr(f"{thu_muc}/Link tai lieu.txt", "\r\n".join(links))
+        return Tep(f"ho-so-du-thau-{date.today().isoformat()}.zip", bo.getvalue(), "application/zip")
+    than = ""
+    if chuoi and not ket_qua:
+        than = '<div class="the trong">Không đọc được mã nào.</div>'
+    for kq in ket_qua:
+        co = {t["loai"] for t in kq["tl"]}
+        het = [t for t in kq["tl"] if hl_tl(t) == "het"]
+        thieu = [TEN_LOAI_TL[x] for x in LOAI_CAN_THAU if x not in co]
+        canh = "".join(f'<span class="nhan do">Thiếu {e(x)}</span> ' for x in thieu)
+        canh += "".join(f'<span class="nhan do">Hết hạn: {e(TEN_LOAI_TL.get(t["loai"], ""))}</span> ' for t in het)
+        if not canh:
+            canh = '<span class="nhan xanh">Đủ hồ sơ cơ bản</span>'
+        if kq["tl"]:
+            dong = "".join(
+                f'<tr><td>{e(TEN_LOAI_TL.get(t["loai"], t["loai"]))}</td><td><a href="/tai-lieu/{t["id"]}">{e(t["ten"])}</a>'
+                f'{"" if t["ma_hang"].strip() else " <small class=mo>(chung cả hãng)</small>"}</td>'
+                f'<td>{e(t["so_hieu"])}</td><td>{nhan_hl_tl(t)}</td><td>{nut_mo_tl(t)}</td></tr>' for t in kq["tl"])
+            bang = (f'<div class="cuon"><table><thead><tr><th>Loại</th><th>Tài liệu</th><th>Số</th><th>Hiệu lực</th><th></th></tr>'
+                    f'</thead><tbody>{dong}</tbody></table></div>')
+        else:
+            bang = '<p class="mo">Chưa có tài liệu nào cho mã này.</p>'
+        ten = " · ".join(x for x in (kq["ten"], kq["nhan_hieu"]) if x) or "Chưa có trong danh mục hàng hóa / TSKT"
+        than += (f'<div class="the"><div class="dau-trang"><h2>{e(kq["ma"])} <small class="mo">{e(ten)}</small></h2>'
+                 f'<div>{canh}</div></div>{bang}'
+                 f'<p><a href="/tai-lieu/moi">+ Thêm tài liệu</a></p></div>')
+    nut_zip = ""
+    if ket_qua and any(t["tep_ten"] for kq in ket_qua for t in kq["tl"]):
+        nut_zip = (f'<form method="post">{an_csrf(c)}<input type="hidden" name="ma" value="{e(chuoi)}">'
+                   '<button class="nut" name="zip" value="1">Tải tất cả (ZIP, chia thư mục theo mã)</button></form>')
+    return trang(c, "Bộ hồ sơ dự thầu", f"""
+      <div class="dau-trang"><h1>Bộ hồ sơ dự thầu</h1><div>{nut_zip}</div></div>
+      <p class="mo">Dán danh sách ký mã hiệu của gói thầu. App gom TSKT, số lưu hành, thư ủy quyền, ISO… của từng mã
+        (gồm cả tài liệu dùng chung của hãng) và báo đỏ loại còn thiếu hoặc đã hết hạn.</p>
+      <form class="the" method="get"><label class="rong">Ký mã hiệu (cách nhau bằng dấu phẩy hoặc xuống dòng)
+        <textarea name="ma" rows="3" placeholder="VD: R0181C, ITP02002-TC40, W141-C">{e(chuoi)}</textarea></label>
+        <div class="hang-nut"><button class="nut">Kiểm tra hồ sơ</button></div></form>
+      {than}""", "tlh")
+
+
 # ───────────────────────── định tuyến ─────────────────────────
 # quyền: "khach" = không cần đăng nhập, "nd" = đã đăng nhập, "ql" = chỉ quản lý
 
@@ -4907,7 +5253,7 @@ TUYEN = [
     ("GET|POST", r"/doi-mat-khau", doi_mat_khau, "nd"),
     ("GET", r"/", trang_chu, "nd"),
     ("GET", r"/tong-quan", tong_quan, "nd"),
-    ("GET", r"/muc/(hop-dong|bao-gia|ban-hang|kho)", trang_muc, "nd"),
+    ("GET", r"/muc/(hop-dong|bao-gia|ban-hang|kho|tai-lieu)", trang_muc, "nd"),
     ("GET", r"/hop-dong", ds_hop_dong, "nd"),
     ("GET|POST", r"/hop-dong/moi", hd_moi, "nd"),
     ("GET", r"/hop-dong/(\d+)", hd_xem, "nd"),
@@ -4949,6 +5295,12 @@ TUYEN = [
     ("POST", r"/thong-so/tai", ts_tai, "nd"),
     ("GET|POST", r"/thong-so/(\d+)", ts_xem, "nd"),
     ("POST", r"/thong-so/(\d+)/xoa", ts_xoa, "ql"),
+    ("GET", r"/tai-lieu", ds_tai_lieu, "nd"),
+    ("GET|POST", r"/tai-lieu/moi", tl_moi, "nd"),
+    ("GET|POST", r"/tai-lieu/ho-so", tl_ho_so, "nd"),
+    ("GET|POST", r"/tai-lieu/(\d+)", tl_xem, "nd"),
+    ("GET", r"/tai-lieu/(\d+)/tai", tl_tai, "nd"),
+    ("POST", r"/tai-lieu/(\d+)/xoa", tl_xoa, "ql"),
     ("GET", r"/uy-quyen", ds_uy_quyen, "nd"),
     ("GET|POST", r"/uy-quyen/moi", uq_moi, "nd"),
     ("GET", r"/uy-quyen/(\d+)", uq_xem, "nd"),
@@ -5069,7 +5421,9 @@ class H(BaseHTTPRequestHandler):
             body = kq.du_lieu
             self.send_response(200)
             self.send_header("Content-Type", kq.kieu)
-            self.send_header("Content-Disposition", "attachment; filename=\"hop-dong.docx\"; filename*=UTF-8''"
+            ascii_ten = re.sub(r'[^A-Za-z0-9._-]+', "_", gap(kq.ten)) or "tep"
+            self.send_header("Content-Disposition", ("inline" if kq.xem else "attachment")
+                             + f"; filename=\"{ascii_ten}\"; filename*=UTF-8''"
                              + urllib.parse.quote(kq.ten))
         else:
             body = kq.encode()
