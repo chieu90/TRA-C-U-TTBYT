@@ -5211,6 +5211,12 @@ def tl_ho_so(c):
         than = '<div class="the trong">Không đọc được mã nào.</div>'
     for kq in ket_qua:
         co = {t["loai"] for t in kq["tl"]}
+        for t in kq["tl"]:                               # file gộp, ví dụ "UQ CTK + ISO": tính cả loại có trong tên
+            g = " " + gap(t["ten"]) + " "
+            if "iso" in g:
+                co.add("iso")
+            if " uq " in g.replace("-", " ").replace("_", " ") or "uy quyen" in g:
+                co.add("uq")
         het = [t for t in kq["tl"] if hl_tl(t) == "het"]
         thieu = [TEN_LOAI_TL[x] for x in LOAI_CAN_THAU if x not in co]
         canh = "".join(f'<span class="nhan do">Thiếu {e(x)}</span> ' for x in thieu)
@@ -5248,7 +5254,7 @@ def tl_ho_so(c):
 LOAI_THEO_TU = [            # (loại, các cụm chữ trong tên file / thư mục, đã bỏ dấu)
     ("uq", ("uy quyen", "uq ", "uq-", "uq_", "authoriz", "maf", "letter of auth")),
     ("iso", ("iso",)),
-    ("ce", ("cfs", "cfg", "free sale", "fda", " ce ", "ce-", "ce_", "ce mark", "ec cert", "ivdr", "doc ce", "declaration of conf")),
+    ("ce", ("cfs", "cfg", "free sale", "fda", " ce ", "ce-", "ce_", "ce mark", "ec cert", " doc ", "declaration of conf")),
     ("lh", ("luu hanh", "phan loai", "cong bo", "so dang ky", "sdk", "gpnk", "giay phep")),
     ("coq", ("co cq", "co-cq", "c/o", "cq ", "certificate of origin", "certificate of quality")),
     ("ifu", ("ifu", "huong dan su dung", "hdsd", "instruction", "package insert")),
@@ -5287,6 +5293,10 @@ def doan_tl(ten_tep, thu_muc, ma_biet, cac_hang):
             ma.append(m)
             nh = nh or h
             con = con.replace(k, " ")
+    if not ma:
+        m = re.match(r"\s*([A-Za-z]{1,6}\d[\w]*(?:-[\w]+)*)", ten_goc)
+        if m and re.search(r"\d{2}", m.group(1)) and len(m.group(1)) >= 5:
+            ma.append(m.group(1).upper())
     duong = gap(thu_muc)
     if not nh:
         for h in cac_hang:
@@ -5351,9 +5361,24 @@ def tl_nhap_drive(c):
         id_co_san = {m.group(1) for l in co_san for m in [re.search(r"/d/([\w-]{20,})", l)] if m}
         dong = ""
         tep.sort(key=lambda t: (gap(t.get("thu_muc", "")), gap(t["ten"])))
+        doan = [doan_tl(t["ten"], t.get("thu_muc", ""), ma_biet, cac_hang) for t in tep]
+        dem = {}                                         # thư mục -> {hãng theo danh mục: số file}
+        for t, d in zip(tep, doan):
+            for m in d["ma"].split(", "):
+                h = ma_biet.get(gap(m).replace(" ", ""), ("", ""))[1]
+                if h:
+                    dem.setdefault(t.get("thu_muc", ""), {}).setdefault(h, 0)
+                    dem[t.get("thu_muc", "")][h] += 1
+        for t, d in zip(tep, doan):
+            tm = t.get("thu_muc", "")
+            tm_cha = next((k for k in [tm] + [" / ".join(tm.split(" / ")[:j]) for j in range(len(tm.split(" / ")) - 1, 0, -1)]
+                           if k in dem), None)
+            co_hang_dm = any(ma_biet.get(gap(m).replace(" ", ""), ("", ""))[1] for m in d["ma"].split(", ") if m)
+            if tm_cha is not None and not co_hang_dm:
+                d["nhan_hieu"] = max(dem[tm_cha].items(), key=lambda kv: kv[1])[0]
         moi = 0
         for i, t in enumerate(tep):
-            d = doan_tl(t["ten"], t.get("thu_muc", ""), ma_biet, cac_hang)
+            d = doan[i]
             da_co = t["url"] in co_san or t.get("id") in id_co_san
             moi += not da_co
             dong += (f'<tr{" class=mo" if da_co else ""}><td><input type="checkbox" name="chon_{i}" value="1"{"" if da_co else " checked"} '
