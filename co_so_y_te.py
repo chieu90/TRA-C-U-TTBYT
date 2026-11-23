@@ -397,6 +397,17 @@ def build_year(year):
     build(paths=(TT_PATH.replace(".json", f"_{year}.json"), DH_PATH.replace(".json", f"_{year}.json")))
 
 
+BS_PATH = os.path.join(g.HERE, "data", "kq_bo_sung.json")
+
+
+def bo_sung(year):
+    """Các gói trúng thầu nhập tay (chủ đầu tư chỉ đăng danh sách hàng dạng PDF) của một năm."""
+    try:
+        return [x for x in json.load(open(BS_PATH, encoding="utf-8")).get("goi", []) if x.get("nam") == year]
+    except (OSError, ValueError):
+        return []
+
+
 def build(paths=(TT_PATH, DH_PATH)):
     kw = g.load_kw()
     goi = json.load(open(g.OUT_PATH, encoding="utf-8"))["goi"]
@@ -414,6 +425,11 @@ def build(paths=(TT_PATH, DH_PATH)):
         for r in rows:
             r.append(MA_CDT.get((r[0], r[1]), ""))
             r.append(tg.get(r[0], ""))
+        # gói nhập tay từ PDF quyết định (data/kq_bo_sung.json): chỉ thêm khi mã gói chưa có trong dữ liệu công khai
+        co = {r[0] for r in rows}
+        for b in bo_sung(YEAR):
+            rows += [list(r) for r in b.get("trung_thau" if path == paths[0] else "duong_huyet", []) if r[0] not in co]
+        rows.sort(key=lambda r: r[3], reverse=True)
         json.dump({"cap_nhat": now_vn().strftime("%Y-%m-%d %H:%M"), "nam": YEAR, "nhom": nhom, "cot": cot, "rows": rows},
                   open(path, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
         print(f"{len(rows)} dòng -> {path}", file=sys.stderr)
