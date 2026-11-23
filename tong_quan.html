@@ -161,7 +161,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 // Hãng của công ty: khớp theo tên hãng chuẩn hóa (hang_chuan) hoặc hãng / nhãn hiệu ghi trong kết quả
 const BRANDS = [
   { id: 'intec', ten: 'InTec', re: /\bintec\b/, c: '--b1' },
-  { id: 'genesee', ten: 'Genesee', re: /genesee/, c: '--b2' },
+  { id: 'genesee', ten: 'Genesee (CTK)', re: /genesee|ctk biotech/, c: '--b2' },
   { id: 'wondfo', ten: 'Wondfo', re: /wondfo/, c: '--b3' },
   { id: 'taidoc', ten: 'TaiDoc', re: /taidoc|\bfora\b/, c: '--b5' },
 ];
@@ -224,7 +224,7 @@ async function loadYear(y) {
 // ---- bảng giá đại lý kênh ETC (Quản trị → Bảng giá đại lý; chỉ quyền KQ Test xem được) ----
 // mỗi sản phẩm lấy giá của quy tắc mới nhất (ID lớn nhất), bỏ giá 0; hãng đoán từ tên / mã trong bảng giá
 let BG = null;
-const BG_BRAND = [['intec', /advanced quality|\[itp|intec/], ['wondfo', /wondfo/], ['taidoc', /u-?right|procheck|taidoc|\[td/], ['genesee', /genesee/]];
+const BG_BRAND = [['intec', /advanced quality|\[itp|intec/], ['wondfo', /wondfo/], ['taidoc', /u-?right|procheck|taidoc|\[td/], ['genesee', /genesee|onsite|ctk/]];  // Genesee chính là CTK (sản phẩm OnSite®)
 const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function napBangGia(d) {
   if (!d || !d.rows || !d.rows.length) return;
@@ -249,20 +249,16 @@ function napBangGia(d) {
   }).filter(p => p.b);
   if (!BG.length) BG = null;
 }
-// gắn giá đại lý cho từng dòng trúng thầu: theo mã (ký mã hiệu / tên) > mã gốc > model > sản phẩm cùng hãng cùng nhóm hay gặp nhất
+// gắn giá đại lý cho từng dòng trúng thầu — CHỈ theo mã sản phẩm (yêu cầu 23/11/2026): mã đầy đủ trong ký mã hiệu / tên hàng,
+// hoặc mã gốc (bỏ đuôi quy cách -DS50/-TC40) khi hãng chỉ có 1 sản phẩm mang mã gốc đó, hoặc model que TD-xxxx. Không có mã thì để trống.
 function ghepGia(rows) {
   if (!BG) return;
-  const hay = new Map();
+  const goc = new Map(); BG.forEach(p => { if (p.reBase) { const k = p.b + '|' + p.reBase.source; goc.set(k, (goc.get(k) || 0) + 1); } });
   for (const r of rows) {
     const t = fold(r.ky + ' ' + r.ten), c = BG.filter(p => p.b === r.b);
-    const p = c.find(p => p.reFull && p.reFull.test(t)) || c.find(p => p.reBase && p.reBase.test(t)) || c.find(p => p.reModel && p.que && p.reModel.test(t));
-    if (p) { r.p = p; r.uoc = false; const k = r.b + '|' + r.nhom, m = hay.get(k) || new Map(); m.set(p, (m.get(p) || 0) + 1); hay.set(k, m); }
-  }
-  for (const r of rows) {
-    if (r.p) continue;
-    const m = hay.get(r.b + '|' + r.nhom);
-    const p = m ? [...m].sort((a, b) => b[1] - a[1])[0][0] : r.nhom === 'Đường huyết' ? BG.find(p => p.b === r.b && p.que && /4279/.test(p.name)) || BG.find(p => p.b === r.b && p.que) : null;
-    if (p) { r.p = p; r.uoc = true; }
+    const p = c.find(p => p.reFull && p.reFull.test(t)) || c.find(p => p.reBase && goc.get(p.b + '|' + p.reBase.source) === 1 && p.reBase.test(t))
+      || c.find(p => p.reModel && p.que && p.reModel.test(t));
+    if (p) r.p = p;
   }
   // so được khi đơn vị tính là test/que/khay... và đơn giá không lệch quá 5 lần (lệch hơn thường là giá theo hộp)
   for (const r of rows) if (r.p) { const x = r.dg / r.p.gia; r.so = r.dg > 0 && !/^(hop|bo|thung|kit)$/.test(fold(r.dvt).trim()) && x >= 0.2 && x <= 5; }
@@ -383,18 +379,18 @@ function veGia(rows) {
     kpi(ICO.pkg, 1, 'Lượt có giá đại lý', num(coGia.length) + ' / ' + num(rows.length), `${num(coGia.length - so.length)} lượt khác đơn vị, không so`),
   ].join('');
   const m = new Map();
-  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0, uoc: 0 });
-    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); if (r.uoc) o.uoc++; }
+  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0 });
+    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); }
   const ds = [...m.values()].sort((a, b) => b.gt - a.gt);
   $('#tBg').innerHTML = `<thead><tr><th>Sản phẩm (bảng giá đại lý)</th><th class="n">Giá đại lý</th><th class="n">Giá trúng TB</th><th class="n">Thấp nhất – cao nhất</th><th class="n">Chênh lệch</th><th class="n">Lượt</th><th class="n">Số lượng</th></tr></thead><tbody>` +
     (ds.length ? ds.slice(0, 30).map(o => { const tb = o.gt / o.sl, ch = (tb / o.p.gia - 1) * 100;
-      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}${o.uoc ? ` · ${o.uoc} lượt ghép theo nhóm` : ''}</div></span></div></td>
+      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}</div></span></div></td>
       <td class="n">${num(o.p.gia)}</td><td class="n"><b>${num(tb)}</b></td><td class="n">${num(o.mn)} – ${num(o.mx)}</td>
       <td class="n"><span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span></td><td class="n">${num(o.n)}</td><td class="n">${num(o.sl)}</td></tr>`; }).join('')
     : '<tr><td colspan="7" class="empty">Không có mặt hàng nào so được với bảng giá</td></tr>') + '</tbody>';
   const genesee = rows.some(r => r.b === 'genesee');
-  $('#bgNote').textContent = 'Ghép theo mã sản phẩm trong bảng giá với ký mã hiệu / tên hàng trúng thầu; dòng không ghi mã thì lấy sản phẩm cùng hãng cùng nhóm hay gặp nhất (ghi "ghép theo nhóm"). '
-    + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee.' : '');
+  $('#bgNote').textContent = 'Chỉ ghép theo mã sản phẩm trong bảng giá (vd ITP01003-DS50, W041-C, R0040S, TD-4279) có ghi trong ký mã hiệu / tên hàng trúng thầu; dòng không ghi mã thì không so. '
+    + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee (CTK).' : '');
 }
 
 async function render() {
