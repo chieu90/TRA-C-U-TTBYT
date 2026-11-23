@@ -139,6 +139,10 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
     <section class="card"><h2>Sản phẩm trúng nhiều nhất<small>theo giá trị</small></h2><div class="tbl-wrap"><table id="tSp"></table></div></section>
   </div>
 
+  <section class="card" id="bgCard" style="margin-bottom:14px" hidden><h2>Giá trúng thầu so với giá đại lý ETC<small id="bgSub"></small></h2>
+    <div class="kpis" id="bgKpi" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:12px"></div>
+    <div class="tbl-wrap"><table id="tBg"></table></div><p class="note" id="bgNote"></p></section>
+
   <div class="row r-3">
     <section class="card"><h2>Top tỉnh / thành</h2><div class="hb" id="hTinh"></div></section>
     <section class="card"><h2>Top khách hàng (nhà thầu)</h2><div class="hb" id="hKhach"></div></section>
@@ -151,13 +155,12 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 <div class="tip" id="tip"></div>
 
 <script>
-// màu hãng theo yêu cầu 23/11/2026: InTec đỏ, Genesee vàng, Wondfo xanh đậm, Orient Gene cam, TaiDoc xanh lá
+// màu hãng theo yêu cầu 23/11/2026: InTec đỏ, Genesee vàng, Wondfo xanh đậm, TaiDoc xanh lá (bỏ Orient Gene 23/11/2026)
 // Hãng của công ty: khớp theo tên hãng chuẩn hóa (hang_chuan) hoặc hãng / nhãn hiệu ghi trong kết quả
 const BRANDS = [
   { id: 'intec', ten: 'InTec', re: /\bintec\b/, c: '--b1' },
   { id: 'genesee', ten: 'Genesee', re: /genesee/, c: '--b2' },
   { id: 'wondfo', ten: 'Wondfo', re: /wondfo/, c: '--b3' },
-  { id: 'orient', ten: 'Orient Gene', re: /orient ?gene|zhejiang orient|^orient$/, c: '--b4' },
   { id: 'taidoc', ten: 'TaiDoc', re: /taidoc|\bfora\b/, c: '--b5' },
 ];
 const NV_NONE = 'Chưa gán nhân viên';
@@ -209,12 +212,67 @@ async function loadYear(y) {
         const b = brandOf(r0); if (!b) continue;
         const sl = +a[ix.sl] || 0, dg = +a[ix.don_gia] || 0;
         out.push({ b, ma: a[ix.ma], cdt: a[ix.cdt] || '', tinh: a[ix.tinh] || '', ngay: a[ix.ngay] || '', nhom: a[ix.nhom] || '', ten: a[ix.ten] || '',
-          sl, gt: sl * dg, slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
+          sl, dg, gt: sl * dg, ky: a[ix.ky_ma] || '', dvt: a[ix.dvt] || '', slt: +a[ix.sl_test] || sl, nt: String(a[ix.nha_thau] || '').split('; ').filter(Boolean) });
       }
     } catch (e) {}
   }
+  ghepGia(out);
   return CACHE[y] = { rows: out, cap };
 }
+// ---- bảng giá đại lý kênh ETC (Quản trị → Bảng giá đại lý; chỉ quyền KQ Test xem được) ----
+// mỗi sản phẩm lấy giá của quy tắc mới nhất (ID lớn nhất), bỏ giá 0; hãng đoán từ tên / mã trong bảng giá
+let BG = null;
+const BG_BRAND = [['intec', /advanced quality|\[itp|intec/], ['wondfo', /wondfo/], ['taidoc', /u-?right|procheck|taidoc|\[td/], ['genesee', /genesee/]];
+const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function napBangGia(d) {
+  if (!d || !d.rows || !d.rows.length) return;
+  const f = d.cot.map(fold), col = re => f.findIndex(c => re.test(c));
+  const iSp = col(/san pham/), iGia = col(/gia co dinh/) >= 0 ? col(/gia co dinh/) : (d.cot_gia || [])[0], iId = col(/\/id$/);
+  if (iSp < 0 || iGia == null || iGia < 0) return;
+  const m = new Map();
+  for (const r of d.rows) {
+    const name = String(r[iSp] || '').trim(), gia = +String(r[iGia] || '').replace(/\./g, '').replace(',', '.') || 0;
+    const id = +((String(r[iId] || '').match(/(\d+)\D*$/) || [])[1] || 0);
+    if (!name || !gia) continue;
+    const o = m.get(name); if (!o || id >= o.id) m.set(name, { name, gia, id });
+  }
+  BG = [...m.values()].map(p => {
+    const b = (BG_BRAND.find(([, re]) => re.test(fold(p.name))) || [])[0];
+    const code = fold((p.name.match(/^\[([^\]]+)\]/) || [])[1] || ''), base = code.split('-')[0];
+    const model = fold((p.name.match(/\btd-? ?\d{4}[a-z]?\b/i) || [])[0] || '').replace(/[- ]/g, '');
+    return { ...p, b, ten: p.name.replace(/^\[[^\]]+\]\s*/, ''), que: /^que thu duong huyet/.test(fold(p.name.replace(/^\[[^\]]+\]\s*/, ''))),
+      reFull: code ? new RegExp('(^|[^a-z0-9])' + reEsc(code).replace(/\\-/g, '[- ]?') + '($|[^a-z0-9])') : null,
+      reBase: base.length >= 5 ? new RegExp('(^|[^a-z0-9])' + reEsc(base) + '($|[^a-z0-9-])') : null,
+      reModel: model ? new RegExp('td[- ]?' + model.slice(2) + '(?![0-9])') : null };
+  }).filter(p => p.b);
+  if (!BG.length) BG = null;
+}
+// gắn giá đại lý cho từng dòng trúng thầu: theo mã (ký mã hiệu / tên) > mã gốc > model > sản phẩm cùng hãng cùng nhóm hay gặp nhất
+function ghepGia(rows) {
+  if (!BG) return;
+  const hay = new Map();
+  for (const r of rows) {
+    const t = fold(r.ky + ' ' + r.ten), c = BG.filter(p => p.b === r.b);
+    const p = c.find(p => p.reFull && p.reFull.test(t)) || c.find(p => p.reBase && p.reBase.test(t)) || c.find(p => p.reModel && p.que && p.reModel.test(t));
+    if (p) { r.p = p; r.uoc = false; const k = r.b + '|' + r.nhom, m = hay.get(k) || new Map(); m.set(p, (m.get(p) || 0) + 1); hay.set(k, m); }
+  }
+  for (const r of rows) {
+    if (r.p) continue;
+    const m = hay.get(r.b + '|' + r.nhom);
+    const p = m ? [...m].sort((a, b) => b[1] - a[1])[0][0] : r.nhom === 'Đường huyết' ? BG.find(p => p.b === r.b && p.que && /4279/.test(p.name)) || BG.find(p => p.b === r.b && p.que) : null;
+    if (p) { r.p = p; r.uoc = true; }
+  }
+  // so được khi đơn vị tính là test/que/khay... và đơn giá không lệch quá 5 lần (lệch hơn thường là giá theo hộp)
+  for (const r of rows) if (r.p) { const x = r.dg / r.p.gia; r.so = r.dg > 0 && !/^(hop|bo|thung|kit)$/.test(fold(r.dvt).trim()) && x >= 0.2 && x <= 5; }
+}
+// chênh lệch giá trúng thầu so với giá đại lý (gia quyền theo số lượng), chỉ tính dòng so được
+function chenh(rows) {
+  let a = 0, b = 0, n = 0;
+  for (const r of rows) if (r.so) { a += r.sl * r.dg; b += r.sl * r.p.gia; n++; }
+  return { a, b, n, p: b ? (a / b - 1) * 100 : null };
+}
+const chTxt = c => c.p == null ? '<span class="sub2">—</span>' : `<span class="${c.p >= 0 ? 'up' : 'down'}">${c.p >= 0 ? '+' : ''}${c.p.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span>`;
+
 function nvOf(r) {
   if (!KHNV) return [NV_NONE];
   if (!r._nv) { const s = new Set(); r.nt.forEach(n => (KHNV.get(kfold(n)) || []).forEach(v => s.add(v))); r._nv = s.size ? [...s] : [NV_NONE]; }
@@ -311,6 +369,32 @@ function hbars(el, list, n, label) {
     <span>${esc(label ? label(o) : o.k)}</span><b>${money(o.gt)}</b><div class="bar"><b style="width:${(o.gt / max * 100).toFixed(1)}%"></b></div></div>`).join('') : '<div class="sub2">Không có dữ liệu</div>';
 }
 
+function veGia(rows) {
+  if (!BG) { $('#bgCard').hidden = true; return; }
+  $('#bgCard').hidden = false;
+  const c = chenh(rows), coGia = rows.filter(r => r.p), so = rows.filter(r => r.so);
+  $('#bgSub').textContent = 'giá trúng thầu trung bình so với giá đại lý, theo số lượng';
+  $('#bgKpi').innerHTML = [
+    kpi(ICO.money, 0, 'Giá trị theo giá trúng', money(c.a), `${num(c.n)} lượt so được`, money(c.a, true)),
+    kpi(ICO.money, 1, 'Cùng số lượng × giá đại lý', money(c.b), '&nbsp;', money(c.b, true)),
+    kpi(ICO.list, 0, 'Giá trúng so với giá ĐL', c.p == null ? '—' : (c.p >= 0 ? '+' : '') + c.p.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%', c.p == null ? '&nbsp;' : c.p >= 0 ? 'giá trúng cao hơn giá đại lý' : 'giá trúng thấp hơn giá đại lý'),
+    kpi(ICO.pkg, 1, 'Lượt có giá đại lý', num(coGia.length) + ' / ' + num(rows.length), `${num(coGia.length - so.length)} lượt khác đơn vị, không so`),
+  ].join('');
+  const m = new Map();
+  for (const r of so) { let o = m.get(r.p); if (!o) m.set(r.p, o = { p: r.p, n: 0, sl: 0, gt: 0, mn: Infinity, mx: 0, uoc: 0 });
+    o.n++; o.sl += r.sl; o.gt += r.sl * r.dg; o.mn = Math.min(o.mn, r.dg); o.mx = Math.max(o.mx, r.dg); if (r.uoc) o.uoc++; }
+  const ds = [...m.values()].sort((a, b) => b.gt - a.gt);
+  $('#tBg').innerHTML = `<thead><tr><th>Sản phẩm (bảng giá đại lý)</th><th class="n">Giá đại lý</th><th class="n">Giá trúng TB</th><th class="n">Thấp nhất – cao nhất</th><th class="n">Chênh lệch</th><th class="n">Lượt</th><th class="n">Số lượng</th></tr></thead><tbody>` +
+    (ds.length ? ds.slice(0, 30).map(o => { const tb = o.gt / o.sl, ch = (tb / o.p.gia - 1) * 100;
+      return `<tr><td><div class="nm">${sw(o.p.b)}<span>${esc(o.p.ten.length > 90 ? o.p.ten.slice(0, 90) + '…' : o.p.ten)}<div class="sub2">${esc((o.p.name.match(/^\[([^\]]+)\]/) || [])[1] || B(o.p.b).ten)}${o.uoc ? ` · ${o.uoc} lượt ghép theo nhóm` : ''}</div></span></div></td>
+      <td class="n">${num(o.p.gia)}</td><td class="n"><b>${num(tb)}</b></td><td class="n">${num(o.mn)} – ${num(o.mx)}</td>
+      <td class="n"><span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%</span></td><td class="n">${num(o.n)}</td><td class="n">${num(o.sl)}</td></tr>`; }).join('')
+    : '<tr><td colspan="7" class="empty">Không có mặt hàng nào so được với bảng giá</td></tr>') + '</tbody>';
+  const genesee = rows.some(r => r.b === 'genesee');
+  $('#bgNote').textContent = 'Ghép theo mã sản phẩm trong bảng giá với ký mã hiệu / tên hàng trúng thầu; dòng không ghi mã thì lấy sản phẩm cùng hãng cùng nhóm hay gặp nhất (ghi "ghép theo nhóm"). '
+    + 'Dòng tính theo hộp/bộ hoặc đơn giá lệch quá 5 lần giá đại lý không đưa vào so sánh.' + (genesee && !BG.some(p => p.b === 'genesee') ? ' Bảng giá chưa có sản phẩm Genesee.' : '');
+}
+
 async function render() {
   $('#status').textContent = 'Đang tải…';
   const [cur, prv] = await Promise.all([loadYear(NAM), YEARS.includes(NAM - 1) ? loadYear(NAM - 1) : Promise.resolve({ rows: [] })]);
@@ -351,27 +435,29 @@ async function render() {
 
   const byB = agg(rows, r => r.b), byBp = new Map(agg(prev, r => r.b).map(o => [o.k, o]));
   drawDonut(byB, T);
-  $('#tBrand').innerHTML = `<thead><tr><th>Thương hiệu</th><th class="n">Giá trị trúng thầu</th><th class="n">Tăng/giảm</th><th class="n">Tỷ trọng</th><th class="n">Lượt trúng</th><th class="n">Gói thầu</th><th class="n">Cơ sở y tế</th><th class="n">Khách hàng</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th></tr></thead><tbody>` +
-    (byB.length ? byB.map(o => { const p = byBp.get(o.k); return `<tr><td><div class="nm">${sw(o.k)}${esc(B(o.k).ten)}</div></td><td class="n"><b>${money(o.gt, true)}</b></td>
+  $('#tBrand').innerHTML = `<thead><tr><th>Thương hiệu</th><th class="n">Giá trị trúng thầu</th><th class="n">Tăng/giảm</th><th class="n">Tỷ trọng</th><th class="n">Lượt trúng</th><th class="n">Gói thầu</th><th class="n">Cơ sở y tế</th><th class="n">Khách hàng</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th>${BG ? '<th class="n" title="Giá trúng thầu so với giá đại lý ETC, gia quyền theo số lượng">So giá ĐL</th>' : ''}</tr></thead><tbody>` +
+    (byB.length ? byB.map(o => { const p = byBp.get(o.k), ch = chenh(rows.filter(r => r.b === o.k)); return `<tr><td><div class="nm">${sw(o.k)}${esc(B(o.k).ten)}</div></td><td class="n"><b>${money(o.gt, true)}</b></td>
       <td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${(o.gt / T * 100).toFixed(1)}%</td><td class="n">${num(o.n)}</td><td class="n">${num(o.ma.size)}</td>
-      <td class="n">${num(o.cdt.size)}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) + ' đ' : '—'}</td></tr>`; }).join('')
-    : '<tr><td colspan="10" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+      <td class="n">${num(o.cdt.size)}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) + ' đ' : '—'}</td>${BG ? `<td class="n">${ch.n ? chTxt(ch) : '<span class="sub2">chưa có giá</span>'}</td>` : ''}</tr>`; }).join('')
+    : '<tr><td colspan="11" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
 
   const byN = agg(rows, nvOf), byNp = new Map(agg(prev, nvOf).map(o => [o.k, o])), maxN = byN[0] ? byN[0].gt : 1;
-  $('#tNv').innerHTML = `<thead><tr><th>Nhân viên</th><th class="n">Giá trị</th><th class="n">Tăng/giảm</th><th class="n">Khách</th><th class="n">CSYT</th></tr></thead><tbody>` +
+  $('#tNv').innerHTML = `<thead><tr><th>Nhân viên</th><th class="n">Giá trị</th><th class="n">Tăng/giảm</th><th class="n">Khách</th><th class="n">CSYT</th>${BG ? '<th class="n">So giá ĐL</th>' : ''}</tr></thead><tbody>` +
     (byN.length ? byN.map(o => { const p = byNp.get(o.k), mix = [...o.b.entries()].sort((a, b) => b[1] - a[1]);
       return `<tr data-tip="<b>${esc(o.k)}</b><br>${mix.map(([b, v]) => esc(B(b).ten) + ': ' + esc(money(v))).join('<br>')}"><td><div class="nm" style="font-weight:${o.k === NV_NONE ? 400 : 600}">${esc(o.k)}</div>
       <div class="bar" style="display:flex;gap:0">${mix.map(([b, v]) => `<b style="width:${(v / maxN * 100).toFixed(1)}%;background:var(${B(b).c});border-radius:0"></b>`).join('')}</div></td>
-      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.cdt.size)}</td></tr>`; }).join('')
+      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${prv.rows.length ? delta(o.gt, p ? p.gt : 0) : '—'}</td><td class="n">${num(o.kh.size)}</td><td class="n">${num(o.cdt.size)}</td>${BG ? `<td class="n">${(ch => ch.n ? chTxt(ch) : '<span class="sub2">—</span>')(chenh(rows.filter(r => nvOf(r).includes(o.k))))}</td>` : ''}</tr>`; }).join('')
     : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
   $('#nvNote').textContent = KHNV ? 'Thanh màu = tỷ trọng từng thương hiệu trong giá trị của nhân viên. Một gói liên danh nhiều khách có thể tính cho nhiều nhân viên.'
     : 'Chưa có danh sách khách hàng theo nhân viên (Quản trị → Khách hàng theo nhân viên).';
 
   const byS = agg(rows, r => r.b + '|' + r.nhom);
-  $('#tSp').innerHTML = `<thead><tr><th>Sản phẩm</th><th class="n">Giá trị</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th><th class="n">Gói</th></tr></thead><tbody>` +
+  $('#tSp').innerHTML = `<thead><tr><th>Sản phẩm</th><th class="n">Giá trị</th><th class="n">Số lượng</th><th class="n">Đơn giá TB</th>${BG ? '<th class="n">So giá ĐL</th>' : ''}<th class="n">Gói</th></tr></thead><tbody>` +
     (byS.length ? byS.slice(0, 10).map(o => { const [b, nh] = o.k.split('|'); return `<tr><td><div class="nm">${sw(b)}<span>${esc(nh)}<div class="sub2">${esc(B(b).ten)}</div></span></div></td>
-      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) : '—'}</td><td class="n">${num(o.ma.size)}</td></tr>`; }).join('')
+      <td class="n"><b>${money(o.gt)}</b></td><td class="n">${num(o.slt)}</td><td class="n">${o.slt ? num(o.gt / o.slt) : '—'}</td>${BG ? `<td class="n">${(ch => ch.n ? chTxt(ch) : '<span class="sub2">—</span>')(chenh(rows.filter(r => r.b + '|' + r.nhom === o.k)))}</td>` : ''}<td class="n">${num(o.ma.size)}</td></tr>`; }).join('')
     : '<tr><td colspan="5" class="empty">Không có dữ liệu</td></tr>') + '</tbody>';
+
+  veGia(rows);
 
   const byT = agg(rows, r => r.tinh || '(không rõ tỉnh)'), byK = agg(rows, kh), byC = agg(rows, r => r.cdt);
   hbars('#hTinh', byT, 10); hbars('#hKhach', byK, 10); hbars('#hCdt', byC, 10);
@@ -401,7 +487,8 @@ $('#nam').addEventListener('change', () => { NAM = +$('#nam').value; $('#tinh').
 ['#nv', '#tinh'].forEach(s => $(s).addEventListener('change', render));
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 250); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
-fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).catch(() => null).then(d => {
+Promise.all(['khach-nv', 'bang-gia'].map(a => fetch('/api/auth?action=' + a).then(r => r.ok ? r.json() : null).catch(() => null))).then(([d, g]) => {
+  try { napBangGia(g); } catch (e) { BG = null; }
   if (d && d.ds && d.ds.length) { KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean))); }
   render();
 });
