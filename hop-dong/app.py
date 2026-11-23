@@ -2472,7 +2472,9 @@ Quy tắc:
 - Hỏi thông số / độ nhạy / độ đặc hiệu / cấu hình của một mã: gọi tra_thong_so rồi trả lời đúng số liệu. Khi người dùng cần thông số để dùng
   cho hồ sơ, chép NGUYÊN VĂN phần cau_hinh_ky_thuat (giữ các gạch đầu dòng), không tóm tắt làm mất ý.
 - Nhờ "cho tôi file" / "xuất file" / "gửi file" thông số: gọi xuat_file_thong_so với đúng các mã (bo_gia=true nếu người dùng nói bỏ giá).
-  Đừng tự viết đường link; app tự hiện nút tải bên dưới câu trả lời của bạn. Chỉ nói đã tạo file, gồm mã nào, mã nào không tìm thấy.
+  Kết quả công cụ có "link": nếu là địa chỉ Google Sheet thì ghi nguyên địa chỉ đó trong câu trả lời (ai có link đều sửa được);
+  nếu là file Excel tải trong app thì app tự hiện nút tải, nói rõ lý do chưa có link Google Sheet nếu công cụ có ghi_chu.
+  Chỉ nói đã tạo file, gồm mã nào, mã nào không tìm thấy.
 - Nhiều mã trong một câu thì truyền hết vào một lần gọi công cụ.
 - Mã không có trong bảng: nói rõ, và gợi ý mã gần giống nếu công cụ trả về.
 - Nếu iso_13485_het_han ghi ĐÃ HẾT HẠN thì nhắc người dùng một câu.
@@ -2533,6 +2535,80 @@ def _tim_theo_ma(c, ma):
     return ds, khong, goi_y
 
 
+def tao_link_ts(c, ds, bo_gia):
+    """Giao file TSKT cho các dòng ds: Google Sheet ai có link cũng sửa được (khi đã kết nối Google ở mục Mẫu HĐ),
+    không được thì file Excel tải trong app. Trả về ({ten, url, loai}, ghi chú nếu phải dùng file Excel)."""
+    ten_file, dl = xlsx_tu_dong(ds, bo_gia)
+    ghi = ""
+    if da_ket_noi(c):
+        try:
+            kq = goi_google(c, "tao_sheet", ten=ten_file[:-5], xlsx=base64.b64encode(dl).decode(), quyen="sua",
+                            thu_muc="Thông số kỹ thuật")
+            url = kq.get("url") or ""
+            if url.startswith("https://docs.google.com/spreadsheets/"):
+                return {"ten": ten_file[:-5], "url": url, "loai": "sheet"}, ""
+            ghi = "Google không trả về link."
+        except Loi as loi:
+            ghi = ("đoạn mã Apps Script là bản cũ, chưa tạo được Google Sheet" if "không hợp lệ" in loi.tb
+                   else loi.tb[:160])
+    else:
+        ghi = "app chưa kết nối Google (mục Mẫu HĐ)"
+    token = secrets.token_urlsafe(12)
+    c.db.execute("DELETE FROM tep WHERE ma LIKE 'ai_%' AND cap_nhat < ?",
+                 ((datetime.now() - timedelta(days=7)).isoformat(timespec="seconds"),))
+    c.db.execute("INSERT INTO tep (ma, ten_tep, noi_dung, cap_nhat, nguoi, nguon) VALUES (?, ?, ?, ?, ?, 'tro_ly')",
+                 ("ai_" + token, ten_file[:200], dl, datetime.now().isoformat(timespec="seconds"), c.user["ho_ten"]))
+    c.db.commit()
+    return {"ten": ten_file, "url": f"/tro-ly/tai/{token}", "loai": "xlsx"}, ghi
+
+
+def tl_nhan_ma(c, van_ban):
+    """Các dòng TSKT mà câu nhắn nhắc đến theo ký mã hiệu (khớp cả mã đủ lẫn phần sau tiền tố, vd 'TD-4279' của 'U-RIGHT TD-4279')."""
+    g = " " + gap(van_ban) + " "
+    ds = c.db.execute("SELECT id, ma FROM thong_so ORDER BY id").fetchall()
+    ids = []
+    for r in ds:
+        m = gap(r["ma"])
+        cac = {m} | ({m.split()[-1]} if " " in m else set())
+        if any(len(x) >= 4 and re.search(r"(?<![a-z0-9-])" + re.escape(x) + r"(?![a-z0-9-])", g) for x in cac):
+            ids.append(r["id"])
+    if not ids:                                           # gõ tắt phần số, vd "4279"
+        toks = [t for t in re.findall(r"[a-z0-9-]+", g) if len(t) >= 4 and re.search(r"\d", t)]
+        for r in ds:
+            m = gap(r["ma"]).split()[-1]
+            if any(m.endswith(t) or m.startswith(t) for t in toks):
+                ids.append(r["id"])
+    if not ids:
+        return []
+    ids = ids[:40]
+    return c.db.execute(f"SELECT * FROM thong_so WHERE id IN ({', '.join('?' * len(ids))}) ORDER BY nhan_hieu, ma", ids).fetchall()
+
+
+HOI_DAP_RE = re.compile(r"do nhay|dac hieu|nguong|bao quan|so sanh|khac nhau|thanh phan|bao nhieu|la gi|co dat|dap ung|phu hop|"
+                        r"hay hon|nen chon|\?")
+
+
+def tl_lam_nhanh(c, van_ban):
+    """Câu giao việc có ký mã hiệu và không phải câu hỏi: làm luôn (tạo file/link TSKT) mà không cần chờ AI chọn công cụ."""
+    gv = gap(van_ban)
+    if HOI_DAP_RE.search(gv) or not c.db.execute("SELECT 1 FROM thong_so").fetchone():
+        return None
+    ds = tl_nhan_ma(c, van_ban)
+    if not ds:
+        return None
+    bo_gia = bool(re.search(r"\b(bo|khong|ko|bot)\s+gia\b", gv))
+    muc, ghi = tao_link_ts(c, ds, bo_gia)
+    dong = [f"Đã làm file thông số kỹ thuật cho **{len(ds)}** mã" + (" (đã bỏ 4 cột giá)" if bo_gia else "") + ":"]
+    for h in ds[:12]:
+        iso, het = iso_ts(h)
+        dong.append(f"- **{h['ma']}** · {h['ten_tm'] or h['ten']} · {h['nhan_hieu']}" + (f" · ISO hết hạn {iso} (ĐÃ HẾT HẠN)" if het else ""))
+    if muc["loai"] == "sheet":
+        dong.append(f"\nLink Google Sheet (ai có link đều sửa được): {muc['url']}")
+    else:
+        dong.append("\nBấm nút bên dưới để tải file Excel." + (f" (Chưa có link Google Sheet vì {ghi}.)" if ghi else ""))
+    return {"tra_loi": "\n".join(dong), "tep": [muc]}
+
+
 def tl_cong_cu(c, ten, a, tep_ra):
     """Chạy một công cụ do AI gọi; trả về dict (gửi lại cho AI). Mọi thao tác đều chỉ đọc hoặc tạo file tải về."""
     a = a if isinstance(a, dict) else {}
@@ -2565,15 +2641,13 @@ def tl_cong_cu(c, ten, a, tep_ra):
         ds, khong, goi_y = _tim_theo_ma(c, ma)
         if not ds:
             return {"loi": "Không có mã nào trong bảng TSKT.", "khong_tim_thay": khong, "goi_y": goi_y[:6]}
-        ten_file, dl = xlsx_tu_dong(ds, bool(a.get("bo_gia")))
-        token = secrets.token_urlsafe(12)
-        c.db.execute("DELETE FROM tep WHERE ma LIKE 'ai_%' AND cap_nhat < ?",
-                     ((datetime.now() - timedelta(days=7)).isoformat(timespec="seconds"),))
-        c.db.execute("INSERT INTO tep (ma, ten_tep, noi_dung, cap_nhat, nguoi, nguon) VALUES (?, ?, ?, ?, ?, 'tro_ly')",
-                     ("ai_" + token, ten_file[:200], dl, datetime.now().isoformat(timespec="seconds"), c.user["ho_ten"]))
-        c.db.commit()
-        tep_ra.append({"ten": ten_file, "url": f"/tro-ly/tai/{token}"})
-        kq = {"da_tao_file": ten_file, "so_dong": len(ds), "cac_ma": [h["ma"] for h in ds]}
+        muc, ghi = tao_link_ts(c, ds, bool(a.get("bo_gia")))
+        tep_ra.append(muc)
+        kq = {"da_tao_file": muc["ten"], "loai": "Google Sheet" if muc["loai"] == "sheet" else "file Excel tải trong app",
+              "link": muc["url"] if muc["loai"] == "sheet" else "(nút tải hiện dưới câu trả lời)", "so_dong": len(ds),
+              "cac_ma": [h["ma"] for h in ds]}
+        if ghi:
+            kq["ghi_chu"] = "Chưa tạo được Google Sheet vì " + ghi
         if khong:
             kq["khong_tim_thay"] = khong
         return kq
@@ -2617,6 +2691,9 @@ def tro_ly_chat(c):
     if not ls or ls[-1]["role"] != "user":
         raise Loi(400, "Chưa có câu hỏi.")
     noi_dung = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": str(m["content"])[:3000]}]} for m in ls]
+    nhanh = tl_lam_nhanh(c, str(ls[-1]["content"]))
+    if nhanh:
+        return Json(nhanh)
     tep_ra = []
     for _ in range(TL_VONG):
         j = tl_goi_gemini(noi_dung, han_chot)

@@ -21,6 +21,7 @@ function doPost(e) {
     if (rq.viec === 'thu') kq = { ok: true, tai_khoan: Session.getEffectiveUser().getEmail() };
     else if (rq.viec === 'lay_mau') kq = layMau_(rq.url);
     else if (rq.viec === 'tao_doc') kq = taoDoc_(rq);
+    else if (rq.viec === 'tao_sheet') kq = taoSheet_(rq);
     else throw new Error('Yêu cầu không hợp lệ.');
   } catch (err) {
     kq = { ok: false, loi: String((err && err.message) || err) };
@@ -63,23 +64,34 @@ function layMau_(url) {
 
 /** Tạo Google Docs từ file Word hợp đồng, đặt quyền link, trả về link. */
 function taoDoc_(rq) {
+  return taoTep_(rq, rq.docx, 'application/vnd.google-apps.document',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'https://docs.google.com/document/d/', 'Google Docs');
+}
+
+/** Tạo Google Sheet từ file Excel (bảng thông số kỹ thuật), đặt quyền link, trả về link. */
+function taoSheet_(rq) {
+  return taoTep_(rq, rq.xlsx, 'application/vnd.google-apps.spreadsheet',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'https://docs.google.com/spreadsheets/d/', 'Google Sheet');
+}
+
+function taoTep_(rq, noiDungB64, loaiDich, loaiNguon, tienTo, tenLoai) {
   const thuMuc = layThuMuc_(rq.thu_muc || 'Hợp đồng nguyên tắc');
   const ranh = 'ranh-gioi-' + Date.now();
-  const meta = { name: rq.ten, mimeType: 'application/vnd.google-apps.document', parents: [thuMuc.getId()] };
+  const meta = { name: rq.ten, mimeType: loaiDich, parents: [thuMuc.getId()] };
   const dau = Utilities.newBlob('--' + ranh + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
-    '\r\n--' + ranh + '\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n').getBytes();
+    '\r\n--' + ranh + '\r\nContent-Type: ' + loaiNguon + '\r\n\r\n').getBytes();
   const cuoi = Utilities.newBlob('\r\n--' + ranh + '--').getBytes();
   const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
     method: 'post', contentType: 'multipart/related; boundary=' + ranh,
-    payload: dau.concat(Utilities.base64Decode(rq.docx)).concat(cuoi),
+    payload: dau.concat(Utilities.base64Decode(noiDungB64)).concat(cuoi),
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true
   });
-  if (r.getResponseCode() !== 200) throw new Error('Không tạo được Google Docs (mã ' + r.getResponseCode() + ').');
+  if (r.getResponseCode() !== 200) throw new Error('Không tạo được ' + tenLoai + ' (mã ' + r.getResponseCode() + ').');
   const id = JSON.parse(r.getContentText()).id;
   const file = DriveApp.getFileById(id);
   if (rq.quyen === 'sua') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
   else if (rq.quyen === 'xem') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return { ok: true, id: id, url: 'https://docs.google.com/document/d/' + id + '/edit' };
+  return { ok: true, id: id, url: tienTo + id + '/edit' };
 }
 
 function layThuMuc_(ten) {

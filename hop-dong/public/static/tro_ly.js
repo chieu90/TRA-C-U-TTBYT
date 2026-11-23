@@ -8,7 +8,10 @@
   try { hist = JSON.parse(sessionStorage.getItem(K_LS) || "[]"); } catch (e) {}
   function luu() { try { sessionStorage.setItem(K_LS, JSON.stringify(hist.slice(-20))); } catch (e) {} }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function inl(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>"); }
+  function inl(s) {
+    return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/(https:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+  }
   function md(t) {          // Markdown tối giản: đoạn, danh sách, bảng
     var L = String(t).split("\n"), out = [], i = 0;
     function o(r) { return r.trim().replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); }); }
@@ -35,7 +38,9 @@
   }
   function chipTep(tep) {
     return (tep || []).map(function (f) {
-      return '<p><a class="nut phu ai-tep" href="' + esc(f.url) + '">⬇ Tải ' + esc(f.ten) + "</a></p>";
+      return f.loai === "sheet"
+        ? '<p><a class="nut ai-tep" href="' + esc(f.url) + '" target="_blank" rel="noopener noreferrer">Mở Google Sheet: ' + esc(f.ten) + "</a></p>"
+        : '<p><a class="nut phu ai-tep" href="' + esc(f.url) + '">⬇ Tải ' + esc(f.ten) + "</a></p>";
     }).join("");
   }
 
