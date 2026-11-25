@@ -3589,7 +3589,8 @@ UNG_DUNG += [
     ("ban-hang", "Bán hàng", "ban_hang", [
         ("/don-hang", "Đơn hàng", "dh", "ds_hd", False), ("/don-hang/moi", "Lập đơn hàng", "dhm", "soan", False),
         ("/cong-no", "Công nợ phải thu", "cn", "tien", False), ("/doanh-so", "Báo cáo doanh số", "ds", "bieu_do", False),
-        ("/ket-qua-ban", "Kết quả bán hàng", "kqb", "bieu_do", False)]),
+        ("/ket-qua-ban", "Kết quả bán hàng", "kqb", "bieu_do", False),
+        ("/ket-qua-ban/pivot", "Bảng pivot", "kqp", "bieu_do", False)]),
     ("kho", "Kho – Mua hàng", "kho", [
         ("/kho", "Tồn kho", "tk", "hang_hoa", False), ("/nhap-kho", "Nhập kho / mua hàng", "pn", "nhap", True),
         ("/nha-cung-cap", "Nhà cung cấp", "ncc", "khach", True), ("/phai-tra", "Nợ nhà cung cấp", "pt", "tien", True)]),
@@ -5719,7 +5720,8 @@ def bang_sl(tieu_de, cot, ds, co_tien, toi_da=None):
             + ('<th class="so">Thành tiền (đ)</th>' if co_tien else "") + f'</tr></thead><tbody>{dong}</tbody></table></div>{an}</div>')
 
 
-def ket_qua_ban(c):
+def loc_kqb(c, url, them=""):
+    """(điều kiện SQL, tham số, form lọc, các nguồn) dùng chung cho báo cáo và pivot."""
     q = c.q
     dk, ts = "", []
     tu, den = q.get("tu", ""), q.get("den", "")
@@ -5734,20 +5736,119 @@ def ket_qua_ban(c):
         dk += " AND nguon_id = ?"; ts.append(int(q["ng"]))
     if q.get("q"):
         dk += " AND (ten LIKE ? OR ma LIKE ? OR khach LIKE ?)"; ts += [f"%{q['q'].strip()}%"] * 3
-    nhom = lambda cot: c.db.execute(f"SELECT {cot}, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
-                                    f"GROUP BY {cot} ORDER BY SUM(so_luong) DESC", ts).fetchall()
     nguon = c.db.execute("SELECT * FROM nguon_kqb ORDER BY id").fetchall()
-    tong = c.db.execute(f"SELECT COUNT(*) AS n, SUM(so_luong) AS q, SUM(gia_tri) AS v, COUNT(DISTINCT khach) AS kh, "
-                        f"COUNT(DISTINCT CASE WHEN ma <> '' THEN ma ELSE ten END) AS hh FROM ket_qua_ban WHERE 1=1{dk}", ts).fetchone()
     loc_tt = lambda cot: [(r["v"], r["v"]) for r in c.db.execute(
         f"SELECT DISTINCT {cot} AS v FROM ket_qua_ban WHERE {cot} <> '' ORDER BY {cot}").fetchall()]
-    bo_loc = f"""<form class="bo-loc">
+    bo_loc = f"""<form class="bo-loc">{them}
         <label>Từ tháng <input type="month" name="tu" value="{e(tu)}"></label><label>Đến tháng <input type="month" name="den" value="{e(den)}"></label>
         <label>Tìm hàng / khách <input name="q" value="{e(q.get('q', ''))}"></label>
         <label>Nhân viên {chon("nv", loc_tt("nhan_vien"), q.get("nv", ""), "Tất cả")}</label>
         <label>Nhãn hiệu {chon("nh", loc_tt("nhan_hieu"), q.get("nh", ""), "Tất cả")}</label>
         {f'<label>Nguồn {chon("ng", [(n["id"], n["ten"]) for n in nguon], q.get("ng", ""), "Tất cả")}</label>' if len(nguon) > 1 else ""}
-        <button class="nut phu">Xem</button> <a href="/ket-qua-ban">Bỏ lọc</a></form>"""
+        <button class="nut phu">Xem</button> <a href="{url}">Bỏ lọc</a></form>"""
+    return dk, ts, bo_loc, nguon
+
+
+CHIEU_KQB = {   # mã: (tên, biểu thức SQL, xếp theo nhãn?)
+    "sp": ("Sản phẩm", "CASE WHEN ma <> '' THEN ma ELSE ten END", False),
+    "kh": ("Khách hàng", "khach", False),
+    "nv": ("Nhân viên", "nhan_vien", False),
+    "nh": ("Nhãn hiệu", "nhan_hieu", False),
+    "nam": ("Năm", "SUBSTR(ngay, 1, 4)", True),
+    "quy": ("Quý", "SUBSTR(ngay, 1, 4) || '-' || CASE WHEN SUBSTR(ngay, 6, 2) IN ('01','02','03') THEN 'Q1' WHEN SUBSTR(ngay, 6, 2) IN ('04','05','06') THEN 'Q2' WHEN SUBSTR(ngay, 6, 2) IN ('07','08','09') THEN 'Q3' WHEN SUBSTR(ngay, 6, 2) <> '' THEN 'Q4' ELSE '' END", True),
+    "thang": ("Tháng", "SUBSTR(ngay, 1, 7)", True),
+    "dvt": ("ĐVT", "dvt", False),
+}
+GIA_TRI_KQB = {"q": ("Tổng số lượng", "SUM(so_luong)"), "v": ("Tổng thành tiền", "SUM(gia_tri)"), "n": ("Số dòng", "COUNT(*)")}
+
+
+def nhan_chieu(chieu, k):
+    if not k:
+        return "(trống)"
+    if chieu == "thang" and len(k) == 7:
+        return f"{k[5:]}/{k[:4]}"
+    return k
+
+
+def kqb_pivot(c):
+    q = c.q
+    hang = q.get("hang") if q.get("hang") in CHIEU_KQB else "sp"
+    cot = q.get("cot") if q.get("cot") in CHIEU_KQB or q.get("cot") == "-" else "nam"
+    if cot == hang:
+        cot = "-"
+    gt = q.get("gt") if q.get("gt") in GIA_TRI_KQB else "q"
+    try:
+        toi_da = max(10, min(int(q.get("n") or 200), 5000))
+    except ValueError:
+        toi_da = 200
+    them = (f'<label>Dòng {chon("hang", [(k, v[0]) for k, v in CHIEU_KQB.items()], hang)}</label>'
+            f'<label>Cột {chon("cot", [("-", "(không chia cột)")] + [(k, v[0]) for k, v in CHIEU_KQB.items()], cot)}</label>'
+            f'<label>Giá trị {chon("gt", [(k, v[0]) for k, v in GIA_TRI_KQB.items()], gt)}</label>'
+            f'<label>Số dòng hiện {chon("n", [(x, x) for x in (50, 200, 1000, 5000)], toi_da)}</label>')
+    dk, ts, bo_loc, _ = loc_kqb(c, "/ket-qua-ban/pivot", them)
+    bt_h, bt_c, ham = CHIEU_KQB[hang][1], (CHIEU_KQB[cot][1] if cot != "-" else "''"), GIA_TRI_KQB[gt][1]
+    ds = c.db.execute(f"SELECT {bt_h} AS h, {bt_c} AS k, {ham} AS g{', MAX(ten) AS t' if hang == 'sp' else ''} "
+                      f"FROM ket_qua_ban WHERE 1=1{dk} GROUP BY {bt_h}, {bt_c}", ts).fetchall()
+    o, t_hang, t_cot, ten_sp = {}, {}, {}, {}
+    for r in ds:
+        g = r["g"] or 0
+        o[(r["h"], r["k"])] = g
+        cong(t_hang, r["h"], g)
+        cong(t_cot, r["k"], g)
+        if hang == "sp":
+            ten_sp[r["h"]] = r["t"]
+    xep = lambda d, chieu: (sorted(d, key=lambda k: k or "") if chieu != "-" and CHIEU_KQB[chieu][2]
+                            else sorted(d, key=lambda k: -d[k]))
+    cac_cot = xep(t_cot, cot) if cot != "-" else [""]
+    if len(cac_cot) > 60:
+        giu = set(sorted(t_cot, key=lambda k: -t_cot[k])[:60])
+        cac_cot = [k for k in cac_cot if k in giu]
+    cac_hang = xep(t_hang, hang)
+    nhan_h = (lambda k: f"{k} — {ten_sp.get(k) or ''}" if ten_sp.get(k) and ten_sp.get(k) != k else (k or "(trống)")) \
+        if hang == "sp" else (lambda k: nhan_chieu(hang, k))
+    so = sl if gt != "v" else tien
+    tong = sum(t_hang.values())
+    if q.get("xuat") == "1":
+        tieu_de = [CHIEU_KQB[hang][0]] + ([nhan_chieu(cot, k) for k in cac_cot] if cot != "-" else []) + ["Tổng"]
+        dong = [[nhan_h(h)] + ([o.get((h, k), 0) for k in cac_cot] if cot != "-" else []) + [t_hang[h]] for h in cac_hang]
+        dong.append(["Tổng cộng"] + ([t_cot.get(k, 0) for k in cac_cot] if cot != "-" else []) + [tong])
+        so_cot = len(tieu_de)
+        return Tep("pivot-ban-hang.xlsx", xlsx_ts.tao("Pivot", tieu_de, [60] + [14] * (so_cot - 1), dong, tuple(range(1, so_cot))),
+                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    if not ds:
+        than = '<div class="the trong">Không có dữ liệu với bộ lọc này.</div>'
+    else:
+        dau = (f'<th>{CHIEU_KQB[hang][0]}</th>' + "".join(f'<th class="so">{e(nhan_chieu(cot, k))}</th>' for k in cac_cot if cot != "-")
+               + f'<th class="so">Tổng</th><th class="so">%</th>')
+        than_bang = "".join(
+            f'<tr><td>{e(nhan_h(h))}</td>' + "".join(f'<td class="so">{so(o[(h, k)]) if o.get((h, k)) else ""}</td>' for k in cac_cot if cot != "-")
+            + f'<td class="so"><b>{so(t_hang[h])}</b></td><td class="so mo">{100 * t_hang[h] / tong if tong else 0:.1f}%</td></tr>'
+            for h in cac_hang[:toi_da])
+        con = cac_hang[toi_da:]
+        if con:
+            than_bang += (f'<tr class="mo"><td>Còn {len(con)} dòng khác</td>' + "".join(
+                f'<td class="so">{so(sum(o.get((h, k), 0) for h in con))}</td>' for k in cac_cot if cot != "-")
+                + f'<td class="so">{so(sum(t_hang[h] for h in con))}</td><td></td></tr>')
+        than_bang += ('<tr class="tong"><td><b>Tổng cộng</b></td>' + "".join(f'<td class="so"><b>{so(t_cot.get(k, 0))}</b></td>' for k in cac_cot if cot != "-")
+                      + f'<td class="so"><b>{so(tong)}</b></td><td class="so">100%</td></tr>')
+        xuat = "?" + urllib.parse.urlencode({**q, "xuat": "1"})
+        than = (f'<div class="dau-trang"><p class="mo">{len(cac_hang)} dòng × {len(cac_cot) if cot != "-" else 1} cột · {GIA_TRI_KQB[gt][0].lower()}</p>'
+                f'<a class="nut phu" href="{e(xuat)}">Tải Excel</a></div>'
+                f'<div class="the cuon pivot"><table><thead><tr>{dau}</tr></thead><tbody>{than_bang}</tbody></table></div>')
+    return trang(c, "Bảng pivot bán hàng", f"""
+      <div class="dau-trang"><h1>Bảng pivot bán hàng</h1><a class="nut phu" href="/ket-qua-ban">← Kết quả bán hàng</a></div>
+      <p class="mo">Chọn cái gì nằm ở <b>Dòng</b>, cái gì chia theo <b>Cột</b> và tính <b>Giá trị</b> gì — như PivotTable trong Excel.
+        Ví dụ: Dòng = Khách hàng, Cột = Năm để so sánh từng khách qua các năm.</p>
+      {bo_loc}{than}""", "kqp")
+
+
+def ket_qua_ban(c):
+    q = c.q
+    dk, ts, bo_loc, nguon = loc_kqb(c, "/ket-qua-ban")
+    nhom = lambda cot: c.db.execute(f"SELECT {cot}, SUM(so_luong) AS q, SUM(gia_tri) AS v FROM ket_qua_ban WHERE 1=1{dk} "
+                                    f"GROUP BY {cot} ORDER BY SUM(so_luong) DESC", ts).fetchall()
+    tong = c.db.execute(f"SELECT COUNT(*) AS n, SUM(so_luong) AS q, SUM(gia_tri) AS v, COUNT(DISTINCT khach) AS kh, "
+                        f"COUNT(DISTINCT CASE WHEN ma <> '' THEN ma ELSE ten END) AS hh FROM ket_qua_ban WHERE 1=1{dk}", ts).fetchone()
     if not tong["n"]:
         than = ('<div class="the trong">Chưa có dữ liệu. ' + ('Bấm <a href="/ket-qua-ban/nhap">Nhập từ link Drive</a> để đưa kết quả bán hàng vào.'
                 if c.ql else "Nhờ quản lý nhập kết quả bán hàng từ link Drive.") + "</div>")
@@ -5785,7 +5886,8 @@ def ket_qua_ban(c):
                   f'<tbody>{ds_nguon}</tbody></table></div>') if nguon else ""
     return trang(c, "Kết quả bán hàng", f"""
       <div class="dau-trang"><h1>Kết quả bán hàng</h1>
-        {'<a class="nut" href="/ket-qua-ban/nhap">Nhập từ link Drive</a>' if c.ql else ""}</div>
+        <div><a class="nut phu" href="/ket-qua-ban/pivot">Bảng pivot</a>
+        {'<a class="nut" href="/ket-qua-ban/nhap">Nhập từ link Drive</a>' if c.ql else ""}</div></div>
       <p class="mo">Số lượng bán theo sản phẩm, khách hàng, tháng, nhân viên — lấy từ file trên Drive. Sửa file trên Drive xong, bấm
         <b>Cập nhật từ Drive</b> ở bảng nguồn cuối trang để lấy số mới.</p>
       {bo_loc}{than}<h2>Nguồn dữ liệu</h2>{bang_nguon or '<p class="mo">Chưa có.</p>'}""", "kqb")
@@ -5845,6 +5947,7 @@ TUYEN = [
     ("GET|POST", r"/tai-lieu/ho-so", tl_ho_so, "nd"),
     ("GET|POST", r"/tai-lieu/nhap-drive", tl_nhap_drive, "nd"),
     ("GET", r"/ket-qua-ban", ket_qua_ban, "nd"),
+    ("GET", r"/ket-qua-ban/pivot", kqb_pivot, "nd"),
     ("GET|POST", r"/ket-qua-ban/nhap", kqb_nhap, "ql"),
     ("POST", r"/ket-qua-ban/nguon/(\d+)/cap-nhat", kqb_cap_nhat, "ql"),
     ("POST", r"/ket-qua-ban/nguon/(\d+)/xoa", kqb_xoa, "ql"),

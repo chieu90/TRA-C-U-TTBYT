@@ -197,3 +197,12 @@ td input.o-bang.rong { min-width: 14rem; }
 /* mẫu kem – cam: tiêu đề ô có gạch cam */
 .the h2 { color: var(--chu); display: flex; align-items: center; gap: 8px; }
 .the h2::before { content: ""; width: 4px; height: 1em; border-radius: 2px; background: var(--chinh); flex: none; }
+
+/* bảng pivot: dòng tiêu đề và cột đầu đứng yên khi cuộn */
+.pivot { max-height: 75vh; overflow: auto; }
+.pivot thead th { position: sticky; top: 0; z-index: 2; }
+.pivot td:first-child, .pivot th:first-child { position: sticky; left: 0; background: var(--the); z-index: 1; min-width: 220px; max-width: 420px; }
+.pivot thead th:first-child { z-index: 3; background: var(--nhe); }
+.pivot tr.tong td { background: var(--nhe); position: sticky; bottom: 0; }
+.pivot td { white-space: nowrap; }
+.pivot td:first-child { white-space: normal; }
