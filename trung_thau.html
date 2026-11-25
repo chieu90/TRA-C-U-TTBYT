@@ -541,6 +541,15 @@ function load(d) {
 const NV_NONE = '(Khách chưa gán nhân viên)';
 const kfold = s => fold(s).replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|thuong mai|va|dich vu|xuat nhap khau|tm|dv|xnk|chi nhanh)\b/g, ' ')
   .replace(/[^a-z0-9]+/g, ' ').trim();
+// khớp nhà thầu -> nhân viên: ưu tiên đúng tên đầy đủ; tên rút gọn (bỏ "công ty", "TNHH", "và", "dịch vụ"...) chỉ dùng khi
+// không có 2 khách khác nhân viên cùng rút gọn ra một tên (vd THIẾT BỊ ANH PHÁT / THIẾT BỊ VÀ DỊCH VỤ ANH PHÁT)
+const efold = s => fold(s).replace(/[^a-z0-9]+/g, ' ').trim();
+function khMap(ds) {
+  const ex = new Map(), lo = new Map();
+  ds.forEach(k => { const nv = String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean), key = kfold(k.ten);
+    ex.set(efold(k.ten), nv); lo.set(key, lo.has(key) && String(lo.get(key)) !== String(nv) ? null : nv); });
+  return { get: n => ex.get(efold(n)) || lo.get(kfold(n)) || [] };
+}
 let KHNV = null;
 fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).then(d => {
   if (!d) return;  // chưa bật đăng nhập
@@ -550,12 +559,12 @@ fetch('/api/auth?action=khach-nv').then(r => r.ok ? r.json() : null).then(d => {
     $('#nvBtn').innerHTML = '<span>Chưa có danh sách</span><span class="car">▼</span>';
     $('#nvLbl').hidden = $('#nvBox').hidden = false; return;
   }
-  KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean)));
+  KHNV = khMap(d.ds);
   if (R.length && !R[0]._nv) { initNV(); apply(); }
 }).catch(() => {});
 function initNV() {
   const cnt = {};
-  R.forEach(r => { const s = new Set(); r.nha_thau.split('; ').filter(Boolean).forEach(n => (KHNV.get(kfold(n)) || []).forEach(v => s.add(v)));
+  R.forEach(r => { const s = new Set(); r.nha_thau.split('; ').filter(Boolean).forEach(n => KHNV.get(n).forEach(v => s.add(v)));
     r._nv = s.size ? [...s] : [NV_NONE]; r._nv.forEach(v => cnt[v] = (cnt[v] || 0) + 1); });
   const cur = [...document.querySelectorAll('#nvList input:checked')].map(i => i.value);  // giữ lựa chọn đang có
   const want = new Set(cur.length ? cur : (new URLSearchParams(location.search).get('nv') || '').split('|').filter(Boolean));

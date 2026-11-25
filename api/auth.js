@@ -155,6 +155,10 @@ async function syncKhach(link) {
 const kfold = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
   .replace(/\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|thuong mai|va|dich vu|xuat nhap khau|tm|dv|xnk|chi nhanh)\b/g, " ")
   .replace(/[^a-z0-9]+/g, " ").trim();
+// tên đầy đủ đã bỏ dấu (không bỏ chữ chung): ưu tiên khớp đúng tên, tránh 2 khách gần trùng tên
+// (vd "THIẾT BỊ ANH PHÁT" và "THIẾT BỊ VÀ DỊCH VỤ ANH PHÁT" cùng rút gọn thành "thiet bi anh phat")
+const efold = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ").trim();
 // khóa nội bộ để hàm này đọc file KQ gốc qua middleware (không cần cookie)
 const internalKey = () => crypto.createHash("sha256").update("muasamcong-noibo|" + dbUrl()).digest("hex");
 async function saveKhach(ds) {
@@ -233,14 +237,17 @@ module.exports = async (req, res) => {
       const d = await r.json();
       if (mine) {
         const ci = d.cot.indexOf("nha_thau");
-        d.rows = d.rows.filter(row => String(row[ci] || "").split("; ").some(n => mine.has(kfold(n))));
+        d.rows = d.rows.filter(row => String(row[ci] || "").split("; ").some(n => mine.ex.has(efold(n)) || mine.lo.has(kfold(n))));
         d.chi_khach_cua = kqOf(me);
       }
       return d;
     };
     const khachCua = async () => {
       const nvs = kqList(me); if (!nvs.length) return null;
-      return new Set((await sql("SELECT ten, nv FROM mc_khach_nv")).filter(x => fixNv(x.nv).split(", ").some(n => nvs.includes(n))).map(x => kfold(x.ten)));
+      const all = await sql("SELECT ten, nv FROM mc_khach_nv"), cua = x => fixNv(x.nv).split(", ").some(n => nvs.includes(n));
+      // tên rút gọn chỉ dùng khi không trùng với khách của nhân viên khác
+      const lo = new Map(); all.forEach(x => { const k = kfold(x.ten), c = cua(x); lo.set(k, lo.has(k) && lo.get(k) !== c ? null : c); });
+      return { ex: new Set(all.filter(cua).map(x => efold(x.ten))), lo: new Set([...lo].filter(([, c]) => c === true).map(([k]) => k)) };
     };
 
     // tab Quản lý công việc (mọi tài khoản đã đăng nhập; nhân viên chỉ thấy gói phân cho mình)

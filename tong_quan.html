@@ -230,6 +230,15 @@ const CACHE = {};
 let MODE = (() => { try { return localStorage.getItem('tq_mode') || 'etc'; } catch (e) { return 'etc'; } })();
 const etc = () => MODE === 'etc' && !!BG;
 const VLBL = () => etc() ? 'Giá trị theo giá ETC' : 'Giá trị trúng thầu';
+// khớp nhà thầu -> nhân viên: ưu tiên đúng tên đầy đủ; tên rút gọn (bỏ "công ty", "TNHH", "và", "dịch vụ"...) chỉ dùng khi
+// không có 2 khách khác nhân viên cùng rút gọn ra một tên (vd THIẾT BỊ ANH PHÁT / THIẾT BỊ VÀ DỊCH VỤ ANH PHÁT)
+const efold = s => fold(s).replace(/[^a-z0-9]+/g, ' ').trim();
+function khMap(ds) {
+  const ex = new Map(), lo = new Map();
+  ds.forEach(k => { const nv = String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean), key = kfold(k.ten);
+    ex.set(efold(k.ten), nv); lo.set(key, lo.has(key) && String(lo.get(key)) !== String(nv) ? null : nv); });
+  return { get: n => ex.get(efold(n)) || lo.get(kfold(n)) || [] };
+}
 let KHNV = null, NAM = CY, LUI_NAM = false, PICK = new Set(BRANDS.map(b => b.id));
 
 function brandOf(r) {
@@ -330,7 +339,7 @@ const chTxt = c => c.p == null ? '<span class="sub2">—</span>' : `<b>${money(c
 
 function nvOf(r) {
   if (!KHNV) return [NV_NONE];
-  if (!r._nv) { const s = new Set(); r.nt.forEach(n => (KHNV.get(kfold(n)) || []).forEach(v => s.add(v))); r._nv = s.size ? [...s] : [NV_NONE]; }
+  if (!r._nv) { const s = new Set(); r.nt.forEach(n => KHNV.get(n).forEach(v => s.add(v))); r._nv = s.size ? [...s] : [NV_NONE]; }
   return r._nv;
 }
 
@@ -596,7 +605,7 @@ let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(ren
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
 Promise.all(['khach-nv', 'bang-gia'].map(a => fetch('/api/auth?action=' + a).then(r => r.ok ? r.json() : null).catch(() => null))).then(([d, g]) => {
   try { napBangGia(g); } catch (e) { BG = null; }
-  if (d && d.ds && d.ds.length) { KHNV = new Map(); d.ds.forEach(k => KHNV.set(kfold(k.ten), String(k.nv).split(/[,;\/]+/).map(x => x.trim()).filter(Boolean))); }
+  if (d && d.ds && d.ds.length) { KHNV = khMap(d.ds); }
   render();
 });
 </script>
